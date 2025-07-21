@@ -1,0 +1,38 @@
+{
+    "folders": [
+        {
+            "name": "🏠 Root",
+            "path": "."
+        },
+        {
+            "name": "🔧 Backend (Django)",
+            "path": "./backend"
+        },
+        {
+            "name": "🤖 ML Server",
+            "path": "./MLServer"
+        },
+        {
+            "name": "🎨 Frontend (Next.js)",
+            "path": "./project1/frontend"
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "./backend/.venv/Scripts/python.exe",
+        "typescript.preferences.includePackageJsonAutoImports": "auto",
+        "files.exclude": {
+            "**/node_modules": true,
+            "**/.venv": true,
+            "**/__pycache__": true,
+            "**/.next": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "bradlc.vscode-tailwindcss",
+            "ms-vscode.vscode-typescript-next",
+            "ms-python.flake8"
+        ]
+    }
+}

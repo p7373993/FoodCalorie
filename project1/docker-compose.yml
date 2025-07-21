@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:15-alpine
+    container_name: diet_app_postgres
+    environment:
+      POSTGRES_DB: diet_app
+      POSTGRES_USER: diet_user
+      POSTGRES_PASSWORD: diet_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database_schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - diet_network
+
+  # Redis 캐시
+  redis:
+    image: redis:7-alpine
+    container_name: diet_app_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - diet_network
+
+  # FastAPI 백엔드
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diet_app_backend
+    environment:
+      - DATABASE_URL=postgresql://diet_user:diet_password@postgres:5432/diet_app
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-here
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - KAKAO_CLIENT_ID=your-kakao-client-id
+      - KAKAO_CLIENT_SECRET=your-kakao-client-secret
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    networks:
+      - diet_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery 워커 (비동기 작업)
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diet_app_celery_worker
+    environment:
+      - DATABASE_URL=postgresql://diet_user:diet_password@postgres:5432/diet_app
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    networks:
+      - diet_network
+    command: celery -A app.celery_app worker --loglevel=info
+
+  # Celery 비트 (스케줄러)
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diet_app_celery_beat
+    environment:
+      - DATABASE_URL=postgresql://diet_user:diet_password@postgres:5432/diet_app
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    networks:
+      - diet_network
+    command: celery -A app.celery_app beat --loglevel=info
+
+  # Nginx (프로덕션용)
+  nginx:
+    image: nginx:alpine
+    container_name: diet_app_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - backend
+    networks:
+      - diet_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  diet_network:
+    driver: bridge 
