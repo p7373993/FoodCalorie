@@ -79,15 +79,22 @@ class MassEstimationService:
             logging.info("3단계: 특징 추출 실행")
             features = self.feature_extractor.extract_features(segmentation_results, depth_map, image_path)
 
-            # 4단계: LLM 질량 추정
-            logging.info("4단계: LLM 질량 추정 실행")
-            debug_helper.log_step_start("LLM 질량 추정")
-            
-            estimated_result = self.llm_estimator.estimate_mass_from_features(
-                features, debug_helper=debug_helper
-            )
-            
-            debug_helper.log_step_end("LLM 질량 추정")
+            # 기준물체 유무 확인
+            reference_objects = features.get("reference_objects", [])
+            has_reference = len(reference_objects) > 0
+
+            if has_reference:
+                # 4단계: LLM 질량 추정
+                logging.info("4단계: LLM 질량 추정 실행")
+                debug_helper.log_step_start("LLM 질량 추정")
+                estimated_result = self.llm_estimator.estimate_mass_from_features(
+                    features, debug_helper=debug_helper
+                )
+                debug_helper.log_step_end("LLM 질량 추정")
+            else:
+                # 기준물체 없으면 초기 질량 추정 스킵
+                logging.info("기준물체 없음: 초기 질량 추정 스킵, 멀티모달만 사용")
+                estimated_result = {"no_food_detected": False}
 
             # 5단계: 멀티모달 검증 (설정에 따라 선택적 실행)
             if settings.ENABLE_MULTIMODAL and (not estimated_result.get("error") or estimated_result.get("no_food_detected")):
@@ -95,9 +102,7 @@ class MassEstimationService:
                 verification_result = self.llm_estimator.verify_mass_with_multimodal(
                     image, estimated_result, features
                 )
-                
                 if not verification_result.get("error"):
-                    # 검증 결과로 최종 결과 업데이트
                     estimated_result = verification_result
                     logging.info("멀티모달 검증 완료")
                 else:

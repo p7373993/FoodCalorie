@@ -94,21 +94,29 @@ class LLMMassEstimator(BaseModel):
             return {"error": "LLM 모델이 초기화되지 않았습니다."}
         try:
             multimodal_model = genai.GenerativeModel(settings.MULTIMODAL_MODEL_NAME or settings.LLM_MODEL_NAME)
-            
+
+            # 기준물체가 없으면 초기 추정값을 무시하고 no_food_detected만 넘김
+            reference_objects = features.get("reference_objects", [])
+            has_reference = len(reference_objects) > 0
+            multimodal_initial = initial_estimation
+            if not has_reference:
+                # 기준물체가 없으면 초기 추정값을 완전히 무시
+                multimodal_initial = {"no_food_detected": initial_estimation.get("no_food_detected", False)}
+
             # 디버그: 원본 이미지 정보 출력
             if settings.DEBUG_MODE:
                 print(f"\n🔍 멀티모달 검증 이미지 처리:")
                 print(f"   원본 이미지 크기: {image.shape}")
                 print(f"   원본 BGR 평균: {np.mean(image, axis=(0,1))}")
-            
+
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             max_size = 1536
             h, w = image_rgb.shape[:2]
-            
+
             if settings.DEBUG_MODE:
                 print(f"   RGB 변환 후 크기: {image_rgb.shape}")
                 print(f"   RGB 평균: {np.mean(image_rgb, axis=(0,1))}")
-            
+
             if max(h, w) > max_size:
                 scale = max_size / max(h, w)
                 new_h, new_w = int(h * scale), int(w * scale)
@@ -116,27 +124,27 @@ class LLMMassEstimator(BaseModel):
                 if settings.DEBUG_MODE:
                     print(f"   리사이즈 후 크기: {image_rgb.shape} (스케일: {scale:.3f})")
                     print(f"   리사이즈 후 RGB 평균: {np.mean(image_rgb, axis=(0,1))}")
-            
+
             # 디버그: 처리된 이미지 저장
             if settings.DEBUG_MODE:
                 cv2.imwrite("debug_multimodal_input.jpg", cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR))
                 print(f"   멀티모달 입력 이미지 저장: debug_multimodal_input.jpg")
-            
+
             # 반드시 BGR로 변환 후 인코딩 (색상 문제 방지)
             image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
             _, buffer = cv2.imencode('.jpg', image_bgr)
             image_base64 = base64.b64encode(buffer).decode('utf-8')
-            
+
             if settings.DEBUG_MODE:
                 print(f"   JPEG 버퍼 크기: {len(buffer)} bytes")
                 print(f"   Base64 길이: {len(image_base64)} 문자")
-            
-            prompt = self._build_multimodal_prompt(initial_estimation, features)
+
+            prompt = self._build_multimodal_prompt(multimodal_initial, features)
             multimodal_content = [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": image_base64}}]}]
-            
+
             if settings.DEBUG_MODE:
                 print(f"   멀티모달 프롬프트 길이: {len(prompt)} 문자")
-            
+
             response = multimodal_model.generate_content(
                 multimodal_content,
                 generation_config=genai.types.GenerationConfig(
@@ -145,12 +153,12 @@ class LLMMassEstimator(BaseModel):
                     candidate_count=1  # 완전히 결정론적
                 ),
             )
-            
+
             if settings.DEBUG_MODE:
                 print(f"   LLM 응답 길이: {len(response.text)} 문자")
                 print(f"   LLM 응답 미리보기: {response.text[:200]}...")
-            
-            return self._parse_multimodal_response(response.text, initial_estimation, features)
+
+            return self._parse_multimodal_response(response.text, multimodal_initial, features)
         except Exception as e:
             logging.error(f"멀티모달 검증 중 오류 발생: {e}")
             return {"error": str(e)}
