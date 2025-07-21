@@ -181,7 +181,7 @@ export function MealUploader() {
           setAiComment('MLServer 분석 시간이 초과되었습니다. 다시 시도해주세요.');
           reject(new Error('작업 타임아웃'));
         }
-      }, 30000);
+      }, 300000); // 5분(300초)로 변경
     });
   };
 
