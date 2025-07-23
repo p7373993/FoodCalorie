@@ -1,15 +1,15 @@
-# 🍽️ FoodCalorie - AI 기반 음식 칼로리 측정 시스템
+# 🍽️ 체감(ChaeGam) - AI 기반 음식 칼로리 측정 시스템
 
-AI와 컴퓨터 비전을 활용하여 음식 사진에서 자동으로 칼로리를 측정하는 통합 시스템입니다.
+AI와 컴퓨터 비전을 활용하여 음식 사진에서 자동으로 칼로리를 측정하고, 건강 관리 플랫폼 기능을 제공하는 통합 시스템입니다.
 
 ## 🏗️ 프로젝트 구조
 
 ```
 FoodCalorie/
-├── 🎨 project1/frontend/     # Next.js 프론트엔드
-├── 🔧 backend/              # Django REST API 백엔드
+├── 🎨 project1/             # Next.js 프론트엔드 (체감 UI)
+├── 🔧 backend/              # Django REST API 백엔드 (체감 기능)
 ├── 🤖 MLServer/             # AI 모델 서버 (YOLO + MiDaS + LLM)
-├── 📊 데이터 파일들/         # CSV 데이터
+├── 📊 음식만개등급화.csv     # 음식 영양 데이터
 └── 🚀 통합 스크립트들/       # 개발 환경 설정
 ```
 
@@ -22,17 +22,13 @@ FoodCalorie/
 check-environments.bat
 ```
 
-### 2. 실행 방법 선택
+### 2. 실행 방법
 
 #### 🐳 Docker 실행 (권장)
 
 ```bash
 # Docker로 모든 서비스 실행
 docker-start.bat
-
-# 또는 직접 실행
-docker-compose up --build          # 프로덕션 모드
-docker-compose -f docker-compose.dev.yml up --build  # 개발 모드
 ```
 
 #### 💻 로컬 실행
@@ -47,7 +43,7 @@ start-all-services.bat
 #### Frontend (Next.js)
 
 ```bash
-cd project1/frontend
+cd project1
 npm install
 npm run dev
 # → http://localhost:3000
@@ -57,7 +53,8 @@ npm run dev
 
 ```bash
 cd backend
-start-services.bat
+python manage.py migrate
+python manage.py runserver
 # → http://localhost:8000
 ```
 
@@ -89,55 +86,52 @@ integrate-repos.bat
 
 ### 🎨 Frontend (Next.js + TypeScript)
 
-- 사용자 친화적인 음식 사진 업로드 인터페이스
-- 실시간 칼로리 측정 결과 표시
-- 반응형 디자인 (Tailwind CSS)
-- 음식 기록 및 히스토리 관리
+- **인증 시스템**: 회원가입/로그인, 카카오 로그인 UI
+- **식사 기록**: AI 이미지 분석을 통한 음식 인식 및 영양 정보 추출
+- **대시보드**: 일일/월간 식사 기록 및 영양소 합계 표시
+- **챌린지 시스템**: 챌린지 생성/참여/탈퇴/진행상황 추적
+- **통계 시스템**: 일간/주간/월간 평균 칼로리, 음식 종류별 비율
+- **프로필 시스템**: 사용자별 뱃지 컬렉션, 프로필 통계
+- **반응형 디자인**: Tailwind CSS 기반
 
 ### 🔧 Backend (Django + Redis + Celery)
 
-- RESTful API 서버
-- Gemini API 연동 (이미지 분석)
-- 비동기 작업 처리 (Celery)
-- 데이터베이스 관리 (SQLite)
+- **RESTful API 서버**: 완전한 CRUD 기능
+- **인증 시스템**: Token 기반 인증
+- **식사 기록 관리**: 생성/조회/삭제 기능
+- **챌린지 시스템**: 챌린지 관리 및 뱃지 시스템
+- **통계 API**: 상세한 영양 통계 제공
+- **Gemini API 연동**: 이미지 분석
+- **비동기 작업 처리**: Celery
+- **데이터베이스**: SQLite/PostgreSQL
 
 ### 🤖 ML Server (FastAPI + AI Models)
 
-- YOLO 기반 음식 객체 분할
-- MiDaS 깊이 추정
-- LLM 기반 질량 계산
-- WebSocket 실시간 알림
+- **YOLO 기반 음식 객체 분할**
+- **MiDaS 깊이 추정**
+- **LLM 기반 질량 계산**
+- **WebSocket 실시간 알림**
 
 ## 🌐 서비스 주소
 
 | 서비스      | 주소                       | 설명              |
 | ----------- | -------------------------- | ----------------- |
-| Frontend    | http://localhost:3000      | 사용자 인터페이스 |
+| Frontend    | http://localhost:3000      | 체감 사용자 인터페이스 |
 | Backend API | http://localhost:8000      | Django REST API   |
 | ML Server   | http://localhost:8001      | AI 모델 서버      |
 | ML API Docs | http://localhost:8001/docs | Swagger UI        |
 
-## 📁 각 프로젝트 상세 정보
+## 🎯 통계 점수 산정 로직
 
-### Frontend
+- **15점 만점 시스템**
+- **등급별 기본 점수**: A: 15점, B: 10점, C: 5점
+- **칼로리 보정**:
+  - 300kcal 미만: +3점
+  - 300~600kcal: +1점
+  - 600kcal 초과: -2점
+- **최종 점수**: 기본점수 + 보정점수 (1~15점 사이로 제한)
 
-- **기술스택**: Next.js 15, TypeScript, Tailwind CSS
-- **주요 기능**: 이미지 업로드, 결과 표시, 사용자 인터페이스
-- **문서**: [project1/frontend/README.md](project1/frontend/README.md)
-
-### Backend
-
-- **기술스택**: Django, Redis, Celery, SQLite
-- **주요 기능**: API 서버, 데이터 관리, 외부 API 연동
-- **문서**: [backend/README.md](backend/README.md)
-
-### ML Server
-
-- **기술스택**: FastAPI, YOLO, MiDaS, LLM (Gemini/OpenAI)
-- **주요 기능**: 이미지 분석, 질량 추정, AI 모델 서빙
-- **문서**: [MLServer/README.md](MLServer/README.md)
-
-## 🛠️ 개발 가이드
+## 🛠️ 개발 환경 설정
 
 ### 환경 요구사항
 
@@ -153,41 +147,43 @@ integrate-repos.bat
 3. **개발 진행**: 각 프로젝트 폴더에서 개별 작업
 4. **통합 테스트**: 전체 시스템 연동 확인
 
-### Git 관리 방식
-
-#### 현재 상태 (각 폴더별 Git)
-
-```
-📁 Root (.git)
-├── 📁 backend (.git)
-├── 📁 MLServer (.git)
-└── 📁 project1 (.git)
-```
-
-#### 통합 옵션
-
-1. **Submodules**: 독립성 유지하면서 통합 관리
-2. **Monorepo**: 단일 저장소로 완전 통합
-3. **현재 유지**: 각각 독립적으로 관리
-
 ## 🚀 배포 가이드
 
 ### Docker 배포
 
 ```bash
-# 각 서비스별 Docker 설정 파일 존재
+# 각 서비스별 Docker 설정
 cd backend && docker-compose up -d
 cd MLServer && docker-compose up -d
-cd project1/frontend && docker build -t frontend .
+cd project1 && docker build -t frontend .
 ```
 
 ### 환경 변수 설정
 
-각 프로젝트의 `.env` 파일 설정 필요:
+각 프로젝트의 `.env` 파일 설정:
 
-- Backend: Django 설정, API 키
-- MLServer: AI 모델 API 키
-- Frontend: API 엔드포인트 URL
+- **Backend**: Django 설정, API 키
+- **MLServer**: AI 모델 API 키
+- **Frontend**: API 엔드포인트 URL
+
+## 📈 구현 현황
+
+### ✅ 구현 완료
+- 인증 시스템 (Token 기반)
+- 식사 기록 시스템 (AI 이미지 분석)
+- 챌린지 시스템 (생성/참여/뱃지)
+- 대시보드 (일일/월간 통계)
+- 기본 통계 시스템
+- 뱃지 시스템
+- 관리자 기본 기능
+
+### 🔄 개선 필요
+- 통계 상세 데이터 백엔드 구현
+- 카카오 로그인 백엔드 연동
+- 식사 기록 수정 기능
+- 프로필 편집 기능
+- 실시간 알림 시스템
+- 소셜 기능 확장
 
 ## 🤝 기여 방법
 
@@ -201,4 +197,4 @@ cd project1/frontend && docker build -t frontend .
 
 ---
 
-**🎉 프로젝트가 도움이 되셨다면 ⭐ 스타를 눌러주세요!**
+**🎉 체감(ChaeGam)으로 건강한 식습관을 만들어보세요! ⭐**
