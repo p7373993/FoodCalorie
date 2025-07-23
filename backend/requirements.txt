@@ -1,0 +1,8 @@
+Django
+djangorestframework
+django-cors-headers
+pandas
+celery==5.3.4
+redis==5.0.1
+channels==4.0.0
+channels-redis==4.2.0
