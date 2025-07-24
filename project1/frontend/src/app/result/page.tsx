@@ -23,9 +23,19 @@ export default function ResultPage() {
     if (storedResult) {
       try {
         const result = JSON.parse(storedResult);
+        console.log('분석 결과 파싱:', result);
         setAnalysisResult(result);
       } catch (error) {
         console.error('Error parsing analysis result:', error);
+        // 파싱 실패 시 기본값 설정
+        setAnalysisResult({
+          result: {
+            calories: 580,
+            food_type: '분석 오류',
+            estimated_mass: 0,
+            confidence_score: 0
+          }
+        });
       }
     }
   }, []);
@@ -41,8 +51,14 @@ export default function ResultPage() {
         body: JSON.stringify({
           type: 'meal_feedback',
           meal_data: {
-            calories: analysisResult?.result?.calories || 580,
-            food_name: analysisResult?.result?.food_type || '분석된 음식'
+            food_name: analysisResult?.result?.food_name || analysisResult?.food_name || '분석된 음식',
+            calories: analysisResult?.result?.total_calories || analysisResult?.total_calories || 580,
+            protein: analysisResult?.result?.total_protein || analysisResult?.total_protein || 20,
+            carbs: analysisResult?.result?.total_carbs || analysisResult?.total_carbs || 70,
+            fat: analysisResult?.result?.total_fat || analysisResult?.total_fat || 15,
+            mass: analysisResult?.result?.total_mass || analysisResult?.total_mass || 0,
+            grade: analysisResult?.result?.overall_grade || analysisResult?.overall_grade || 'B',
+            food_details: analysisResult?.result?.food_details || analysisResult?.food_details || []
           }
         })
       });
@@ -69,11 +85,16 @@ export default function ResultPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_url: imageUrl || '',
-          calories: analysisResult?.result?.calories || 580,
-          analysis_data: analysisResult?.result || { food_type: '분석된 음식' },
-          ml_task_id: sessionStorage.getItem('mlTaskId'),
-          estimated_mass: analysisResult?.result?.estimated_mass,
-          confidence_score: analysisResult?.result?.confidence_score
+          calories: analysisResult?.result?.total_calories || analysisResult?.total_calories || 580,
+          protein: analysisResult?.result?.total_protein || analysisResult?.total_protein || 20,
+          carbs: analysisResult?.result?.total_carbs || analysisResult?.total_carbs || 70,
+          fat: analysisResult?.result?.total_fat || analysisResult?.total_fat || 15,
+          food_name: analysisResult?.result?.food_name || analysisResult?.food_name || '분석된 음식',
+          estimated_mass: analysisResult?.result?.total_mass || analysisResult?.total_mass || 0,
+          confidence_score: analysisResult?.result?.confidence_score || analysisResult?.confidence_score || 0.5,
+          overall_grade: analysisResult?.result?.overall_grade || analysisResult?.overall_grade || 'B',
+          analysis_data: analysisResult?.result || analysisResult || {},
+          ml_task_id: sessionStorage.getItem('mlTaskId')
         })
       });
       
@@ -107,16 +128,91 @@ export default function ResultPage() {
             className="rounded-lg w-full h-auto object-contain max-h-60"
           />
           
+          {/* 음식 정보 */}
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--point-green)' }}>
+              {analysisResult?.result?.food_name || analysisResult?.food_name || '분석된 음식'}
+            </h2>
+            <div className="flex justify-center items-center space-x-4 mb-4">
+              <span className="text-sm text-gray-400">
+                질량: {analysisResult?.result?.total_mass || analysisResult?.total_mass || 0}g
+              </span>
+              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                (analysisResult?.result?.overall_grade || analysisResult?.overall_grade) === 'A' ? 'bg-green-500' :
+                (analysisResult?.result?.overall_grade || analysisResult?.overall_grade) === 'B' ? 'bg-yellow-500' :
+                (analysisResult?.result?.overall_grade || analysisResult?.overall_grade) === 'C' ? 'bg-orange-500' : 'bg-red-500'
+              }`}>
+                등급 {analysisResult?.result?.overall_grade || analysisResult?.overall_grade || 'B'}
+              </span>
+            </div>
+          </div>
+
+          {/* 칼로리 */}
           <div>
             <h2 className="text-lg text-gray-400">총 칼로리</h2>
             <p className="text-6xl font-black my-2" style={{ color: 'var(--point-green)' }}>
-              {analysisResult?.result?.calories || 580} <span className="text-4xl">kcal</span>
+              {analysisResult?.result?.total_calories || analysisResult?.total_calories || 580} <span className="text-4xl">kcal</span>
             </p>
             <div className="w-full bg-gray-700 rounded-full h-2.5">
-              <div className="bg-[var(--point-green)] h-2.5 rounded-full" style={{ width: "29%" }}></div>
+              <div className="bg-[var(--point-green)] h-2.5 rounded-full" style={{ 
+                width: `${Math.min((analysisResult?.result?.total_calories || analysisResult?.total_calories || 580) / 2000 * 100, 100)}%` 
+              }}></div>
             </div>
-            <p className="text-xs text-gray-400 mt-1 text-right">일일 권장량의 29%</p>
+            <p className="text-xs text-gray-400 mt-1 text-right">
+              일일 권장량의 {Math.round((analysisResult?.result?.total_calories || analysisResult?.total_calories || 580) / 2000 * 100)}%
+            </p>
           </div>
+
+          {/* 영양소 정보 */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-3 bg-gray-800/50 rounded-lg">
+              <p className="text-sm text-gray-400">단백질</p>
+              <p className="text-xl font-bold text-blue-400">
+                {analysisResult?.result?.total_protein || analysisResult?.total_protein || 20}g
+              </p>
+            </div>
+            <div className="text-center p-3 bg-gray-800/50 rounded-lg">
+              <p className="text-sm text-gray-400">탄수화물</p>
+              <p className="text-xl font-bold text-yellow-400">
+                {analysisResult?.result?.total_carbs || analysisResult?.total_carbs || 70}g
+              </p>
+            </div>
+            <div className="text-center p-3 bg-gray-800/50 rounded-lg">
+              <p className="text-sm text-gray-400">지방</p>
+              <p className="text-xl font-bold text-red-400">
+                {analysisResult?.result?.total_fat || analysisResult?.total_fat || 15}g
+              </p>
+            </div>
+          </div>
+
+          {/* 음식별 상세 정보 */}
+          {(analysisResult?.result?.food_details || analysisResult?.food_details) && (
+            <div>
+              <h3 className="text-lg font-bold mb-3 text-gray-300">음식별 상세 정보</h3>
+              <div className="space-y-2">
+                {(analysisResult?.result?.food_details || analysisResult?.food_details || []).map((food: any, index: number) => (
+                  <div key={index} className="p-3 bg-gray-800/30 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium">{food.name}</span>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        food.grade === 'A' ? 'bg-green-500' :
+                        food.grade === 'B' ? 'bg-yellow-500' :
+                        food.grade === 'C' ? 'bg-orange-500' : 'bg-red-500'
+                      }`}>
+                        {food.grade}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-sm text-gray-400">
+                      <div>질량: {food.mass}g</div>
+                      <div>칼로리: {food.calories}kcal</div>
+                      <div>단백질: {food.protein}g</div>
+                      <div>지방: {food.fat}g</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           
           <div className="text-left">
             <button 

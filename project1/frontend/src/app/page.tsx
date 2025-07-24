@@ -15,24 +15,26 @@ export default function Home() {
       sessionStorage.setItem('uploadedImage', imageUrl);
       
       try {
-        // MLServer에 이미지 업로드
-        const formData = new FormData();
-        formData.append('image', file);
+        // API 클라이언트를 통해 백엔드 MLServer API에 이미지 업로드
+        const { apiClient } = await import('@/lib/api');
+        const result = await apiClient.uploadImageToMLServer(file);
         
-        const response = await fetch('/mlserver/api/upload/', {
-          method: 'POST',
-          body: formData,
-        });
+        console.log('업로드 결과:', result);
         
-        if (response.ok) {
-          const result = await response.json();
+        if (result.success && result.data?.task_id) {
           sessionStorage.setItem('mlTaskId', result.data.task_id);
+          console.log('MLServer 작업 시작:', result.data.task_id);
+          router.push('/loading');
+        } else {
+          console.error('MLServer 응답 오류:', result.error || '알 수 없는 오류');
+          // 에러가 있어도 로딩 페이지로 이동 (데모용)
+          router.push('/loading');
         }
       } catch (error) {
-        console.error('Error uploading to MLServer:', error);
+        console.error('MLServer 업로드 에러:', error);
+        // 에러가 발생해도 로딩 페이지로 이동 (데모용)
+        router.push('/loading');
       }
-      
-      router.push('/loading');
     }
   };
 

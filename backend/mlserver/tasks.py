@@ -199,11 +199,8 @@ def process_image_upload(self, task_id):
             # (결과는 WebSocket을 통해 이미 전송됨)
             logger.info(f"ML 서버 작업 완료: {task.task_id}")
             
-            # 작업 상태 업데이트
-            task.status = 'completed'
-            task.progress = 100
-            task.save()
-            
+            # 작업 상태는 WebSocket 콜백에서 이미 업데이트됨
+            # 여기서는 추가 처리만 수행
             return f"ML 서버 작업 완료: {task_id}"
         else:
             # ML 서버 작업 실패

@@ -20,13 +20,6 @@ class TaskConsumer(AsyncWebsocketConsumer):
         logger.info(f"TaskConsumer.connect: Task ID: {self.task_id}")
         logger.info(f"TaskConsumer.connect: Room group name: {self.room_group_name}")
         
-        # 작업이 존재하는지 확인
-        task_exists = await self.check_task_exists(self.task_id)
-        if not task_exists:
-            logger.warning(f"TaskConsumer.connect: Task {self.task_id} not found")
-            await self.close()
-            return
-        
         # 그룹에 참가
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -35,10 +28,22 @@ class TaskConsumer(AsyncWebsocketConsumer):
         
         logger.info(f"TaskConsumer.connect: Added to group {self.room_group_name} with channel {self.channel_name}")
         
+        # 먼저 연결을 수락
         await self.accept()
         
-        # 현재 작업 상태 전송
-        await self.send_current_task_status()
+        # 작업이 존재하는지 확인 (연결 수락 후)
+        task_exists = await self.check_task_exists(self.task_id)
+        if not task_exists:
+            logger.warning(f"TaskConsumer.connect: Task {self.task_id} not found, but connection accepted")
+            # 작업이 없어도 연결은 유지하고 상태만 알림
+            await self.send(text_data=json.dumps({
+                'type': 'task.not_found',
+                'task_id': self.task_id,
+                'message': '작업을 찾을 수 없습니다.'
+            }))
+        else:
+            # 현재 작업 상태 전송
+            await self.send_current_task_status()
     
     async def disconnect(self, close_code):
         """WebSocket 연결 해제 처리"""
