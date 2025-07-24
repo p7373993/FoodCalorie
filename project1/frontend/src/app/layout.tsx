@@ -1,12 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { ConditionalNavigation } from "@/components/layout/ConditionalNavigation";
 
 export const metadata: Metadata = {
-  title: "Diet Survival - 다이어트 생존 게임",
-  description: "AI 기반 영양 분석과 소셜 게임화를 통한 다이어트 관리 서비스",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
-  themeColor: "#011936",
+  title: "체감 - 오로지 한 장으로 변화한다",
+  description: "AI 기반 음식 칼로리 측정과 소셜 챌린지를 통한 다이어트 관리 서비스",
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#00FFA3',
 };
 
 export default function RootLayout({
@@ -17,19 +22,11 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        <meta name="theme-color" content="#011936" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <link rel="manifest" href="/manifest.json" />
       </head>
       <body>
-        <div className="app-container">
-          <ConditionalNavigation />
-          <main className="app-content">
-            {children}
-          </main>
-        </div>
+        {children}
       </body>
     </html>
   );

@@ -1,155 +1,159 @@
-import axios from 'axios';
-import { 
-  ApiResponse, 
-  DailyNutrition, 
-  MonthlyCalendar, 
-  Challenge, 
-  Badge, 
-  AICoachTip,
-  MealLog 
-} from '@/types';
-
+// API 클라이언트 설정
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  // Content-Type 헤더 제거 (FormData 전송을 위해)
-});
+interface ApiResponse<T = any> {
+  success?: boolean;
+  data?: T;
+  error?: string;
+}
 
-// 인터셉터 설정 (토큰 인증 등)
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('authToken');
-  if (token) {
-    config.headers.Authorization = `Token ${token}`;
+class ApiClient {
+  private baseURL: string;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
   }
-  return config;
-});
 
-// API 함수들
-export const apiClient = {
-  // 달력 관련 API
-  getMonthlyLogs: async (year: number, month: number): Promise<MonthlyCalendar> => {
-    const response = await api.get<ApiResponse<MonthlyCalendar>>(`/api/logs/monthly?year=${year}&month=${month}`);
-    return response.data.data;
-  },
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
 
-  getDailyReport: async (date: string): Promise<DailyNutrition> => {
-    const response = await api.get<ApiResponse<DailyNutrition>>(`/api/logs/daily?date=${date}`);
-    return response.data.data;
-  },
-
-  // 식사 로그 관련 API
-  analyzeImageGemini: async (file: File) => {
-    const formData = new FormData();
-    formData.append('image', file);
-    formData.append('method', 'gemini_only'); // Gemini만 사용하도록 지시
+    // 인증 토큰이 있으면 추가
     const token = localStorage.getItem('authToken');
-    const response = await api.post(
-      '/api/logs/analyze-image/', // 반드시 슬래시 포함
-      formData,
-      {
-        headers: {
-          ...(token ? { 'Authorization': `Token ${token}` } : {})
-          // Content-Type을 지정하지 않음! (axios가 자동 처리)
-        },
-      }
-    );
-    return response.data.data;
-  },
+    if (token) {
+      config.headers = {
+        ...config.headers,
+        'Authorization': `Token ${token}`,
+      };
+    }
 
-  // MLServer 방식 이미지 분석
-  analyzeImageMLServer: async (file: File) => {
-    const formData = new FormData();
-    formData.append('image', file);
-    const token = localStorage.getItem('authToken');
-    const response = await api.post(
-      '/mlserver/api/upload/',
-      formData,
-      {
-        headers: {
-          ...(token ? { 'Authorization': `Token ${token}` } : {})
-        },
-      }
-    );
-    return response.data;
-  },
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-  createMealLog: async (mealData: Omit<MealLog, 'id'>): Promise<MealLog> => {
-    const response = await api.post<ApiResponse<MealLog>>('/api/logs/', mealData);
-    return response.data.data;
-  },
+    return response.json();
+  }
+
+  // 식단 관련 API
+  async getMeals() {
+    return this.request('/api/meals/');
+  }
+
+  async createMeal(mealData: {
+    image_url: string;
+    calories: number;
+    analysis_data?: any;
+    ml_task_id?: string;
+    estimated_mass?: number;
+    confidence_score?: number;
+  }) {
+    return this.request('/api/meals/', {
+      method: 'POST',
+      body: JSON.stringify(mealData),
+    });
+  }
+
+  async getCalendarMeals(year: number, month: number) {
+    return this.request(`/api/meals/calendar/?year=${year}&month=${month}`);
+  }
+
+  // 체중 관련 API
+  async getWeightEntries() {
+    return this.request('/api/weight/');
+  }
+
+  async createWeightEntry(weight: number) {
+    return this.request('/api/weight/', {
+      method: 'POST',
+      body: JSON.stringify({ weight }),
+    });
+  }
+
+  // 게임화 관련 API
+  async getGamificationProfile() {
+    return this.request('/api/gamification/');
+  }
+
+  async updateGamification(action: string) {
+    return this.request('/api/gamification/update/', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+  }
 
   // 챌린지 관련 API
-  getRecommendedChallenges: async (): Promise<Challenge[]> => {
-    const response = await api.get<ApiResponse<Challenge[]>>('/api/challenge-main/challenges/');
-    return response.data.data;
-  },
+  async getChallenges() {
+    return this.request('/api/challenges/');
+  }
 
-  getMyChallenges: async (): Promise<Challenge[]> => {
-    const response = await api.get<ApiResponse<Challenge[]>>('/api/challenge-main/challenges/my_challenges/');
-    return response.data.data;
-  },
+  async createChallenge(challengeData: {
+    title: string;
+    description: string;
+    type: 'CALORIE_LIMIT' | 'PROTEIN_MINIMUM';
+    goal: number;
+  }) {
+    return this.request('/api/challenges/', {
+      method: 'POST',
+      body: JSON.stringify(challengeData),
+    });
+  }
 
-  getChallengeDetails: async (challengeId: string): Promise<Challenge> => {
-    const response = await api.get<ApiResponse<Challenge>>(`/api/challenge-main/challenges/${challengeId}/`);
-    return response.data.data;
-  },
+  async joinChallenge(challengeId: number) {
+    return this.request(`/api/challenges/${challengeId}/join/`, {
+      method: 'POST',
+    });
+  }
 
-  leaveChallenge: async (challengeId: string) => {
-    const response = await api.post(`/api/challenge-main/challenges/${challengeId}/leave/`);
-    return response.data;
-  },
+  // AI 코칭 관련 API
+  async getAICoaching(type: 'meal_feedback' | 'weekly_report' | 'insights', data?: any) {
+    return this.request('/api/ai/coaching/', {
+      method: 'POST',
+      body: JSON.stringify({
+        type,
+        meal_data: data,
+      }),
+    });
+  }
 
-  createChallenge: async (challengeData: any) => {
-    const response = await api.post('/api/challenge-main/challenges/', challengeData);
-    return response.data;
-  },
+  // MLServer 연동 API
+  async uploadImageToMLServer(file: File): Promise<{ task_id: string }> {
+    const formData = new FormData();
+    formData.append('image', file);
 
-  joinChallenge: async (challengeId: string) => {
-    const response = await api.post(`/api/challenge-main/challenges/${challengeId}/join/`);
-    return response.data;
-  },
+    const response = await fetch(`${this.baseURL}/mlserver/api/upload/`, {
+      method: 'POST',
+      body: formData,
+    });
 
-  // 챌린지 진행상황(Progress) 조회 API 추가
-  getChallengeProgress: async (challengeId: string) => {
-    const response = await api.get(`/api/challenge-main/progress/challenge_progress/?challenge_id=${challengeId}`);
-    return response.data;
-  },
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status}`);
+    }
 
-  // AI 코치 관련 API
-  getCoachingTip: async (): Promise<AICoachTip> => {
-    const response = await api.get<ApiResponse<AICoachTip>>('/api/ai/coaching-tip');
-    return response.data.data;
-  },
+    return response.json();
+  }
 
-  // 프로필 관련 API
-  getUserBadges: async (username: string): Promise<Badge[]> => {
-    const response = await api.get<ApiResponse<Badge[]>>(`/api/users/${username}/badges`);
-    return response.data.data;
-  },
+  async getMLServerTaskStatus(taskId: string) {
+    return this.request(`/mlserver/api/tasks/${taskId}/`);
+  }
 
-  // 사용자 통계 API
-  getUserStatistics: async (): Promise<any> => {
-    const response = await api.get('/api/users/statistics');
-    return response.data.data;
-  },
+  // WebSocket 연결을 위한 URL 생성
+  getWebSocketURL(taskId: string): string {
+    const wsBaseURL = this.baseURL.replace('http', 'ws');
+    return `${wsBaseURL}/mlserver/ws/task/${taskId}/`;
+  }
+}
 
-  // 사용자 프로필 통계 API
-  getUserProfileStats: async (username: string): Promise<any> => {
-    const response = await api.get(`/api/users/profile/stats`, { params: { username } });
-    return response.data.data;
-  },
-
-  // 내 식사 기록 API
-  getMyMealLogs: async (): Promise<any[]> => {
-    const response = await api.get('/api/logs/');
-    return response.data.data;
-  },
-
-  // 식사 기록 삭제 API
-  deleteMealLog: async (id: string | number): Promise<void> => {
-    await api.delete(`/api/logs/${id}/`);
-  },
-};
-
-export default api; 
+export const apiClient = new ApiClient(API_BASE_URL);
+export default apiClient;

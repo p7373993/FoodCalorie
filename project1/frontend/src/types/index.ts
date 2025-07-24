@@ -1,117 +1,82 @@
-// 기본 타입 정의
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  profilePicture?: string; // 백엔드에 없을 수 있음
-  nickname?: string; // 백엔드에 없을 수 있음
+// Type definitions from provided Chegam prototype code
+
+export type AppState = 'main' | 'loading' | 'result' | 'dashboard' | 'challengeList' | 'createChallenge' | 'challengeDetail' | 'calendar';
+
+export type Challenge = { 
+  id: string; 
+  title: string; 
+  description: string; 
+  type: 'CALORIE_LIMIT' | 'PROTEIN_MINIMUM'; 
+  goal: number; 
+  creatorId: string; 
+  participants: string[]; 
+};
+
+export type Meal = { 
+  id: string; 
+  imageUrl: string; 
+  calories: number; 
+  timestamp: Date | { seconds: number; nanoseconds: number; }; 
+};
+
+export type WeightEntry = { 
+  id: string; 
+  weight: number; 
+  timestamp: { seconds: number; nanoseconds: number; }; 
+};
+
+export type GamificationData = { 
+  points: number; 
+  badges: string[]; 
+};
+
+export type ActionType = 'record_meal' | 'record_weight' | 'create_challenge' | 'join_challenge';
+
+// API Response types
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
 }
 
-export interface MealLog {
-  id: string;
-  date: string;
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-  foodName: string;
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  nutriScore: 'A' | 'B' | 'C' | 'D' | 'E';
-  imageUrl?: string;
-  time?: string;
-}
-
-export interface DailyNutrition {
-  date: string;
-  totalCalories: number;
-  totalCarbs: number;
-  totalProtein: number;
-  totalFat: number;
-  meals: MealLog[];
-}
-
-export interface MonthlyCalendar {
-  year: number;
-  month: number;
-  days: {
-    [date: string]: {
-      meals: Array<{
-        type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-        hasLog: boolean;
-      }>;
-    };
+export interface MLServerTaskResponse {
+  task_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  result_data?: {
+    estimated_mass: number;
+    confidence_score: number;
+    food_type: string;
+    calories: number;
   };
 }
 
-export interface Challenge {
-  id: string;
-  name: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  targetType: 'weight' | 'calorie' | 'macro';
-  targetValue: number;
-  isActive: boolean;
-  participants: ChallengeParticipant[];
-  maxParticipants?: number;
-  currentParticipantsCount?: number;
-  isFull?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  userParticipation?: ChallengeParticipant;
+// Component Props types
+export interface MainScreenProps {
+  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onGoToDashboard: () => void;
 }
 
-export interface ChallengeParticipant {
-  id: string;
-  user?: User; // user가 undefined일 수 있음
-  status: 'survived' | 'eliminated';
-  eliminationDate?: string;
-  currentStreak: number;
-  maxStreak?: number;
-  joinedAt?: string;
-  updatedAt?: string;
-  challengeId?: string;
+export interface LoadingScreenProps {
+  onCancel: () => void;
 }
 
-export interface ChallengeProgress {
-  id: string;
-  participant: ChallengeParticipant;
-  date: string;
-  target_achieved: boolean;
-  actual_value: number;
-  notes?: string;
-  created_at: string;
+export interface ResultScreenProps {
+  imageUrl: string | null;
+  onSaveAndGoToDashboard: (mealData: Omit<Meal, 'id' | 'timestamp'>) => void;
+  onReset: () => void;
 }
 
-export interface Badge {
-  id: string;
-  name: string;
-  description: string;
-  iconUrl: string;
-  isAcquired: boolean;
-  acquiredDate?: string;
-  user?: User;
-  challenge?: Challenge;
-  createdAt?: string;
+export interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export interface UserBadge {
-  id: string;
-  user: string; // User ID
-  badge: Badge; // Badge 객체
-  acquiredDate: string;
+export interface WeightRecordModalProps extends ModalProps {
+  onSave: (weight: string) => void;
 }
 
-export interface AICoachTip {
-  id: string;
-  message: string;
-  type: 'warning' | 'suggestion' | 'encouragement';
-  priority: 'low' | 'medium' | 'high';
-  createdAt: string;
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
+export interface FormattedAiResponseProps {
+  text: string;
 }
