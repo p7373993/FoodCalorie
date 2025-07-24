@@ -2,6 +2,15 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from datetime import time
+
+# 식사 시간대 상수
+MEAL_TIME_RANGES = {
+    'breakfast': (6, 11),   # 06:00~11:00 아침
+    'lunch': (11, 15),      # 11:00~15:00 점심
+    'snack': (15, 18),      # 15:00~18:00 간식
+    'dinner': (18, 23),     # 18:00~23:00 저녁
+}
 
 
 class ChallengeRoom(models.Model):
@@ -48,6 +57,18 @@ class UserChallenge(models.Model):
     user_target_weight = models.FloatField(validators=[MinValueValidator(30), MaxValueValidator(300)])  # kg
     user_challenge_duration_days = models.IntegerField(validators=[MinValueValidator(7), MaxValueValidator(365)])
     user_weekly_cheat_limit = models.IntegerField(choices=CHEAT_LIMIT_CHOICES, default=1)
+    
+    # 식사 규칙 설정
+    min_daily_meals = models.IntegerField(
+        choices=[(1, '1회'), (2, '2회'), (3, '3회'), (4, '4회'), (5, '5회')],
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="하루 최소 식사 횟수"
+    )
+    challenge_cutoff_time = models.TimeField(
+        default=time(23, 0),
+        help_text="챌린지 인정 마감 시간 (이후 식사는 무효)"
+    )
     
     # 챌린지 진행 상태
     current_streak_days = models.IntegerField(default=0, validators=[MinValueValidator(0)])

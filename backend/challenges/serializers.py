@@ -39,6 +39,7 @@ class UserChallengeSerializer(serializers.ModelSerializer):
             'id', 'room', 'room_name', 'target_calorie',
             'user_height', 'user_weight', 'user_target_weight',
             'user_challenge_duration_days', 'user_weekly_cheat_limit',
+            'min_daily_meals', 'challenge_cutoff_time',  # 새로운 식사 규칙 필드
             'current_streak_days', 'max_streak_days', 'remaining_duration_days',
             'current_weekly_cheat_count', 'total_success_days', 'total_failure_days',
             'status', 'challenge_start_date', 'challenge_end_date', 'is_active',
@@ -59,6 +60,17 @@ class ChallengeJoinSerializer(serializers.Serializer):
     user_target_weight = serializers.FloatField(min_value=30, max_value=300)
     user_challenge_duration_days = serializers.IntegerField(min_value=7, max_value=365)
     user_weekly_cheat_limit = serializers.ChoiceField(choices=[0, 1, 2, 3])
+    
+    # 식사 규칙 설정
+    min_daily_meals = serializers.ChoiceField(
+        choices=[1, 2, 3, 4, 5], 
+        default=2,
+        help_text="하루 최소 식사 횟수"
+    )
+    challenge_cutoff_time = serializers.TimeField(
+        default='23:00:00',
+        help_text="챌린지 인정 마감 시간 (HH:MM:SS 형식)"
+    )
 
 
 class DailyChallengeRecordSerializer(serializers.ModelSerializer):

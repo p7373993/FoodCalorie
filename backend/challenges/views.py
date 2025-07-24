@@ -74,6 +74,8 @@ class JoinChallengeView(APIView):
                     user_target_weight=serializer.validated_data['user_target_weight'],
                     user_challenge_duration_days=serializer.validated_data['user_challenge_duration_days'],
                     user_weekly_cheat_limit=serializer.validated_data['user_weekly_cheat_limit'],
+                    min_daily_meals=serializer.validated_data['min_daily_meals'],
+                    challenge_cutoff_time=serializer.validated_data['challenge_cutoff_time'],
                     remaining_duration_days=serializer.validated_data['user_challenge_duration_days'],
                     status='active'
                 )

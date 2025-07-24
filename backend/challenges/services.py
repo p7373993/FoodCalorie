@@ -4,10 +4,10 @@ from django.db.models import Sum, Q
 from api_integrated.models import MealLog
 from .models import (
     UserChallenge, DailyChallengeRecord, CheatDayRequest, 
-    ChallengeBadge, UserChallengeBadge
+    ChallengeBadge, UserChallengeBadge, MEAL_TIME_RANGES
 )
 import logging
-from datetime import date, timedelta
+from datetime import date, timedelta, time
 
 logger = logging.getLogger('challenges')
 
@@ -32,8 +32,8 @@ class ChallengeJudgmentService:
                 is_approved=True
             ).exists()
             
-            # 성공/실패 판정
-            is_success = self._judge_success(total_calories, target_calories, tolerance, is_cheat_day)
+            # 성공/실패 판정 (새로운 식사 규칙 포함)
+            is_success = self._judge_success(user_challenge, target_date, total_calories, target_calories, tolerance, is_cheat_day)
             
             # 일일 기록 생성/업데이트
             daily_record, created = DailyChallengeRecord.objects.update_or_create(
@@ -71,16 +71,52 @@ class ChallengeJudgmentService:
         return total_calories
     
     def _count_meals(self, user, target_date: date) -> int:
-        """해당 날짜의 식사 횟수 계산"""
+        """해당 날짜의 식사 횟수 계산 (모든 식사)"""
         return MealLog.objects.filter(user=user, date=target_date).count()
     
-    def _judge_success(self, total_calories: float, target_calories: float, tolerance: int, is_cheat_day: bool) -> bool:
-        """성공/실패 판정"""
+    def _count_valid_meals(self, user_challenge: UserChallenge, target_date: date) -> int:
+        """유효한 시간대의 식사 횟수 계산 (새로운 규칙)"""
+        user = user_challenge.user
+        cutoff_time = user_challenge.challenge_cutoff_time
+        
+        valid_meal_count = 0
+        meal_logs = MealLog.objects.filter(user=user, date=target_date)
+        
+        for meal_log in meal_logs:
+            # 1. 마감 시간 이후는 무효
+            if meal_log.time and meal_log.time > cutoff_time:
+                continue
+                
+            # 2. 식사 타입별 유효 시간대 체크
+            if self._is_valid_meal_time(meal_log.mealType, meal_log.time):
+                valid_meal_count += 1
+                
+        return valid_meal_count
+    
+    def _is_valid_meal_time(self, meal_type: str, meal_time) -> bool:
+        """식사 타입과 시간이 유효한지 체크"""
+        if not meal_time or meal_type not in MEAL_TIME_RANGES:
+            return False
+            
+        start_hour, end_hour = MEAL_TIME_RANGES[meal_type]
+        meal_hour = meal_time.hour
+        
+        return start_hour <= meal_hour < end_hour
+    
+    def _judge_success(self, user_challenge: UserChallenge, target_date: date, total_calories: float, target_calories: float, tolerance: int, is_cheat_day: bool) -> bool:
+        """새로운 식사 규칙이 적용된 성공/실패 판정"""
         if is_cheat_day:
             return True  # 치팅 데이는 무조건 성공 처리
         
-        # 목표 칼로리 ±tolerance 범위 내인지 확인
-        return abs(total_calories - target_calories) <= tolerance
+        # 1. 목표 칼로리 ±tolerance 범위 내인지 확인
+        calorie_success = abs(total_calories - target_calories) <= tolerance
+        
+        # 2. 유효한 식사 횟수 체크 (새로운 규칙)
+        valid_meal_count = self._count_valid_meals(user_challenge, target_date)
+        meal_count_success = valid_meal_count >= user_challenge.min_daily_meals
+        
+        # 둘 다 만족해야 성공
+        return calorie_success and meal_count_success
     
     def _update_streak(self, user_challenge: UserChallenge, target_date: date, is_success: bool, is_cheat_day: bool):
         """연속 성공 일수 업데이트"""

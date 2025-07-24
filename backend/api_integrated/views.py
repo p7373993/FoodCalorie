@@ -4,7 +4,6 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny # IsAuthenticated, AllowAny 임포트
 from .models import MealLog, AICoachTip # Only import models that still exist in api.models
 from .serializers import MealLogSerializer, AICoachTipSerializer, UserSerializer # Only import serializers that still exist
-from .challenges.serializers import ChallengeSerializer
 from datetime import datetime, timedelta
 from django.db.models import Q, Avg, Sum # Avg, Sum 임포트
 from django.contrib.auth.models import User
@@ -111,21 +110,8 @@ class MealLogViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         meal_log = serializer.save(user=self.request.user)
-        # --- 챌린지 성공/실패 판정 자동 연동 ---
-        from api.challenges.models import ChallengeParticipant, Challenge
-        from api.challenges.utils import update_challenge_progress
-        from datetime import date
-        user = self.request.user
-        today = meal_log.date
-        # 오늘 참여 중인 모든 챌린지에 대해 판정
-        participations = ChallengeParticipant.objects.filter(user=user, status='survived', challenge__is_active=True)
-        for participation in participations:
-            challenge = participation.challenge
-            # 오늘의 총 칼로리 합산
-            from api.models import MealLog
-            total_calories = MealLog.objects.filter(user=user, date=today).aggregate(total=Sum('calories'))['total'] or 0
-            nutrition_data = {'total_calories': total_calories, 'date': today}
-            update_challenge_progress(challenge.id, user, nutrition_data, target_date=today)
+        # 챌린지 판정은 signals.py에서 자동으로 처리됩니다.
+        # MealLog 생성 시 post_save 신호가 발생하여 자동으로 챌린지 판정이 실행됩니다.
 
 class AICoachTipViewSet(viewsets.ModelViewSet):
     queryset = AICoachTip.objects.all()
