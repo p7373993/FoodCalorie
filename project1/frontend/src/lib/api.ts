@@ -128,7 +128,7 @@ class ApiClient {
   }
 
   // MLServer 연동 API
-  async uploadImageToMLServer(file: File): Promise<{ task_id: string }> {
+  async uploadImageToMLServer(file: File): Promise<ApiResponse<{ task_id: string }>> {
     const formData = new FormData();
     formData.append('image', file);
 

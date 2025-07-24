@@ -15,24 +15,26 @@ export default function Home() {
       sessionStorage.setItem('uploadedImage', imageUrl);
       
       try {
-        // MLServer에 이미지 업로드
-        const formData = new FormData();
-        formData.append('image', file);
+        // API 클라이언트를 통해 백엔드 MLServer API에 이미지 업로드
+        const { apiClient } = await import('@/lib/api');
+        const result = await apiClient.uploadImageToMLServer(file);
         
-        const response = await fetch('/mlserver/api/upload/', {
-          method: 'POST',
-          body: formData,
-        });
+        console.log('업로드 결과:', result);
         
-        if (response.ok) {
-          const result = await response.json();
+        if (result.success && result.data?.task_id) {
           sessionStorage.setItem('mlTaskId', result.data.task_id);
+          console.log('MLServer 작업 시작:', result.data.task_id);
+          router.push('/loading');
+        } else {
+          console.error('MLServer 응답 오류:', result.error || '알 수 없는 오류');
+          // 에러가 있어도 로딩 페이지로 이동 (데모용)
+          router.push('/loading');
         }
       } catch (error) {
-        console.error('Error uploading to MLServer:', error);
+        console.error('MLServer 업로드 에러:', error);
+        // 에러가 발생해도 로딩 페이지로 이동 (데모용)
+        router.push('/loading');
       }
-      
-      router.push('/loading');
     }
   };
 
@@ -41,8 +43,8 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl text-center flex flex-col items-center justify-center space-y-12 relative">
+    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4 pt-8">
+      <div className="w-full max-w-2xl text-center flex flex-col items-center space-y-12 relative">
         <button 
           onClick={handleGoToDashboard} 
           className="absolute top-0 right-0 bg-gray-800/80 text-white font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105 backdrop-blur-sm border border-gray-700"
