@@ -201,24 +201,6 @@ class MLServerClient:
             foods = mass_estimation.get('foods', [])
             total_mass_g = mass_estimation.get('total_mass_g', 0)
             
-            # 음식별 영양 정보 데이터베이스 (100g당)
-            nutrition_db = {
-                '밥': {'calories': 130, 'protein': 2.7, 'carbs': 28.0, 'fat': 0.3, 'grade': 'B'},
-                '김치': {'calories': 20, 'protein': 1.6, 'carbs': 3.0, 'fat': 0.4, 'grade': 'A'},
-                '고기': {'calories': 250, 'protein': 26.0, 'carbs': 0.0, 'fat': 15.0, 'grade': 'B'},
-                '닭고기': {'calories': 165, 'protein': 31.0, 'carbs': 0.0, 'fat': 3.6, 'grade': 'A'},
-                '돼지고기': {'calories': 242, 'protein': 27.0, 'carbs': 0.0, 'fat': 14.0, 'grade': 'B'},
-                '소고기': {'calories': 250, 'protein': 26.0, 'carbs': 0.0, 'fat': 15.0, 'grade': 'B'},
-                '생선': {'calories': 206, 'protein': 22.0, 'carbs': 0.0, 'fat': 12.0, 'grade': 'A'},
-                '야채': {'calories': 25, 'protein': 2.0, 'carbs': 5.0, 'fat': 0.2, 'grade': 'A'},
-                '과일': {'calories': 50, 'protein': 0.5, 'carbs': 12.0, 'fat': 0.2, 'grade': 'A'},
-                '빵': {'calories': 280, 'protein': 8.0, 'carbs': 50.0, 'fat': 6.0, 'grade': 'C'},
-                '면': {'calories': 150, 'protein': 5.0, 'carbs': 30.0, 'fat': 1.0, 'grade': 'B'},
-                '계란': {'calories': 155, 'protein': 13.0, 'carbs': 1.1, 'fat': 11.0, 'grade': 'A'},
-                '우유': {'calories': 42, 'protein': 3.4, 'carbs': 5.0, 'fat': 1.0, 'grade': 'A'},
-                '치즈': {'calories': 113, 'protein': 7.0, 'carbs': 1.0, 'fat': 9.0, 'grade': 'B'},
-            }
-            
             # 음식별 상세 정보 계산
             food_details = []
             total_calories = 0
@@ -233,68 +215,79 @@ class MLServerClient:
                     food_mass = food.get('estimated_mass_g', 0)
                     confidence = food.get('confidence', 0.5)
                     
-                    # 음식명에서 영양 정보 찾기
-                    nutrition_info = None
-                    for key, value in nutrition_db.items():
-                        if key in food_name.lower():
-                            nutrition_info = value
-                            break
+                    # CSV에서 음식 정보 찾기
+                    nutrition_info = self._find_food_in_csv(food_name)
                     
-                    # 기본값 사용
-                    if not nutrition_info:
-                        nutrition_info = {'calories': 150, 'protein': 5.0, 'carbs': 20.0, 'fat': 5.0, 'grade': 'B'}
-                    
-                    # 실제 질량에 따른 영양소 계산
-                    ratio = food_mass / 100.0  # 100g 기준으로 계산
-                    food_calories = nutrition_info['calories'] * ratio
-                    food_protein = nutrition_info['protein'] * ratio
-                    food_carbs = nutrition_info['carbs'] * ratio
-                    food_fat = nutrition_info['fat'] * ratio
-                    
-                    food_details.append({
-                        'name': food_name,
-                        'mass': food_mass,
-                        'calories': round(food_calories, 1),
-                        'protein': round(food_protein, 1),
-                        'carbs': round(food_carbs, 1),
-                        'fat': round(food_fat, 1),
-                        'grade': nutrition_info['grade'],
-                        'confidence': confidence
-                    })
-                    
-                    total_calories += food_calories
-                    total_protein += food_protein
-                    total_carbs += food_carbs
-                    total_fat += food_fat
+                    if nutrition_info:
+                        # CSV에서 찾은 경우
+                        ratio = food_mass / 100.0  # 100g 기준으로 계산
+                        food_calories = nutrition_info['calories'] * ratio
+                        food_protein = nutrition_info['protein'] * ratio
+                        food_carbs = nutrition_info['carbs'] * ratio
+                        food_fat = nutrition_info['fat'] * ratio
+                        
+                        food_details.append({
+                            'name': food_name,
+                            'mass': food_mass,
+                            'calories': round(food_calories, 1),
+                            'protein': round(food_protein, 1),
+                            'carbs': round(food_carbs, 1),
+                            'fat': round(food_fat, 1),
+                            'grade': nutrition_info['grade'],
+                            'confidence': confidence,
+                            'found_in_db': True,
+                            'matched_name': nutrition_info.get('matched_name', food_name)
+                        })
+                        
+                        total_calories += food_calories
+                        total_protein += food_protein
+                        total_carbs += food_carbs
+                        total_fat += food_fat
+                    else:
+                        # CSV에서 찾지 못한 경우
+                        food_details.append({
+                            'name': food_name,
+                            'mass': food_mass,
+                            'calories': 0,
+                            'protein': 0,
+                            'carbs': 0,
+                            'fat': 0,
+                            'grade': 'UNKNOWN',
+                            'confidence': confidence,
+                            'found_in_db': False,
+                            'needs_manual_input': True
+                        })
                 
                 # 전체 등급 계산 (평균)
-                grades = [food['grade'] for food in food_details]
-                grade_scores = {'A': 4, 'B': 3, 'C': 2, 'D': 1}
-                avg_score = sum(grade_scores.get(g, 3) for g in grades) / len(grades)
-                if avg_score >= 3.5:
-                    overall_grade = 'A'
-                elif avg_score >= 2.5:
-                    overall_grade = 'B'
-                elif avg_score >= 1.5:
-                    overall_grade = 'C'
+                valid_grades = [food['grade'] for food in food_details if food['grade'] != 'UNKNOWN']
+                if valid_grades:
+                    grade_scores = {'A': 4, 'B': 3, 'C': 2, 'D': 1, 'E': 0}
+                    avg_score = sum(grade_scores.get(g, 3) for g in valid_grades) / len(valid_grades)
+                    if avg_score >= 3.5:
+                        overall_grade = 'A'
+                    elif avg_score >= 2.5:
+                        overall_grade = 'B'
+                    elif avg_score >= 1.5:
+                        overall_grade = 'C'
+                    elif avg_score >= 0.5:
+                        overall_grade = 'D'
+                    else:
+                        overall_grade = 'E'
                 else:
-                    overall_grade = 'D'
+                    overall_grade = 'UNKNOWN'
             else:
-                # 음식이 감지되지 않은 경우 기본값
-                total_calories = total_mass_g * 2.5  # 기본 칼로리 계산
-                total_protein = total_mass_g * 0.1
-                total_carbs = total_mass_g * 0.3
-                total_fat = total_mass_g * 0.05
-                
+                # 음식이 감지되지 않은 경우
                 food_details.append({
                     'name': '분석된 음식',
                     'mass': total_mass_g,
-                    'calories': round(total_calories, 1),
-                    'protein': round(total_protein, 1),
-                    'carbs': round(total_carbs, 1),
-                    'fat': round(total_fat, 1),
-                    'grade': 'B',
-                    'confidence': 0.5
+                    'calories': 0,
+                    'protein': 0,
+                    'carbs': 0,
+                    'fat': 0,
+                    'grade': 'UNKNOWN',
+                    'confidence': 0.5,
+                    'found_in_db': False,
+                    'needs_manual_input': True
                 })
             
             # 최종 결과 구성
@@ -308,35 +301,93 @@ class MLServerClient:
                 'overall_grade': overall_grade,
                 'confidence_score': self._calculate_average_confidence(result),
                 'food_details': food_details,
-                'detailed_result': result  # 원본 ML 결과
+                'detailed_result': result,  # 원본 ML 결과
+                'needs_manual_input': any(food.get('needs_manual_input', False) for food in food_details)
             }
             
             return django_result
             
         except Exception as e:
             logger.error(f"영양 정보 변환 오류: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             # 오류 시 기본값 반환
             return {
                 'food_name': '분석 오류',
                 'total_mass': 0,
-                'total_calories': 580,
-                'total_protein': 20,
-                'total_carbs': 70,
-                'total_fat': 15,
-                'overall_grade': 'B',
+                'total_calories': 0,
+                'total_protein': 0,
+                'total_carbs': 0,
+                'total_fat': 0,
+                'overall_grade': 'UNKNOWN',
                 'confidence_score': 0.5,
                 'food_details': [{
                     'name': '분석 오류',
                     'mass': 0,
-                    'calories': 580,
-                    'protein': 20,
-                    'carbs': 70,
-                    'fat': 15,
-                    'grade': 'B',
-                    'confidence': 0.5
+                    'calories': 0,
+                    'protein': 0,
+                    'carbs': 0,
+                    'fat': 0,
+                    'grade': 'UNKNOWN',
+                    'confidence': 0.5,
+                    'found_in_db': False,
+                    'needs_manual_input': True
                 }],
-                'detailed_result': result
+                'detailed_result': result,
+                'needs_manual_input': True
             }
+    
+    def _find_food_in_csv(self, food_name):
+        """CSV 파일에서 유사도 기반으로 음식 찾기"""
+        import csv
+        import os
+        from difflib import SequenceMatcher
+        
+        try:
+            csv_path = os.path.join(os.path.dirname(__file__), '..', '음식만개등급화.csv')
+            
+            if not os.path.exists(csv_path):
+                logger.warning(f"CSV 파일을 찾을 수 없습니다: {csv_path}")
+                return None
+            
+            best_match = None
+            best_similarity = 0.0
+            
+            with open(csv_path, 'r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                
+                for row in reader:
+                    csv_food_name = row['식품명']
+                    
+                    # 유사도 계산
+                    similarity = SequenceMatcher(None, food_name.lower(), csv_food_name.lower()).ratio()
+                    
+                    # 부분 문자열 매칭도 확인
+                    if food_name.lower() in csv_food_name.lower() or csv_food_name.lower() in food_name.lower():
+                        similarity = max(similarity, 0.8)
+                    
+                    if similarity > best_similarity and similarity > 0.6:  # 60% 이상 유사도
+                        best_similarity = similarity
+                        best_match = {
+                            'matched_name': csv_food_name,
+                            'calories': float(row['에너지(kcal)']),
+                            'protein': float(row['단백질(g)']),
+                            'carbs': float(row['당류(g)']),
+                            'fat': float(row['포화지방산(g)']),
+                            'grade': row['kfni_grade'],
+                            'similarity': similarity
+                        }
+            
+            if best_match:
+                logger.info(f"음식 매칭 성공: {food_name} -> {best_match['matched_name']} (유사도: {best_similarity:.2f})")
+                return best_match
+            else:
+                logger.info(f"음식 매칭 실패: {food_name} (데이터베이스에 없음)")
+                return None
+                
+        except Exception as e:
+            logger.error(f"CSV 파일 읽기 오류: {e}")
+            return None
     
     async def _update_task_in_db(self, task_id, result_data):
         """데이터베이스에 작업 결과 업데이트"""

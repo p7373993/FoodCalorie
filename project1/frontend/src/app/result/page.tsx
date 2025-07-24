@@ -4,6 +4,96 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import FormattedAiResponse from '@/components/ui/FormattedAiResponse';
 
+// 백엔드에서 이미 변환된 결과를 그대로 사용하는 함수
+const processBackendResult = (backendResult: any) => {
+  try {
+    console.log('백엔드 결과 처리:', backendResult);
+    
+    // 백엔드에서 이미 변환된 결과가 있는지 확인
+    if (backendResult.result && typeof backendResult.result === 'object') {
+      // 백엔드에서 변환된 결과 사용
+      const result = backendResult.result;
+      
+      // 백엔드 결과 구조에 맞게 반환
+      return {
+        food_name: result.food_name || '분석된 음식',
+        total_mass: result.total_mass || 0,
+        total_calories: result.total_calories || 0,
+        total_protein: result.total_protein || 0,
+        total_carbs: result.total_carbs || 0,
+        total_fat: result.total_fat || 0,
+        overall_grade: result.overall_grade || 'UNKNOWN',
+        confidence_score: result.confidence_score || 0.5,
+        food_details: result.food_details || [],
+        needs_manual_input: result.needs_manual_input || false,
+        original_result: result
+      };
+    } else {
+      // 원본 ML 결과인 경우 (백엔드 변환 실패)
+      console.log('원본 ML 결과 감지, 프론트엔드에서 처리');
+      const mlResult = backendResult.result || backendResult;
+      const massEstimation = mlResult.mass_estimation || {};
+      const foods = massEstimation.foods || [];
+      const totalMass = massEstimation.total_mass_g || 0;
+
+      if (foods.length > 0) {
+        const food = foods[0]; // 첫 번째 음식만 처리
+        return {
+          food_name: food.food_name || '분석된 음식',
+          total_mass: totalMass,
+          total_calories: 0, // CSV에서 찾지 못했으므로 0
+          total_protein: 0,
+          total_carbs: 0,
+          total_fat: 0,
+          overall_grade: 'UNKNOWN',
+          confidence_score: food.confidence || 0.5,
+          food_details: [{
+            name: food.food_name || '분석된 음식',
+            mass: food.estimated_mass_g || 0,
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            grade: 'UNKNOWN',
+            confidence: food.confidence || 0.5,
+            needs_manual_input: true
+          }],
+          needs_manual_input: true,
+          original_result: mlResult
+        };
+      } else {
+        return {
+          food_name: '분석된 음식',
+          total_mass: totalMass,
+          total_calories: 0,
+          total_protein: 0,
+          total_carbs: 0,
+          total_fat: 0,
+          overall_grade: 'UNKNOWN',
+          confidence_score: 0.5,
+          food_details: [],
+          needs_manual_input: true,
+          original_result: mlResult
+        };
+      }
+    }
+  } catch (error) {
+    console.error('백엔드 결과 처리 오류:', error);
+    return {
+      food_name: '처리 오류',
+      total_mass: 0,
+      total_calories: 0,
+      total_protein: 0,
+      total_carbs: 0,
+      total_fat: 0,
+      overall_grade: 'UNKNOWN',
+      confidence_score: 0.5,
+      food_details: [],
+      needs_manual_input: true
+    };
+  }
+};
+
 export default function ResultPage() {
   const router = useRouter();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -25,146 +115,44 @@ export default function ResultPage() {
         const result = JSON.parse(storedResult);
         console.log('분석 결과 파싱:', result);
         
-        // ML 서버 원본 결과를 영양 정보로 변환
-        const processedResult = convertMLResultToNutrition(result);
+        // 백엔드에서 변환된 결과 처리
+        const processedResult = processBackendResult(result);
+        console.log('처리된 결과:', processedResult);
         setAnalysisResult(processedResult);
       } catch (error) {
         console.error('Error parsing analysis result:', error);
+        console.error('Stored result:', storedResult);
         // 파싱 실패 시 기본값 설정
         setAnalysisResult({
-          food_name: '분석 오류',
+          food_name: '분석 오류 - 세션 스토리지 확인 필요',
           total_mass: 0,
-          total_calories: 580,
-          total_protein: 20,
-          total_carbs: 70,
-          total_fat: 15,
-          overall_grade: 'B',
+          total_calories: 0,
+          total_protein: 0,
+          total_carbs: 0,
+          total_fat: 0,
+          overall_grade: 'UNKNOWN',
           confidence_score: 0.5,
-          food_details: []
+          food_details: [],
+          needs_manual_input: true
         });
       }
+    } else {
+      console.log('세션 스토리지에 분석 결과가 없습니다.');
+      // 세션 스토리지에 결과가 없는 경우
+      setAnalysisResult({
+        food_name: '분석 결과 없음 - 다시 업로드해주세요',
+        total_mass: 0,
+        total_calories: 0,
+        total_protein: 0,
+        total_carbs: 0,
+        total_fat: 0,
+        overall_grade: 'UNKNOWN',
+        confidence_score: 0.5,
+        food_details: [],
+        needs_manual_input: true
+      });
     }
   }, []);
-
-  // ML 서버 결과를 영양 정보로 변환하는 함수
-  const convertMLResultToNutrition = (mlResult: any) => {
-    try {
-      const result = mlResult.result || mlResult;
-      const massEstimation = result.mass_estimation || {};
-      const foods = massEstimation.foods || [];
-      const totalMass = massEstimation.total_mass_g || 0;
-
-      // 음식별 영양 정보 데이터베이스 (100g당)
-      const nutritionDB: { [key: string]: any } = {
-        '약과': { calories: 400, protein: 6.0, carbs: 65.0, fat: 12.0, grade: 'C' },
-        '밥': { calories: 130, protein: 2.7, carbs: 28.0, fat: 0.3, grade: 'B' },
-        '김치': { calories: 20, protein: 1.6, carbs: 3.0, fat: 0.4, grade: 'A' },
-        '고기': { calories: 250, protein: 26.0, carbs: 0.0, fat: 15.0, grade: 'B' },
-        '닭고기': { calories: 165, protein: 31.0, carbs: 0.0, fat: 3.6, grade: 'A' },
-        '돼지고기': { calories: 242, protein: 27.0, carbs: 0.0, fat: 14.0, grade: 'B' },
-        '소고기': { calories: 250, protein: 26.0, carbs: 0.0, fat: 15.0, grade: 'B' },
-        '생선': { calories: 206, protein: 22.0, carbs: 0.0, fat: 12.0, grade: 'A' },
-        '야채': { calories: 25, protein: 2.0, carbs: 5.0, fat: 0.2, grade: 'A' },
-        '과일': { calories: 50, protein: 0.5, carbs: 12.0, fat: 0.2, grade: 'A' },
-        '빵': { calories: 280, protein: 8.0, carbs: 50.0, fat: 6.0, grade: 'C' },
-        '면': { calories: 150, protein: 5.0, carbs: 30.0, fat: 1.0, grade: 'B' },
-        '계란': { calories: 155, protein: 13.0, carbs: 1.1, fat: 11.0, grade: 'A' },
-        '우유': { calories: 42, protein: 3.4, carbs: 5.0, fat: 1.0, grade: 'A' },
-        '치즈': { calories: 113, protein: 7.0, carbs: 1.0, fat: 9.0, grade: 'B' },
-      };
-
-      let totalCalories = 0;
-      let totalProtein = 0;
-      let totalCarbs = 0;
-      let totalFat = 0;
-      const foodDetails: any[] = [];
-
-      if (foods.length > 0) {
-        foods.forEach((food: any) => {
-          const foodName = food.food_name || '알수없음';
-          const foodMass = food.estimated_mass_g || 0;
-          const confidence = food.confidence || 0.5;
-
-          // 음식명에서 영양 정보 찾기
-          let nutritionInfo = nutritionDB['약과']; // 기본값
-          for (const [key, value] of Object.entries(nutritionDB)) {
-            if (foodName.includes(key)) {
-              nutritionInfo = value;
-              break;
-            }
-          }
-
-          // 실제 질량에 따른 영양소 계산
-          const ratio = foodMass / 100.0;
-          const foodCalories = nutritionInfo.calories * ratio;
-          const foodProtein = nutritionInfo.protein * ratio;
-          const foodCarbs = nutritionInfo.carbs * ratio;
-          const foodFat = nutritionInfo.fat * ratio;
-
-          foodDetails.push({
-            name: foodName,
-            mass: foodMass,
-            calories: Math.round(foodCalories * 10) / 10,
-            protein: Math.round(foodProtein * 10) / 10,
-            carbs: Math.round(foodCarbs * 10) / 10,
-            fat: Math.round(foodFat * 10) / 10,
-            grade: nutritionInfo.grade,
-            confidence: confidence
-          });
-
-          totalCalories += foodCalories;
-          totalProtein += foodProtein;
-          totalCarbs += foodCarbs;
-          totalFat += foodFat;
-        });
-      } else {
-        // 기본값
-        totalCalories = totalMass * 2.5;
-        totalProtein = totalMass * 0.1;
-        totalCarbs = totalMass * 0.3;
-        totalFat = totalMass * 0.05;
-      }
-
-      // 전체 등급 계산
-      const grades = foodDetails.map(f => f.grade);
-      const gradeScores: { [key: string]: number } = { 'A': 4, 'B': 3, 'C': 2, 'D': 1 };
-      const avgScore = grades.length > 0 
-        ? grades.reduce((sum, grade) => sum + (gradeScores[grade] || 3), 0) / grades.length 
-        : 3;
-      
-      let overallGrade = 'B';
-      if (avgScore >= 3.5) overallGrade = 'A';
-      else if (avgScore >= 2.5) overallGrade = 'B';
-      else if (avgScore >= 1.5) overallGrade = 'C';
-      else overallGrade = 'D';
-
-      return {
-        food_name: foods.map((f: any) => f.food_name).join(', ') || '분석된 음식',
-        total_mass: Math.round(totalMass * 10) / 10,
-        total_calories: Math.round(totalCalories * 10) / 10,
-        total_protein: Math.round(totalProtein * 10) / 10,
-        total_carbs: Math.round(totalCarbs * 10) / 10,
-        total_fat: Math.round(totalFat * 10) / 10,
-        overall_grade: overallGrade,
-        confidence_score: foods.length > 0 ? foods.reduce((sum: number, f: any) => sum + (f.confidence || 0.5), 0) / foods.length : 0.5,
-        food_details: foodDetails,
-        original_result: result
-      };
-    } catch (error) {
-      console.error('ML 결과 변환 오류:', error);
-      return {
-        food_name: '변환 오류',
-        total_mass: 0,
-        total_calories: 580,
-        total_protein: 20,
-        total_carbs: 70,
-        total_fat: 15,
-        overall_grade: 'B',
-        confidence_score: 0.5,
-        food_details: []
-      };
-    }
-  };
 
   const handleGetCoaching = async () => {
     setIsCoachingLoading(true); 
@@ -178,10 +166,10 @@ export default function ResultPage() {
           type: 'meal_feedback',
           meal_data: {
             food_name: analysisResult?.food_name || '분석된 음식',
-            calories: analysisResult?.total_calories || 580,
-            protein: analysisResult?.total_protein || 20,
-            carbs: analysisResult?.total_carbs || 70,
-            fat: analysisResult?.total_fat || 15,
+            calories: analysisResult?.total_calories || 0,
+            protein: analysisResult?.total_protein || 0,
+            carbs: analysisResult?.total_carbs || 0,
+            fat: analysisResult?.total_fat || 0,
             mass: analysisResult?.total_mass || 0,
             grade: analysisResult?.overall_grade || 'B',
             food_details: analysisResult?.food_details || []
@@ -211,10 +199,10 @@ export default function ResultPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_url: imageUrl || '',
-          calories: analysisResult?.total_calories || 580,
-          protein: analysisResult?.total_protein || 20,
-          carbs: analysisResult?.total_carbs || 70,
-          fat: analysisResult?.total_fat || 15,
+          calories: analysisResult?.total_calories || 0,
+          protein: analysisResult?.total_protein || 0,
+          carbs: analysisResult?.total_carbs || 0,
+          fat: analysisResult?.total_fat || 0,
           food_name: analysisResult?.food_name || '분석된 음식',
           estimated_mass: analysisResult?.total_mass || 0,
           confidence_score: analysisResult?.confidence_score || 0.5,
@@ -280,15 +268,15 @@ export default function ResultPage() {
           <div>
             <h2 className="text-lg text-gray-400">총 칼로리</h2>
             <p className="text-6xl font-black my-2" style={{ color: 'var(--point-green)' }}>
-              {analysisResult?.total_calories || 580} <span className="text-4xl">kcal</span>
+              {analysisResult?.total_calories || 0} <span className="text-4xl">kcal</span>
             </p>
             <div className="w-full bg-gray-700 rounded-full h-2.5">
               <div className="bg-[var(--point-green)] h-2.5 rounded-full" style={{ 
-                width: `${Math.min((analysisResult?.total_calories || 580) / 2000 * 100, 100)}%` 
+                width: `${Math.min((analysisResult?.total_calories || 0) / 2000 * 100, 100)}%` 
               }}></div>
             </div>
             <p className="text-xs text-gray-400 mt-1 text-right">
-              일일 권장량의 {Math.round((analysisResult?.total_calories || 580) / 2000 * 100)}%
+              일일 권장량의 {Math.round((analysisResult?.total_calories || 0) / 2000 * 100)}%
             </p>
           </div>
 
@@ -297,19 +285,19 @@ export default function ResultPage() {
             <div className="text-center p-3 bg-gray-800/50 rounded-lg">
               <p className="text-sm text-gray-400">단백질</p>
               <p className="text-xl font-bold text-blue-400">
-                {analysisResult?.total_protein || 20}g
+                {analysisResult?.total_protein || 0}g
               </p>
             </div>
             <div className="text-center p-3 bg-gray-800/50 rounded-lg">
               <p className="text-sm text-gray-400">탄수화물</p>
               <p className="text-xl font-bold text-yellow-400">
-                {analysisResult?.total_carbs || 70}g
+                {analysisResult?.total_carbs || 0}g
               </p>
             </div>
             <div className="text-center p-3 bg-gray-800/50 rounded-lg">
               <p className="text-sm text-gray-400">지방</p>
               <p className="text-xl font-bold text-red-400">
-                {analysisResult?.total_fat || 15}g
+                {analysisResult?.total_fat || 0}g
               </p>
             </div>
           </div>
@@ -322,29 +310,76 @@ export default function ResultPage() {
                 {analysisResult.food_details.map((food: any, index: number) => (
                   <div key={index} className="p-3 bg-gray-800/30 rounded-lg">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">{food.name}</span>
                       <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          food.grade === 'A' ? 'bg-green-500' :
-                          food.grade === 'B' ? 'bg-yellow-500' :
-                          food.grade === 'C' ? 'bg-orange-500' : 'bg-red-500'
-                        }`}>
-                          {food.grade}
-                        </span>
+                        <span className="font-medium">{food.name}</span>
+                        {food.matched_name && food.matched_name !== food.name && (
+                          <span className="text-xs text-gray-500">
+                            (매칭: {food.matched_name})
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {food.needs_manual_input ? (
+                          <span className="px-2 py-1 rounded text-xs bg-gray-600 text-white">
+                            수동입력필요
+                          </span>
+                        ) : (
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            food.grade === 'A' ? 'bg-green-500' :
+                            food.grade === 'B' ? 'bg-yellow-500' :
+                            food.grade === 'C' ? 'bg-orange-500' :
+                            food.grade === 'D' ? 'bg-red-500' :
+                            food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
+                          }`}>
+                            {food.grade === 'UNKNOWN' ? '미확인' : food.grade}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-500">
                           {Math.round(food.confidence * 100)}%
                         </span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-400">
-                      <div>질량: {food.mass}g</div>
-                      <div>칼로리: {food.calories}kcal</div>
-                      <div>단백질: {food.protein}g</div>
-                      <div>지방: {food.fat}g</div>
-                    </div>
+                    
+                    {food.needs_manual_input ? (
+                      <div className="text-center py-4">
+                        <p className="text-yellow-400 text-sm mb-2">
+                          데이터베이스에 없는 음식입니다. 직접 입력해주세요.
+                        </p>
+                        <button className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                          영양정보 직접 입력
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-400">
+                        <div>질량: {food.mass}g</div>
+                        <div>칼로리: {food.calories}kcal</div>
+                        <div>단백질: {food.protein}g</div>
+                        <div>지방: {food.fat}g</div>
+                      </div>
+                    )}
+                    
+                    {!food.found_in_db && !food.needs_manual_input && (
+                      <div className="mt-2 text-xs text-yellow-400">
+                        ⚠️ 추정값입니다. 정확한 정보를 위해 직접 입력을 권장합니다.
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* 수동 입력 필요 알림 */}
+          {analysisResult?.needs_manual_input && (
+            <div className="p-4 bg-yellow-900/30 border border-yellow-600 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-yellow-400">⚠️</span>
+                <span className="font-medium text-yellow-400">영양정보 입력 필요</span>
+              </div>
+              <p className="text-sm text-gray-300">
+                일부 음식이 데이터베이스에 없어 정확한 영양정보를 제공할 수 없습니다. 
+                더 정확한 분석을 위해 영양정보를 직접 입력해주세요.
+              </p>
             </div>
           )}
           

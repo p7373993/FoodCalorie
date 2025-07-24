@@ -30,3 +30,4 @@ node_modules/
 # Task files
 tasks.json
 tasks/ 
+MLServer/debug_multimodal_input.jpg
