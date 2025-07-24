@@ -185,7 +185,10 @@ class CheatDayService:
         """치팅 요청 처리"""
         # 현재 시간 확인 (23:59:59 KST 이전인지)
         current_time = timezone.now()
-        target_datetime = timezone.datetime.combine(target_date, timezone.datetime.min.time().replace(hour=23, minute=59, second=59))
+        from datetime import datetime
+        target_datetime = timezone.make_aware(
+            datetime.combine(target_date, time(23, 59, 59))
+        )
         
         if current_time > target_datetime:
             return {
