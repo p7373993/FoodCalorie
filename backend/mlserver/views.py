@@ -225,7 +225,13 @@ def update_test_task(request, task_id):
         task.message = new_message
         
         # 완료 상태인 경우 결과 데이터 추가
-        if new_status == 'completed':
+        if new_status == 'completed' and 'result_data' in request.data:
+            result_data = request.data.get('result_data', {})
+            task.result_data = result_data
+            task.estimated_mass = result_data.get('estimated_mass', 0)
+            task.confidence_score = result_data.get('confidence_score', 0.0)
+        elif new_status == 'completed':
+            # 기본 테스트 데이터
             task.result_data = {
                 'estimated_mass': 250.5,
                 'confidence_score': 0.85,
@@ -299,11 +305,21 @@ def upload_image(request):
         image_file = request.FILES['image']
         
         # 파일 타입 검증
-        if not image_file.content_type.startswith('image/'):
-            return Response({
-                'success': False,
-                'error': '이미지 파일만 업로드 가능합니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if not image_file.content_type or not image_file.content_type.startswith('image/'):
+            # content_type이 없는 경우 파일 확장자로 검증
+            if image_file.name:
+                file_extension = image_file.name.lower().split('.')[-1]
+                allowed_extensions = ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp']
+                if file_extension not in allowed_extensions:
+                    return Response({
+                        'success': False,
+                        'error': f'지원하지 않는 파일 형식입니다. 지원 형식: {", ".join(allowed_extensions)}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'success': False,
+                    'error': '이미지 파일만 업로드 가능합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # 파일 크기 검증 (10MB 제한)
         if image_file.size > 10 * 1024 * 1024:
