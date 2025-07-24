@@ -1,94 +1,94 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-interface Challenge {
-  id: string;
-  title: string;
-  description: string;
-  type: 'CALORIE_LIMIT' | 'PROTEIN_MINIMUM';
-  goal: number;
-  creator: string;
-  participant_count: number;
-}
+import { ChallengeRoom } from '@/types';
+import ChallengeRoomList from '@/components/challenges/ChallengeRoomList';
 
 export default function ChallengeListPage() {
   const router = useRouter();
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<ChallengeRoom | null>(null);
 
-  useEffect(() => {
-    const loadChallenges = async () => {
-      try {
-        const response = await fetch('/api/challenges/');
-        const data = await response.json();
-        setChallenges(data);
-      } catch (error) {
-        console.error('Error loading challenges:', error);
-      }
-    };
-
-    loadChallenges();
-  }, []);
-
-  const handleGoToCreate = () => {
-    router.push('/challenges/create');
+  const handleRoomSelect = (room: ChallengeRoom) => {
+    setSelectedRoom(room);
+    // 챌린지 참여 페이지로 이동하거나 모달을 열 수 있습니다
+    router.push(`/challenges/${room.id}`);
   };
 
-  const handleGoToDetail = (challenge: Challenge) => {
-    router.push(`/challenges/${challenge.id}`);
-  };
-
-  const handleBack = () => {
+  const handleGoToDashboard = () => {
     router.push('/dashboard');
   };
 
+  const handleGoToMyChallenges = () => {
+    router.push('/challenges/my');
+  };
+
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-4xl flex flex-col space-y-6 animate-fade-in">
-        <header className="w-full flex justify-between items-center">
-          <h1 className="text-4xl font-black" style={{ color: 'var(--point-green)' }}>챌린지</h1>
+    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4">
+      <div className="w-full max-w-7xl flex flex-col space-y-6 animate-fade-in">
+        {/* 헤더 */}
+        <header className="w-full flex justify-between items-center py-6">
           <div>
+            <h1 className="text-4xl font-black mb-2" style={{ fontFamily: 'NanumGothic', color: 'var(--point-green)' }}>
+              챌린지 참여하기
+            </h1>
+            <p className="text-gray-400">
+              칼로리 목표를 달성하고 다른 사용자들과 경쟁해보세요
+            </p>
+          </div>
+          <div className="flex gap-3">
             <button 
-              onClick={handleGoToCreate} 
-              className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg mr-2"
+              onClick={handleGoToMyChallenges} 
+              className="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors"
+              style={{ fontFamily: 'NanumGothic' }}
             >
-              새 챌린지 만들기
+              내 챌린지
             </button>
             <button 
-              onClick={handleBack} 
-              className="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+              onClick={handleGoToDashboard} 
+              className="bg-[var(--point-green)] text-black font-bold py-3 px-6 rounded-lg hover:bg-green-400 transition-colors"
+              style={{ fontFamily: 'NanumGothic' }}
             >
-              뒤로
+              대시보드로
             </button>
           </div>
         </header>
 
-        <div className="space-y-4">
-          {challenges.map(c => (
-            <button 
-              key={c.id} 
-              onClick={() => handleGoToDetail(c)} 
-              className="w-full bg-[var(--card-bg)] p-6 rounded-2xl text-left flex justify-between items-center hover:border-[var(--point-green)] border border-transparent transition-colors"
-            >
-              <div>
-                <h2 className="text-xl font-bold">{c.title}</h2>
-                <p className="text-sm text-gray-400 mt-1">{c.description}</p>
-                <p className="text-sm text-gray-300 mt-2">
-                  목표: {c.goal}{c.type === 'CALORIE_LIMIT' ? 'kcal 이하' : 'g 이상'}
-                </p>
+        {/* 안내 섹션 */}
+        <div className="bg-[var(--card-bg)] rounded-2xl p-6 border border-gray-600">
+          <div className="flex items-start gap-4">
+            <div className="text-3xl">🎯</div>
+            <div>
+              <h2 className="text-lg font-bold text-white mb-2" style={{ fontFamily: 'NanumGothic' }}>
+                챌린지 시스템이란?
+              </h2>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                AI 기반 식단 분석을 통해 자동으로 칼로리를 계산하고, 목표 달성 여부를 판정합니다. 
+                다른 사용자들과 실시간으로 순위를 경쟁하며 건강한 식습관을 만들어보세요.
+              </p>
+              <div className="flex gap-4 mt-3 text-xs text-gray-500">
+                <span>• 실시간 순위 시스템</span>
+                <span>• 주간 치팅 기능</span>
+                <span>• 개인 맞춤 목표 설정</span>
+                <span>• 배지 획득 시스템</span>
               </div>
-              <p className="text-sm text-gray-500">참가자: {c.participant_count}명</p>
-            </button>
-          ))}
-          
-          {challenges.length === 0 && (
-            <div className="w-full bg-[var(--card-bg)] p-6 rounded-2xl text-center">
-              <p className="text-gray-400">아직 생성된 챌린지가 없습니다.</p>
-              <p className="text-gray-500 text-sm mt-2">첫 번째 챌린지를 만들어보세요!</p>
             </div>
-          )}
+          </div>
         </div>
+
+        {/* 챌린지 방 목록 */}
+        <div className="flex-1">
+          <ChallengeRoomList 
+            onRoomSelect={handleRoomSelect}
+            showJoinButton={true}
+          />
+        </div>
+
+        {/* 푸터 */}
+        <footer className="text-center py-6 text-gray-500 text-sm">
+          <p>새로운 챌린지 방은 관리자가 주기적으로 추가합니다.</p>
+          <p>궁금한 점이 있으시면 설정에서 문의해주세요.</p>
+        </footer>
       </div>
     </div>
   );
