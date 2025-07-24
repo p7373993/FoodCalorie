@@ -41,8 +41,8 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl text-center flex flex-col items-center justify-center space-y-12 relative">
+    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4 pt-8">
+      <div className="w-full max-w-2xl text-center flex flex-col items-center space-y-12 relative">
         <button 
           onClick={handleGoToDashboard} 
           className="absolute top-0 right-0 bg-gray-800/80 text-white font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105 backdrop-blur-sm border border-gray-700"

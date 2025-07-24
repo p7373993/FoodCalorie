@@ -98,8 +98,8 @@ export default function ResultPage() {
   };
 
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl text-center flex flex-col items-center justify-center space-y-6">
+    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4 pt-8">
+      <div className="w-full max-w-2xl text-center flex flex-col items-center space-y-6">
         <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 space-y-6 animate-fade-in-slow">
           <img 
             src={imageUrl || "https://placehold.co/600x400/121212/eaeaea?text=분석된+음식+사진"} 
