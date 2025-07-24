@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     DEFAULT_CONFIDENCE: float = 0.3
     DEFAULT_MASS: float = 100.0
     
+    # 밀도 계산 설정
+    DENSITY_CONFIDENCE_THRESHOLD: float = 0.5
+    DENSITY_VALIDATION_MIN: float = 0.1
+    DENSITY_VALIDATION_MAX: float = 3.0
+    DENSITY_FALLBACK_VALUE: float = 1.0
+    
     # 모델 입력 크기
     MIDAS_INPUT_SIZE: int = 384
     
