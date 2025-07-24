@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'api_integrated.apps.ApiIntegratedConfig',  # 메인 API 앱
     'mlserver',  # MLServer 연동
     'chegam',  # 체감 앱
+    'challenges.apps.ChallengesConfig',  # 챌린지 시스템
 ]
 
 MIDDLEWARE = [
