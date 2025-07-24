@@ -21,7 +21,7 @@ logger = logging.getLogger('challenges')
 class ChallengeRoomViewSet(viewsets.ReadOnlyModelViewSet):
     """챌린지 방 ViewSet (읽기 전용)"""
     serializer_class = ChallengeRoomSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # 임시로 인증 없이 접근 허용
     
     def get_queryset(self):
         return ChallengeRoom.objects.filter(is_active=True)

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChallengeRoom } from '@/types';
 import { apiClient } from '@/lib/api';
-import ChallengeRoomCard from './ChallengeRoomCard';
+import ChallengeRoomCard from '@/components/challenges/ChallengeRoomCard';
 
 interface ChallengeRoomListProps {
   onRoomSelect?: (room: ChallengeRoom) => void;
@@ -34,11 +34,14 @@ const ChallengeRoomList: React.FC<ChallengeRoomListProps> = ({
       setLoading(true);
       const response = await apiClient.getChallengeRooms();
       
-      if (response.success && response.data) {
-        setRooms(response.data);
+      console.log('API Response:', response); // 디버깅용
+      
+      if (response && response.results) {
+        // Django REST Framework 페이지네이션 응답 처리
+        setRooms(response.results);
         setError(null);
       } else {
-        setError(response.error || '챌린지 방 목록을 불러올 수 없습니다.');
+        setError('챌린지 방 목록을 불러올 수 없습니다.');
       }
     } catch (err) {
       console.error('Error loading challenge rooms:', err);

@@ -40,6 +40,14 @@ export interface ApiResponse<T = any> {
   message?: string;
 }
 
+// Django REST Framework 페이지네이션 응답
+export interface PaginatedResponse<T = any> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export interface MLServerTaskResponse {
   task_id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';

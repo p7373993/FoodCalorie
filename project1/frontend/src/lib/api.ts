@@ -1,5 +1,6 @@
 import type { 
   ApiResponse,
+  PaginatedResponse,
   ChallengeRoom,
   UserChallenge,
   ChallengeJoinRequest,
@@ -123,7 +124,7 @@ class ApiClient {
 
   // 새로운 챌린지 시스템 API
   // 챌린지 방 관리
-  async getChallengeRooms(): Promise<ApiResponse<ChallengeRoom[]>> {
+  async getChallengeRooms(): Promise<PaginatedResponse<ChallengeRoom>> {
     return this.request('/api/challenges/rooms/');
   }
 
