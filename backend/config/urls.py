@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/', include('api_integrated.urls')),  # 팀원의 완성된 API
     # path('', include('challenges.urls')),  # 기존 챌린지 URL (임시 주석)
     path('mlserver/', include('mlserver.urls')),  # MLServer 연동 유지
+    path('', include('chegam.urls')),  # 체감 API
 ]
 
 # Media files serving (개발 환경용)
