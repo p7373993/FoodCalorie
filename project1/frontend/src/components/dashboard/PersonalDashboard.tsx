@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { UserChallenge, LeaderboardEntry } from '@/types';
 import { apiClient } from '@/lib/api';
 
@@ -13,6 +14,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   onNavigateToChallenge,
   onNavigateToLeaderboard,
 }) => {
+  const router = useRouter();
   const [currentChallenge, setCurrentChallenge] = useState<UserChallenge | null>(null);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -297,13 +299,20 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
             </div>
 
             {/* 액션 버튼들 */}
-            <div className="space-y-3">
-              <button
-                onClick={onNavigateToLeaderboard}
-                className="w-full bg-[var(--point-green)] text-black font-bold py-3 px-4 rounded-lg hover:bg-green-400 transition-colors"
-              >
-                🏆 순위표 보기
-              </button>
+                         <div className="space-y-3">
+               <button
+                 onClick={() => {
+                   if (currentChallenge) {
+                     // 특정 챌린지 방의 리더보드로 이동
+                     router.push(`/challenges/leaderboard/${currentChallenge.room}`);
+                   } else if (onNavigateToLeaderboard) {
+                     onNavigateToLeaderboard();
+                   }
+                 }}
+                 className="w-full bg-[var(--point-green)] text-black font-bold py-3 px-4 rounded-lg hover:bg-green-400 transition-colors"
+               >
+                 🏆 순위표 보기
+               </button>
               
               <button
                 onClick={() => {/* TODO: 통계 페이지로 이동 */}}
