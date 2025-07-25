@@ -343,6 +343,12 @@ class PasswordResetService:
             bool: 전송 성공 여부
         """
         try:
+            # 사용자 닉네임 안전하게 가져오기
+            try:
+                user_name = user.profile.nickname
+            except AttributeError:
+                user_name = user.username
+            
             # 재설정 링크 생성
             reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token.token}"
             
@@ -353,7 +359,7 @@ class PasswordResetService:
             <html>
             <body>
                 <h2>비밀번호 재설정</h2>
-                <p>안녕하세요, {user.profile.nickname if hasattr(user, 'profile') else user.username}님!</p>
+                <p>안녕하세요, {user_name}님!</p>
                 <p>비밀번호 재설정을 요청하셨습니다.</p>
                 <p>아래 링크를 클릭하여 새로운 비밀번호를 설정해주세요:</p>
                 <p><a href="{reset_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">비밀번호 재설정</a></p>
@@ -368,7 +374,7 @@ class PasswordResetService:
             plain_message = f"""
             비밀번호 재설정
             
-            안녕하세요, {user.profile.nickname if hasattr(user, 'profile') else user.username}님!
+            안녕하세요, {user_name}님!
             
             비밀번호 재설정을 요청하셨습니다.
             아래 링크를 클릭하여 새로운 비밀번호를 설정해주세요:
@@ -767,8 +773,14 @@ class PasswordResetService:
         # 재설정 링크 생성 (프론트엔드 URL)
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token.token}"
         
+        # 사용자 닉네임 안전하게 가져오기
+        try:
+            user_name = user.profile.nickname
+        except AttributeError:
+            user_name = user.username
+            
         message = f"""
-안녕하세요, {user.userprofile.nickname}님
+안녕하세요, {user_name}님
 
 비밀번호 재설정을 요청하셨습니다.
 아래 링크를 클릭하여 새 비밀번호를 설정해주세요.

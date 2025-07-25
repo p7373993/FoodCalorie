@@ -9,6 +9,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
+from django.utils import timezone
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserProfileSerializer, 
     PasswordChangeSerializer, PasswordResetRequestSerializer, 
@@ -249,7 +250,7 @@ class LogoutView(APIView):
             logout_all_devices = request.data.get('logout_all_devices', False)
             if logout_all_devices:
                 try:
-                    JWTAuthService.revoke_all_user_tokens(user)
+                    JWTAuthService.revoke_all_tokens_for_user(user)
                     blacklist_message += " 모든 기기에서 로그아웃되었습니다."
                 except Exception as revoke_error:
                     blacklist_message += f" 전체 로그아웃 처리 중 오류: {str(revoke_error)}"
@@ -609,37 +610,378 @@ class NicknameCheckView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PasswordChangeView(APIView):
-    """비밀번호 변경 API - 임시 구현"""
+    """
+    비밀번호 변경 API 뷰
+    PUT /api/auth/password/change/
+    
+    요구사항:
+    1. 현재 비밀번호 확인 후 새 비밀번호 변경 로직
+    2. 비밀번호 강도 검증
+    3. 변경 후 모든 세션 무효화 (보안)
+    4. 비밀번호 변경 이력 기록
+    """
     permission_classes = [IsAuthenticated]
     
     def put(self, request):
-        # TODO: 비밀번호 변경 로직 구현
-        return Response({
-            'message': '비밀번호 변경 API - 구현 예정'
-        }, status=status.HTTP_200_OK)
+        """비밀번호 변경 처리"""
+        try:
+            user = request.user
+            
+            # 비밀번호 변경 데이터 검증
+            serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+            
+            if serializer.is_valid():
+                current_password = serializer.validated_data['current_password']
+                new_password = serializer.validated_data['new_password']
+                
+                # 현재 비밀번호 확인
+                if not user.check_password(current_password):
+                    return Response({
+                        'success': False,
+                        'message': '현재 비밀번호가 올바르지 않습니다.',
+                        'error_code': 'INVALID_CURRENT_PASSWORD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # 새 비밀번호가 현재 비밀번호와 같은지 확인
+                if user.check_password(new_password):
+                    return Response({
+                        'success': False,
+                        'message': '새 비밀번호는 현재 비밀번호와 달라야 합니다.',
+                        'error_code': 'SAME_AS_CURRENT_PASSWORD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # 데이터베이스 트랜잭션으로 안전하게 변경
+                with transaction.atomic():
+                    # 비밀번호 변경
+                    user.set_password(new_password)
+                    user.save()
+                    
+                    # 비밀번호 변경 시도 기록 (성공)
+                    LoginAttemptService.record_attempt(
+                        request, 
+                        user.email, 
+                        user, 
+                        success=True, 
+                        attempt_type='password_change'
+                    )
+                    
+                    # 모든 Refresh Token 무효화 (보안 - 다른 기기에서 강제 로그아웃)
+                    try:
+                        JWTAuthService.revoke_all_tokens_for_user(user)
+                    except Exception as token_error:
+                        # 토큰 무효화 실패는 비밀번호 변경에 영향 없음
+                        print(f"토큰 무효화 실패: {token_error}")
+                
+                # 새 JWT 토큰 생성 (현재 세션 유지를 위해)
+                new_tokens = JWTAuthService.generate_tokens_with_extended_refresh(user, extend_refresh=False)
+                
+                response_data = {
+                    'success': True,
+                    'message': '비밀번호가 성공적으로 변경되었습니다.',
+                    'user': {
+                        'id': user.id,
+                        'email': user.email,
+                        'username': user.username,
+                    },
+                    'auth': {
+                        'access_token': new_tokens['access_token'],
+                        'refresh_token': new_tokens['refresh_token'],
+                        'token_type': 'Bearer',
+                        'access_expires_at': new_tokens['access_expires_at'].isoformat(),
+                        'refresh_expires_at': new_tokens['refresh_expires_at'].isoformat(),
+                    },
+                    'security_info': {
+                        'all_sessions_revoked': True,
+                        'new_tokens_issued': True,
+                        'changed_at': timezone.now().isoformat()
+                    }
+                }
+                
+                return Response(response_data, status=status.HTTP_200_OK)
+                
+            else:
+                # 비밀번호 변경 시도 기록 (실패)
+                LoginAttemptService.record_attempt(
+                    request, 
+                    user.email, 
+                    user, 
+                    success=False, 
+                    attempt_type='password_change'
+                )
+                
+                return Response({
+                    'success': False,
+                    'message': '비밀번호 변경 데이터가 유효하지 않습니다.',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': '비밀번호 변경 중 오류가 발생했습니다.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestView(APIView):
-    """비밀번호 재설정 요청 API - 임시 구현"""
+    """
+    비밀번호 재설정 요청 API 뷰
+    POST /api/auth/password/reset/
+    
+    요구사항:
+    1. 이메일 기반 비밀번호 재설정 토큰 생성 및 전송
+    2. 존재하지 않는 이메일에도 동일한 응답 (보안)
+    3. 토큰 만료 시간 설정 (15분)
+    4. 이메일 전송 및 오류 처리
+    """
     permission_classes = [AllowAny]
     
     def post(self, request):
-        # TODO: 비밀번호 재설정 요청 로직 구현
-        return Response({
-            'message': '비밀번호 재설정 요청 API - 구현 예정'
-        }, status=status.HTTP_200_OK)
+        """비밀번호 재설정 요청 처리"""
+        try:
+            # 비밀번호 재설정 요청 데이터 검증
+            serializer = PasswordResetRequestSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                email = serializer.validated_data['email']
+                
+                # 사용자 찾기 (존재하지 않아도 보안상 동일한 응답)
+                try:
+                    user = User.objects.get(email=email)
+                    user_exists = True
+                except User.DoesNotExist:
+                    user = None
+                    user_exists = False
+                
+                if user_exists and user.is_active:
+                    try:
+                        # 비밀번호 재설정 토큰 생성 및 이메일 전송
+                        reset_token = PasswordResetService.create_reset_token(user)
+                        
+                        # 이메일 전송 시도
+                        email_sent = PasswordResetService.send_reset_email(
+                            user, 
+                            reset_token
+                        )
+                        
+                        if email_sent:
+                            # 재설정 요청 기록 (성공)
+                            LoginAttemptService.record_attempt(
+                                request, 
+                                email, 
+                                user, 
+                                success=True, 
+                                attempt_type='password_reset_request'
+                            )
+                            
+                            actual_message = '비밀번호 재설정 이메일이 전송되었습니다.'
+                        else:
+                            actual_message = '비밀번호 재설정 토큰은 생성되었지만 이메일 전송에 실패했습니다.'
+                    
+                    except Exception as e:
+                        # 토큰 생성/이메일 전송 실패
+                        print(f"비밀번호 재설정 처리 오류: {e}")
+                        actual_message = '비밀번호 재설정 처리 중 오류가 발생했습니다.'
+                        
+                        # 재설정 요청 기록 (실패)
+                        LoginAttemptService.record_attempt(
+                            request, 
+                            email, 
+                            user, 
+                            success=False, 
+                            attempt_type='password_reset_request'
+                        )
+                
+                else:
+                    # 사용자가 존재하지 않거나 비활성 상태
+                    actual_message = '존재하지 않거나 비활성화된 사용자입니다.'
+                    
+                    # 재설정 요청 기록 (실패)
+                    LoginAttemptService.record_attempt(
+                        request, 
+                        email, 
+                        None, 
+                        success=False, 
+                        attempt_type='password_reset_request'
+                    )
+                
+                # 보안을 위해 항상 성공 메시지 반환 (타이밍 공격 방지)
+                response_data = {
+                    'success': True,
+                    'message': '해당 이메일로 비밀번호 재설정 안내가 전송되었습니다.',
+                    'email': email,
+                    'expires_in_minutes': 15,
+                    'info': '이메일이 도착하지 않으면 스팸 폴더를 확인해주세요.'
+                }
+                
+                # 개발 환경에서만 실제 메시지 포함 (디버깅용)
+                from django.conf import settings
+                if settings.DEBUG:
+                    response_data['debug_info'] = {
+                        'actual_message': actual_message,
+                        'user_exists': user_exists,
+                        'user_active': user.is_active if user else False
+                    }
+                
+                return Response(response_data, status=status.HTTP_200_OK)
+                
+            else:
+                return Response({
+                    'success': False,
+                    'message': '이메일 주소가 유효하지 않습니다.',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': '비밀번호 재설정 요청 처리 중 오류가 발생했습니다.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmView(APIView):
-    """비밀번호 재설정 확인 API - 임시 구현"""
+    """
+    비밀번호 재설정 확인 API 뷰
+    POST /api/auth/password/reset/confirm/
+    
+    요구사항:
+    1. 토큰을 통한 비밀번호 재설정 확인
+    2. 토큰 유효성 및 만료 시간 검증
+    3. 새 비밀번호 강도 검증
+    4. 재설정 후 모든 세션 무효화 및 새 토큰 발급
+    """
     permission_classes = [AllowAny]
     
     def post(self, request):
-        # TODO: 비밀번호 재설정 확인 로직 구현
-        return Response({
-            'message': '비밀번호 재설정 확인 API - 구현 예정'
-        }, status=status.HTTP_200_OK)
+        """비밀번호 재설정 확인 처리"""
+        try:
+            # 비밀번호 재설정 확인 데이터 검증
+            serializer = PasswordResetConfirmSerializer(data=request.data, context={'request': request})
+            
+            if serializer.is_valid():
+                token = serializer.validated_data['token']
+                new_password = serializer.validated_data['new_password']
+                
+                # 토큰 유효성 검증
+                try:
+                    from .models import PasswordResetToken
+                    reset_token = PasswordResetToken.objects.get(
+                        token=token,
+                        is_used=False
+                    )
+                    
+                    # 토큰 유효성 확인
+                    if not reset_token.is_valid():
+                        return Response({
+                            'success': False,
+                            'message': '비밀번호 재설정 토큰이 만료되었거나 이미 사용되었습니다. 새로운 재설정 요청을 해주세요.',
+                            'error_code': 'TOKEN_INVALID'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    user = reset_token.user
+                    
+                    # 사용자 활성 상태 확인
+                    if not user.is_active:
+                        return Response({
+                            'success': False,
+                            'message': '비활성화된 사용자 계정입니다.',
+                            'error_code': 'USER_INACTIVE'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # 새 비밀번호가 현재 비밀번호와 같은지 확인
+                    if user.check_password(new_password):
+                        return Response({
+                            'success': False,
+                            'message': '새 비밀번호는 이전 비밀번호와 달라야 합니다.',
+                            'error_code': 'SAME_AS_CURRENT_PASSWORD'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # 데이터베이스 트랜잭션으로 안전하게 처리
+                    with transaction.atomic():
+                        # 비밀번호 변경
+                        user.set_password(new_password)
+                        user.save()
+                        
+                        # 토큰 사용 처리
+                        reset_token.mark_as_used()
+                        
+                        # 비밀번호 재설정 시도 기록 (성공)
+                        LoginAttemptService.record_attempt(
+                            request, 
+                            user.email, 
+                            user, 
+                            success=True, 
+                            attempt_type='password_reset_confirm'
+                        )
+                        
+                        # 모든 Refresh Token 무효화 (보안)
+                        try:
+                            JWTAuthService.revoke_all_tokens_for_user(user)
+                        except Exception as token_error:
+                            print(f"토큰 무효화 실패: {token_error}")
+                    
+                    # 새 JWT 토큰 생성 (자동 로그인)
+                    new_tokens = JWTAuthService.generate_tokens_with_extended_refresh(user, extend_refresh=False)
+                    
+                    response_data = {
+                        'success': True,
+                        'message': '비밀번호가 성공적으로 재설정되었습니다.',
+                        'user': {
+                            'id': user.id,
+                            'email': user.email,
+                            'username': user.username,
+                        },
+                        'auth': {
+                            'access_token': new_tokens['access_token'],
+                            'refresh_token': new_tokens['refresh_token'],
+                            'token_type': 'Bearer',
+                            'access_expires_at': new_tokens['access_expires_at'].isoformat(),
+                            'refresh_expires_at': new_tokens['refresh_expires_at'].isoformat(),
+                        },
+                        'security_info': {
+                            'all_sessions_revoked': True,
+                            'auto_login_enabled': True,
+                            'reset_at': timezone.now().isoformat(),
+                            'token_used': True
+                        }
+                    }
+                    
+                    return Response(response_data, status=status.HTTP_200_OK)
+                    
+                except PasswordResetToken.DoesNotExist:
+                    # 비밀번호 재설정 시도 기록 (실패 - 잘못된 토큰)
+                    LoginAttemptService.record_attempt(
+                        request, 
+                        'unknown', 
+                        None, 
+                        success=False, 
+                        attempt_type='password_reset_confirm'
+                    )
+                    
+                    return Response({
+                        'success': False,
+                        'message': '유효하지 않은 비밀번호 재설정 토큰입니다.',
+                        'error_code': 'INVALID_TOKEN'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+            else:
+                return Response({
+                    'success': False,
+                    'message': '비밀번호 재설정 데이터가 유효하지 않습니다.',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': '비밀번호 재설정 확인 처리 중 오류가 발생했습니다.',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AdminUserListView(APIView):

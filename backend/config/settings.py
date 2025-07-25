@@ -28,7 +28,7 @@ GEMINI_API_KEY = 'AIzaSyBHk7IcID52trC-d2rZQzFrpPKH-1sCjKo'  # 실제 Gemini API 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 
 
 # Application definition
@@ -157,16 +157,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework 설정
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',  # JWT 인증 (기본)
-        'rest_framework.authentication.TokenAuthentication',  # 기존 시스템 호환
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+        'accounts.authentication.JWTAuthentication',  # 커스텀 JWT 인증 (기본)
+        'accounts.authentication.OptionalJWTAuthentication',  # 선택적 JWT 인증  
+        'rest_framework.authentication.SessionAuthentication',  # 관리자 패널용
+        'rest_framework.authentication.BasicAuthentication',  # 기본 인증
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
 }
 
 # JWT 설정
