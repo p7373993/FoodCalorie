@@ -1,6 +1,7 @@
 
 import ProfileDashboard from "@/app/components/profile-dashboard";
 import { createMockData } from "@/app/lib/data";
+import AuthNavigation from "@/app/components/AuthNavigation";
 
 export default function Home() {
   // Data is fetched on the server
