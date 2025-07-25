@@ -217,6 +217,29 @@ class ApiClient {
     return this.request(`/api/challenges/report/${params}`);
   }
 
+  // 챌린지 완료 관련 API
+  async getChallengeCompletionReport(challengeId?: number): Promise<ApiResponse<any>> {
+    const params = challengeId ? `?challenge_id=${challengeId}` : '';
+    return this.request(`/api/challenges/completion/report/${params}`);
+  }
+
+  async completeChallengeAction(action: any): Promise<ApiResponse<any>> {
+    return this.request('/api/challenges/completion/action/', {
+      method: 'POST',
+      body: JSON.stringify(action),
+    });
+  }
+
+  async shareChallengeReport(challengeId: number, platform: string): Promise<ApiResponse<any>> {
+    return this.request('/api/challenges/completion/share/', {
+      method: 'POST',
+      body: JSON.stringify({
+        challenge_id: challengeId,
+        platform,
+      }),
+    });
+  }
+
   // AI 코칭 관련 API
   async getAICoaching(type: 'meal_feedback' | 'weekly_report' | 'insights', data?: any) {
     return this.request('/api/ai/coaching/', {

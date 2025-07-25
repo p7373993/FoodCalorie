@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { UserChallenge, LeaderboardEntry } from '@/types';
 import { apiClient } from '@/lib/api';
 import CheatDayModal from '@/components/challenges/CheatDayModal';
+import ChallengeCompletionReport from '@/components/challenges/ChallengeCompletionReport';
 
 interface PersonalDashboardProps {
   onNavigateToChallenge?: () => void;
@@ -22,6 +23,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isCheatModalOpen, setIsCheatModalOpen] = useState(false);
+  const [isCompletionReportOpen, setIsCompletionReportOpen] = useState(false);
 
   useEffect(() => {
     loadPersonalData();
@@ -323,13 +325,22 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 📊 상세 통계
               </button>
               
-                             <button
-                 onClick={() => setIsCheatModalOpen(true)}
-                 className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
-                 disabled={currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit}
-               >
-                 🍕 치팅 사용 {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit && '(한도 초과)'}
-               </button>
+                             {currentChallenge.remaining_duration_days <= 0 ? (
+                 <button
+                   onClick={() => setIsCompletionReportOpen(true)}
+                   className="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-500 transition-colors"
+                 >
+                   🏆 완료 리포트 보기
+                 </button>
+               ) : (
+                 <button
+                   onClick={() => setIsCheatModalOpen(true)}
+                   className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
+                   disabled={currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit}
+                 >
+                   🍕 치팅 사용 {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit && '(한도 초과)'}
+                 </button>
+               )}
             </div>
           </div>
         </div>
@@ -407,6 +418,22 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           onCheatUsed={() => {
             // 치팅 사용 후 현황 새로고침
             loadPersonalData();
+          }}
+        />
+      )}
+
+      {/* 완료 리포트 모달 */}
+      {currentChallenge && (
+        <ChallengeCompletionReport
+          isOpen={isCompletionReportOpen}
+          onClose={() => setIsCompletionReportOpen(false)}
+          challenge={currentChallenge}
+          onActionComplete={(action) => {
+            // 행동 완료 후 현황 새로고침
+            loadPersonalData();
+            if (action === 'new_challenge') {
+              router.push('/challenges');
+            }
           }}
         />
       )}
