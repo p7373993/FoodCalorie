@@ -106,8 +106,9 @@ class RegisterSerializer(serializers.Serializer):
         )
         
         # UserProfile은 signals에 의해 자동 생성되므로, 닉네임만 업데이트
-        user.userprofile.nickname = nickname
-        user.userprofile.save()
+        # profile 속성으로 접근 (related_name='profile')
+        user.profile.nickname = nickname
+        user.profile.save()
         
         # JWT 토큰 생성 (자동 로그인 처리)
         tokens = JWTAuthService.generate_tokens_with_extended_refresh(
@@ -118,7 +119,7 @@ class RegisterSerializer(serializers.Serializer):
         return {
             'user': user,
             'tokens': tokens,
-            'profile': user.userprofile
+            'profile': user.profile
         }
 
 

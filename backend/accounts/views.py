@@ -161,7 +161,7 @@ class LoginView(APIView):
                         'email': user.email,
                         'username': user.username,
                     },
-                    'profile': UserProfileSerializer(user.userprofile).data,
+                    'profile': UserProfileSerializer(user.profile).data,
                     'auth': {
                         'access_token': tokens['access_token'],
                         'refresh_token': tokens['refresh_token'],
@@ -208,15 +208,115 @@ class LoginView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LogoutView(APIView):
-    """로그아웃 API - 임시 구현"""
+    """
+    로그아웃 API 뷰
+    POST /api/auth/logout/
+    
+    요구사항:
+    1. Refresh Token 블랙리스트 처리
+    2. 클라이언트 토큰 무효화 응답
+    3. 로그아웃 후 리다이렉트 처리
+    4. 로그아웃 기록 및 보안 처리
+    """
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        # TODO: 로그아웃 로직 구현
-        return Response({
-            'message': '로그아웃 API - 구현 예정'
-        }, status=status.HTTP_200_OK)
+        """로그아웃 처리"""
+        try:
+            user = request.user
+            refresh_token = request.data.get('refresh_token')
+            
+            # Refresh Token이 제공된 경우 블랙리스트 처리
+            if refresh_token:
+                try:
+                    from rest_framework_simplejwt.tokens import RefreshToken
+                    
+                    # Refresh Token 검증 및 블랙리스트 추가
+                    token = RefreshToken(refresh_token)
+                    token.blacklist()
+                    
+                    blacklist_message = "Refresh Token이 블랙리스트에 추가되었습니다."
+                    
+                except Exception as token_error:
+                    # 토큰이 이미 만료되었거나 유효하지 않은 경우
+                    blacklist_message = f"토큰 처리 중 오류: {str(token_error)}"
+            else:
+                blacklist_message = "Refresh Token이 제공되지 않았습니다."
+            
+            # 현재 사용자의 모든 Refresh Token 블랙리스트 처리 (선택사항)
+            logout_all_devices = request.data.get('logout_all_devices', False)
+            if logout_all_devices:
+                try:
+                    JWTAuthService.revoke_all_user_tokens(user)
+                    blacklist_message += " 모든 기기에서 로그아웃되었습니다."
+                except Exception as revoke_error:
+                    blacklist_message += f" 전체 로그아웃 처리 중 오류: {str(revoke_error)}"
+            
+            # 로그아웃 시도 기록
+            try:
+                from django.utils import timezone
+                LoginAttemptService.record_attempt(
+                    request, 
+                    user.email, 
+                    user, 
+                    success=True,
+                    attempt_type='logout'
+                )
+            except Exception as log_error:
+                # 로그 기록 실패는 로그아웃 성공에 영향을 주지 않음
+                pass
+            
+            # 리다이렉트 URL 처리
+            redirect_url = request.data.get('redirect_url')
+            if redirect_url:
+                # 허용된 도메인 검증 (보안)
+                from django.conf import settings
+                allowed_domains = getattr(settings, 'ALLOWED_LOGOUT_REDIRECT_DOMAINS', [
+                    'localhost:3000', '127.0.0.1:3000', settings.FRONTEND_URL.replace('http://', '').replace('https://', '')
+                ])
+                
+                from urllib.parse import urlparse
+                parsed_url = urlparse(redirect_url)
+                domain_with_port = f"{parsed_url.hostname}:{parsed_url.port}" if parsed_url.port else parsed_url.hostname
+                
+                if domain_with_port not in allowed_domains and parsed_url.hostname not in allowed_domains:
+                    redirect_url = settings.FRONTEND_URL + '/login'  # 기본 리다이렉트
+            else:
+                from django.conf import settings
+                redirect_url = settings.FRONTEND_URL + '/login'  # 기본 리다이렉트
+            
+            # 성공 응답
+            response_data = {
+                'success': True,
+                'message': '로그아웃이 완료되었습니다.',
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                },
+                'logout_info': {
+                    'blacklist_status': blacklist_message,
+                    'logout_all_devices': logout_all_devices,
+                    'redirect_url': redirect_url,
+                    'logout_timestamp': timezone.now().isoformat()
+                }
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            # 로그아웃 실패 시에도 기본적인 정보는 제공
+            return Response({
+                'success': False,
+                'message': '로그아웃 처리 중 오류가 발생했습니다.',
+                'error': str(e),
+                'logout_info': {
+                    'partial_logout': True,
+                    'redirect_url': getattr(settings, 'FRONTEND_URL', 'http://localhost:3000') + '/login'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ProfileView(APIView):

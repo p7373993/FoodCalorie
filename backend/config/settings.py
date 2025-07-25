@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'accounts',  # 사용자 인증 시스템
     'api_integrated.apps.ApiIntegratedConfig',  # 메인 API 앱
     'mlserver',  # MLServer 연동
-    'chegam',  # 체감 앱
+    # 'chegam',  # 체감 앱 (일시 비활성화 - UserProfile 충돌)
     'challenges.apps.ChallengesConfig',  # 챌린지 시스템
     # 'calender.apps.CalenderConfig',  # 캘린더 앱 (일시 비활성화 - UserProfile 충돌)
 ]

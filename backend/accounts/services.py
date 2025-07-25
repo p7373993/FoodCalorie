@@ -599,15 +599,16 @@ class LoginAttemptService:
     """
     
     @staticmethod
-    def record_attempt(request, email, user=None, success=False):
+    def record_attempt(request, email, user=None, success=False, attempt_type='login'):
         """
-        로그인 시도 기록
+        로그인/로그아웃 시도 기록
         
         Args:
             request: Django request 객체
             email: 시도한 이메일
             user: 사용자 객체 (성공 시)
-            success: 로그인 성공 여부
+            success: 로그인/로그아웃 성공 여부
+            attempt_type: 시도 타입 ('login' 또는 'logout')
         """
         from .models import LoginAttempt
         
@@ -617,12 +618,14 @@ class LoginAttemptService:
         # User Agent 추출
         user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]  # 길이 제한
         
-        # 로그인 시도 기록 생성
+        # 로그인/로그아웃 시도 기록 생성
         LoginAttempt.objects.create(
             username=email,
             ip_address=ip_address,
             user_agent=user_agent,
             is_successful=success
+            # attempt_type은 LoginAttempt 모델에 필드가 있을 때만 저장
+            # 현재는 기본 필드만 사용
         )
     
     @staticmethod

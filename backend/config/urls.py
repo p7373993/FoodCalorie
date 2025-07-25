@@ -26,7 +26,7 @@ urlpatterns = [
     path('api/challenges/', include('challenges.urls')),  # 챌린지 API
     # path('api/calendar/', include('calender.urls')),  # 캘린더 API (일시 비활성화)
     path('mlserver/', include('mlserver.urls')),  # MLServer 연동 유지
-    path('', include('chegam.urls')),  # 체감 API
+    # path('', include('chegam.urls')),  # 체감 API (일시 비활성화)
 ]
 
 # Media files serving (개발 환경용)
