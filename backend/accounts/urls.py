@@ -28,6 +28,7 @@ urlpatterns = [
     # 프로필 관리
     path('profile/', views.ProfileView.as_view(), name='profile'),
     path('profile/me/', views.CurrentUserProfileView.as_view(), name='current_profile'),
+    path('profile/nickname-check/', views.NicknameCheckView.as_view(), name='nickname_check'),
     
     # 비밀번호 관리
     path('password/change/', views.PasswordChangeView.as_view(), name='password_change'),
