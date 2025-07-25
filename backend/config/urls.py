@@ -23,6 +23,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api_integrated.urls')),  # 팀원의 완성된 API
     path('api/challenges/', include('challenges.urls')),  # 챌린지 API
+    path('api/calendar/', include('calender.urls')),  # 캘린더 API
     path('mlserver/', include('mlserver.urls')),  # MLServer 연동 유지
     path('', include('chegam.urls')),  # 체감 API
 ]
