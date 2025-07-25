@@ -591,3 +591,203 @@ class TokenBlacklistService:
         expired_tokens.delete()
         
         return count
+
+
+class LoginAttemptService:
+    """
+    로그인 시도 기록 및 관리 서비스
+    """
+    
+    @staticmethod
+    def record_attempt(request, email, user=None, success=False):
+        """
+        로그인 시도 기록
+        
+        Args:
+            request: Django request 객체
+            email: 시도한 이메일
+            user: 사용자 객체 (성공 시)
+            success: 로그인 성공 여부
+        """
+        from .models import LoginAttempt
+        
+        # IP 주소 추출
+        ip_address = LoginAttemptService.get_client_ip(request)
+        
+        # User Agent 추출
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]  # 길이 제한
+        
+        # 로그인 시도 기록 생성
+        LoginAttempt.objects.create(
+            username=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            is_successful=success
+        )
+    
+    @staticmethod
+    def get_client_ip(request):
+        """클라이언트 IP 주소 추출"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+    
+    @staticmethod
+    def get_recent_failed_attempts(email, minutes=15):
+        """
+        최근 실패한 로그인 시도 횟수 조회
+        
+        Args:
+            email: 이메일 주소
+            minutes: 조회할 시간 범위 (분)
+            
+        Returns:
+            int: 실패한 로그인 시도 횟수
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+        from .models import LoginAttempt
+        
+        cutoff_time = timezone.now() - timedelta(minutes=minutes)
+        
+        return LoginAttempt.objects.filter(
+            username=email,
+            is_successful=False,
+            attempted_at__gte=cutoff_time
+        ).count()
+    
+    @staticmethod
+    def is_account_locked(email, max_attempts=5, lockout_minutes=15):
+        """
+        계정 잠금 상태 확인
+        
+        Args:
+            email: 이메일 주소
+            max_attempts: 최대 시도 횟수
+            lockout_minutes: 잠금 시간 (분)
+            
+        Returns:
+            bool: 계정 잠금 여부
+        """
+        failed_attempts = LoginAttemptService.get_recent_failed_attempts(
+            email, lockout_minutes
+        )
+        return failed_attempts >= max_attempts
+    
+    @staticmethod
+    def get_lockout_remaining_time(email, max_attempts=5, lockout_minutes=15):
+        """
+        계정 잠금 해제까지 남은 시간 계산
+        
+        Returns:
+            int: 남은 시간 (초), 잠금되지 않은 경우 0
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+        from .models import LoginAttempt
+        
+        if not LoginAttemptService.is_account_locked(email, max_attempts, lockout_minutes):
+            return 0
+        
+        cutoff_time = timezone.now() - timedelta(minutes=lockout_minutes)
+        
+        # 가장 오래된 실패 시도 찾기
+        oldest_failed_attempt = LoginAttempt.objects.filter(
+            username=email,
+            is_successful=False,
+            attempted_at__gte=cutoff_time
+        ).order_by('attempted_at').first()
+        
+        if oldest_failed_attempt:
+            unlock_time = oldest_failed_attempt.attempted_at + timedelta(minutes=lockout_minutes)
+            remaining_seconds = (unlock_time - timezone.now()).total_seconds()
+            return max(0, int(remaining_seconds))
+        
+        return 0
+
+
+class PasswordResetService:
+    """
+    비밀번호 재설정 서비스
+    """
+    
+    @staticmethod
+    def create_reset_token(user):
+        """
+        비밀번호 재설정 토큰 생성
+        
+        Args:
+            user: 사용자 객체
+            
+        Returns:
+            PasswordResetToken: 생성된 토큰 객체
+        """
+        from .models import PasswordResetToken
+        import uuid
+        from datetime import timedelta
+        from django.utils import timezone
+        
+        # 기존 토큰들 무효화
+        PasswordResetToken.objects.filter(
+            user=user,
+            is_used=False
+        ).update(is_used=True)
+        
+        # 새 토큰 생성
+        token = PasswordResetToken.objects.create(
+            user=user,
+            token=str(uuid.uuid4()),
+            expires_at=timezone.now() + timedelta(hours=24)  # 24시간 유효
+        )
+        
+        return token
+    
+    @staticmethod
+    def send_reset_email(user, reset_token):
+        """
+        비밀번호 재설정 이메일 발송
+        
+        Args:
+            user: 사용자 객체
+            reset_token: 재설정 토큰 객체
+        """
+        from django.core.mail import send_mail
+        from django.template.loader import render_to_string
+        from django.conf import settings
+        
+        # 이메일 템플릿 렌더링
+        subject = '[FoodCalorie] 비밀번호 재설정 요청'
+        
+        # 재설정 링크 생성 (프론트엔드 URL)
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token.token}"
+        
+        message = f"""
+안녕하세요, {user.userprofile.nickname}님
+
+비밀번호 재설정을 요청하셨습니다.
+아래 링크를 클릭하여 새 비밀번호를 설정해주세요.
+
+재설정 링크: {reset_url}
+
+이 링크는 24시간 동안 유효합니다.
+만약 비밀번호 재설정을 요청하지 않으셨다면, 이 이메일을 무시해주세요.
+
+감사합니다.
+FoodCalorie 팀
+        """
+        
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+            return True
+        except Exception as e:
+            print(f"이메일 발송 실패: {e}")
+            return False

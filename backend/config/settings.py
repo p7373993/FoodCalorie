@@ -201,6 +201,13 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
+# Frontend URL (비밀번호 재설정 등에 사용)
+FRONTEND_URL = 'http://localhost:3000'
+
+# 이메일 설정 (개발 환경)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'noreply@foodcalorie.com'
+
 # CORS 설정
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",

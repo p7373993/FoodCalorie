@@ -5,200 +5,324 @@
 """
 
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import UserProfile, PasswordResetToken
+from .models import UserProfile, PasswordResetToken, LoginAttempt
+from .services import JWTAuthService
+
+User = get_user_model()
 
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    """사용자 프로필 시리얼라이저"""
-    
-    # 계산된 필드들 (읽기 전용)
-    bmi = serializers.SerializerMethodField()
-    bmi_category = serializers.SerializerMethodField()
-    bmr = serializers.SerializerMethodField()
-    recommended_calories = serializers.SerializerMethodField()
-    is_complete = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = UserProfile
-        fields = [
-            'nickname', 'height', 'weight', 'age', 'gender',
-            'profile_image', 'bio', 'is_profile_public',
-            'email_notifications', 'push_notifications',
-            'bmi', 'bmi_category', 'bmr', 'recommended_calories', 'is_complete',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-    
-    def get_bmi(self, obj):
-        return obj.get_bmi()
-    
-    def get_bmi_category(self, obj):
-        return obj.get_bmi_category()
-    
-    def get_bmr(self, obj):
-        return obj.calculate_bmr()
-    
-    def get_recommended_calories(self, obj):
-        return obj.get_recommended_calories()
-    
-    def get_is_complete(self, obj):
-        return obj.is_complete_profile()
-    
-    def validate_nickname(self, value):
-        """닉네임 중복 검사"""
-        user = self.context['request'].user if self.context.get('request') else None
-        
-        # 현재 사용자의 닉네임은 제외하고 중복 검사
-        queryset = UserProfile.objects.filter(nickname=value)
-        if user and hasattr(user, 'profile'):
-            queryset = queryset.exclude(id=user.profile.id)
-        
-        if queryset.exists():
-            raise serializers.ValidationError("이미 사용 중인 닉네임입니다.")
-        
-        return value
+class RegisterSerializer(serializers.Serializer):
+    """
+    회원가입용 Serializer
+    이메일, 비밀번호, 닉네임 검증 및 사용자 생성
+    """
+    email = serializers.EmailField(
+        max_length=254,
+        help_text="사용자 이메일 주소"
+    )
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        max_length=128,
+        style={'input_type': 'password'},
+        help_text="비밀번호 (8자 이상)"
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        max_length=128,
+        style={'input_type': 'password'},
+        help_text="비밀번호 확인"
+    )
+    nickname = serializers.CharField(
+        max_length=50,
+        help_text="사용자 닉네임"
+    )
+    remember_me = serializers.BooleanField(
+        default=False,
+        required=False,
+        help_text="로그인 상태 유지 여부"
+    )
 
-
-class UserSerializer(serializers.ModelSerializer):
-    """사용자 기본 정보 시리얼라이저"""
-    
-    profile = UserProfileSerializer(read_only=True)
-    
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'profile']
-        read_only_fields = ['id', 'username', 'date_joined']
-
-
-class RegisterSerializer(serializers.ModelSerializer):
-    """회원가입 시리얼라이저"""
-    
-    password = serializers.CharField(write_only=True, validators=[validate_password])
-    password_confirm = serializers.CharField(write_only=True)
-    nickname = serializers.CharField(max_length=50)
-    
-    class Meta:
-        model = User
-        fields = ['username', 'email', 'password', 'password_confirm', 'first_name', 'last_name', 'nickname']
-    
     def validate_email(self, value):
         """이메일 중복 검사"""
         if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("이미 사용 중인 이메일입니다.")
+            raise serializers.ValidationError("이미 존재하는 이메일입니다.")
         return value
-    
+
     def validate_nickname(self, value):
         """닉네임 중복 검사"""
         if UserProfile.objects.filter(nickname=value).exists():
             raise serializers.ValidationError("이미 사용 중인 닉네임입니다.")
+        
+        # 닉네임 길이 및 특수문자 검증
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("닉네임은 2자 이상이어야 합니다.")
+        
+        # 특수문자 검증 (한글, 영문, 숫자, 일부 특수문자만 허용)
+        import re
+        if not re.match(r'^[a-zA-Z0-9가-힣_.-]+$', value):
+            raise serializers.ValidationError("닉네임에는 한글, 영문, 숫자, _, ., - 만 사용할 수 있습니다.")
+        
+        return value.strip()
+
+    def validate_password(self, value):
+        """비밀번호 강도 검증"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
         return value
-    
+
     def validate(self, attrs):
-        """비밀번호 확인"""
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError("비밀번호가 일치하지 않습니다.")
+        """비밀번호 일치 검증"""
+        password = attrs.get('password')
+        password_confirm = attrs.get('password_confirm')
+        
+        if password != password_confirm:
+            raise serializers.ValidationError({
+                'password_confirm': '비밀번호가 일치하지 않습니다.'
+            })
+        
         return attrs
-    
+
     def create(self, validated_data):
-        """사용자 생성"""
-        # password_confirm과 nickname 제거
+        """
+        사용자 계정 생성 및 자동 로그인 처리
+        """
+        # password_confirm 제거 (DB 저장 불필요)
         validated_data.pop('password_confirm')
+        remember_me = validated_data.pop('remember_me', False)
         nickname = validated_data.pop('nickname')
         
         # 사용자 생성
-        user = User.objects.create_user(**validated_data)
+        user = User.objects.create_user(
+            username=validated_data['email'],  # 이메일을 username으로 사용
+            email=validated_data['email'],
+            password=validated_data['password']
+        )
         
-        # 프로필 업데이트 (시그널로 이미 생성됨)
-        user.profile.nickname = nickname
-        user.profile.save()
+        # UserProfile은 signals에 의해 자동 생성되므로, 닉네임만 업데이트
+        user.userprofile.nickname = nickname
+        user.userprofile.save()
         
-        return user
+        # JWT 토큰 생성 (자동 로그인 처리)
+        tokens = JWTAuthService.generate_tokens_with_extended_refresh(
+            user, extend_refresh=remember_me
+        )
+        
+        # 사용자 정보와 토큰을 함께 반환
+        return {
+            'user': user,
+            'tokens': tokens,
+            'profile': user.userprofile
+        }
 
 
 class LoginSerializer(serializers.Serializer):
-    """로그인 시리얼라이저"""
-    
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
-    remember_me = serializers.BooleanField(default=False)
-    
+    """
+    로그인용 Serializer
+    """
+    email = serializers.EmailField(help_text="사용자 이메일")
+    password = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'},
+        help_text="비밀번호"
+    )
+    remember_me = serializers.BooleanField(
+        default=False,
+        required=False,
+        help_text="로그인 상태 유지 여부"
+    )
+
     def validate(self, attrs):
-        """로그인 검증"""
         email = attrs.get('email')
         password = attrs.get('password')
         
         if email and password:
+            # 이메일로 사용자 찾기
             try:
                 user = User.objects.get(email=email)
-                if not user.check_password(password):
-                    raise serializers.ValidationError("이메일 또는 비밀번호가 올바르지 않습니다.")
-                if not user.is_active:
-                    raise serializers.ValidationError("비활성화된 계정입니다.")
-                attrs['user'] = user
+                username = user.username
             except User.DoesNotExist:
-                raise serializers.ValidationError("이메일 또는 비밀번호가 올바르지 않습니다.")
+                raise serializers.ValidationError({
+                    'non_field_errors': '이메일 또는 비밀번호가 올바르지 않습니다.'
+                })
+            
+            # 인증
+            user = authenticate(username=username, password=password)
+            
+            if user:
+                if not user.is_active:
+                    raise serializers.ValidationError({
+                        'non_field_errors': '비활성화된 계정입니다.'
+                    })
+                attrs['user'] = user
+            else:
+                raise serializers.ValidationError({
+                    'non_field_errors': '이메일 또는 비밀번호가 올바르지 않습니다.'
+                })
         else:
-            raise serializers.ValidationError("이메일과 비밀번호를 모두 입력해주세요.")
+            raise serializers.ValidationError({
+                'non_field_errors': '이메일과 비밀번호를 모두 입력해주세요.'
+            })
         
         return attrs
 
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    사용자 프로필 Serializer
+    """
+    email = serializers.EmailField(source='user.email', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    bmi = serializers.SerializerMethodField()
+    bmi_category = serializers.SerializerMethodField()
+    recommended_calories = serializers.SerializerMethodField()
+    is_profile_complete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'id', 'email', 'username', 'nickname', 'height', 'weight', 
+            'age', 'gender', 'profile_image', 'bio', 'is_profile_public',
+            'email_notifications', 'push_notifications', 'created_at', 
+            'updated_at', 'bmi', 'bmi_category', 'recommended_calories',
+            'is_profile_complete'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_bmi(self, obj):
+        return obj.get_bmi()
+
+    def get_bmi_category(self, obj):
+        return obj.get_bmi_category()
+
+    def get_recommended_calories(self, obj):
+        return obj.get_recommended_calories()
+
+    def get_is_profile_complete(self, obj):
+        return obj.is_complete_profile()
+
+    def validate_nickname(self, value):
+        """닉네임 중복 검사 (본인 제외)"""
+        if value:
+            existing_profile = UserProfile.objects.filter(nickname=value).exclude(
+                id=self.instance.id if self.instance else None
+            ).first()
+            
+            if existing_profile:
+                raise serializers.ValidationError("이미 사용 중인 닉네임입니다.")
+            
+            # 닉네임 형식 검증
+            if len(value.strip()) < 2:
+                raise serializers.ValidationError("닉네임은 2자 이상이어야 합니다.")
+            
+            import re
+            if not re.match(r'^[a-zA-Z0-9가-힣_.-]+$', value):
+                raise serializers.ValidationError(
+                    "닉네임에는 한글, 영문, 숫자, _, ., - 만 사용할 수 있습니다."
+                )
+        
+        return value.strip() if value else value
+
+
 class PasswordChangeSerializer(serializers.Serializer):
-    """비밀번호 변경 시리얼라이저"""
-    
-    current_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(write_only=True, validators=[validate_password])
-    new_password_confirm = serializers.CharField(write_only=True)
-    
+    """
+    비밀번호 변경용 Serializer
+    """
+    current_password = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'},
+        help_text="현재 비밀번호"
+    )
+    new_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={'input_type': 'password'},
+        help_text="새 비밀번호 (8자 이상)"
+    )
+    new_password_confirm = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={'input_type': 'password'},
+        help_text="새 비밀번호 확인"
+    )
+
     def validate_current_password(self, value):
         """현재 비밀번호 확인"""
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("현재 비밀번호가 올바르지 않습니다.")
         return value
-    
+
+    def validate_new_password(self, value):
+        """새 비밀번호 강도 검증"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
+
     def validate(self, attrs):
-        """새 비밀번호 확인"""
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError("새 비밀번호가 일치하지 않습니다.")
+        """새 비밀번호 일치 검증"""
+        new_password = attrs.get('new_password')
+        new_password_confirm = attrs.get('new_password_confirm')
+        
+        if new_password != new_password_confirm:
+            raise serializers.ValidationError({
+                'new_password_confirm': '새 비밀번호가 일치하지 않습니다.'
+            })
+        
         return attrs
-    
+
     def save(self):
-        """비밀번호 변경"""
+        """비밀번호 변경 처리"""
         user = self.context['request'].user
-        user.set_password(self.validated_data['new_password'])
+        new_password = self.validated_data['new_password']
+        
+        user.set_password(new_password)
         user.save()
+        
         return user
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    """비밀번호 재설정 요청 시리얼라이저"""
-    
-    email = serializers.EmailField()
-    
+    """
+    비밀번호 재설정 요청용 Serializer
+    """
+    email = serializers.EmailField(help_text="등록된 이메일 주소")
+
     def validate_email(self, value):
-        """이메일 존재 확인"""
-        try:
-            user = User.objects.get(email=value)
-            self.user = user
-        except User.DoesNotExist:
-            # 보안상 동일한 메시지 반환
-            pass
+        """이메일 존재 여부 확인"""
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("등록되지 않은 이메일입니다.")
         return value
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    """비밀번호 재설정 확인 시리얼라이저"""
-    
-    token = serializers.CharField()
-    new_password = serializers.CharField(write_only=True, validators=[validate_password])
-    new_password_confirm = serializers.CharField(write_only=True)
-    
+    """
+    비밀번호 재설정 확인용 Serializer
+    """
+    token = serializers.CharField(help_text="비밀번호 재설정 토큰")
+    new_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={'input_type': 'password'},
+        help_text="새 비밀번호 (8자 이상)"
+    )
+    new_password_confirm = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={'input_type': 'password'},
+        help_text="새 비밀번호 확인"
+    )
+
     def validate_token(self, value):
-        """토큰 유효성 검사"""
+        """토큰 유효성 확인"""
         try:
             reset_token = PasswordResetToken.objects.get(token=value)
             if not reset_token.is_valid():
@@ -207,17 +331,33 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         except PasswordResetToken.DoesNotExist:
             raise serializers.ValidationError("유효하지 않은 토큰입니다.")
         return value
-    
+
+    def validate_new_password(self, value):
+        """새 비밀번호 강도 검증"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
+
     def validate(self, attrs):
-        """새 비밀번호 확인"""
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError("비밀번호가 일치하지 않습니다.")
+        """새 비밀번호 일치 검증"""
+        new_password = attrs.get('new_password')
+        new_password_confirm = attrs.get('new_password_confirm')
+        
+        if new_password != new_password_confirm:
+            raise serializers.ValidationError({
+                'new_password_confirm': '새 비밀번호가 일치하지 않습니다.'
+            })
+        
         return attrs
-    
+
     def save(self):
-        """비밀번호 재설정"""
+        """비밀번호 재설정 처리"""
         user = self.reset_token.user
-        user.set_password(self.validated_data['new_password'])
+        new_password = self.validated_data['new_password']
+        
+        user.set_password(new_password)
         user.save()
         
         # 토큰 사용 처리
