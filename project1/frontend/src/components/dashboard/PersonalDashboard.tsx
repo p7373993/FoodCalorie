@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserChallenge, LeaderboardEntry } from '@/types';
 import { apiClient } from '@/lib/api';
+import CheatDayModal from '@/components/challenges/CheatDayModal';
 
 interface PersonalDashboardProps {
   onNavigateToChallenge?: () => void;
@@ -20,6 +21,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCheatModalOpen, setIsCheatModalOpen] = useState(false);
 
   useEffect(() => {
     loadPersonalData();
@@ -321,13 +323,13 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 📊 상세 통계
               </button>
               
-              <button
-                onClick={() => {/* TODO: 치팅 모달 열기 */}}
-                className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
-                disabled={currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit}
-              >
-                🍕 치팅 사용 {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit && '(한도 초과)'}
-              </button>
+                             <button
+                 onClick={() => setIsCheatModalOpen(true)}
+                 className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
+                 disabled={currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit}
+               >
+                 🍕 치팅 사용 {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit && '(한도 초과)'}
+               </button>
             </div>
           </div>
         </div>
@@ -395,6 +397,19 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 치팅 모달 */}
+      {currentChallenge && (
+        <CheatDayModal
+          isOpen={isCheatModalOpen}
+          onClose={() => setIsCheatModalOpen(false)}
+          challenge={currentChallenge}
+          onCheatUsed={() => {
+            // 치팅 사용 후 현황 새로고침
+            loadPersonalData();
+          }}
+        />
+      )}
     </div>
   );
 };
