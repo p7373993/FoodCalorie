@@ -2,142 +2,319 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { ChallengeRoom } from '@/types';
+import { apiClient } from '@/lib/api';
+import ChallengeJoinForm from '@/components/challenges/ChallengeJoinForm';
 
-interface Challenge {
-  id: string;
-  title: string;
-  description: string;
-  type: 'CALORIE_LIMIT' | 'PROTEIN_MINIMUM';
-  goal: number;
-  creator: string;
-  participants: string[];
-  participant_count: number;
-}
+type PageMode = 'details' | 'join';
 
 export default function ChallengeDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const [challenge, setChallenge] = useState<Challenge | null>(null);
-  const [isParticipant, setIsParticipant] = useState(false);
+  const [room, setRoom] = useState<ChallengeRoom | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pageMode, setPageMode] = useState<PageMode>('details');
 
   useEffect(() => {
-    const loadChallenge = async () => {
+    const loadChallengeRoom = async () => {
       try {
-        const response = await fetch(`/api/challenges/${params.id}/`);
-        const data = await response.json();
-        setChallenge(data);
+        setLoading(true);
+        const roomId = Number(params.id);
         
-        // TODO: 현재 사용자가 참가자인지 확인하는 로직 추가
-        // setIsParticipant(data.participants.includes(currentUserId));
-      } catch (error) {
-        console.error('Error loading challenge:', error);
+        if (isNaN(roomId)) {
+          setError('잘못된 챌린지 방 ID입니다.');
+          return;
+        }
+
+        const response = await apiClient.getChallengeRoom(roomId);
+        
+        if (response && response.id) {
+          setRoom(response);
+          setError(null);
+        } else {
+          setError('챌린지 방을 찾을 수 없습니다.');
+        }
+      } catch (err) {
+        console.error('Error loading challenge room:', err);
+        setError('챌린지 방 정보를 불러오는 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
       }
     };
 
     if (params.id) {
-      loadChallenge();
+      loadChallengeRoom();
     }
   }, [params.id]);
 
-  const handleJoinChallenge = async () => { 
-    if (!challenge) return; 
-    
-    try { 
-      const response = await fetch(`/api/challenges/${challenge.id}/join/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (response.ok) {
-        // 게임화 포인트 업데이트
-        await fetch('/api/gamification/update/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'join_challenge' })
-        });
-
-        setIsParticipant(true);
-        // 챌린지 데이터 새로고침
-        const updatedResponse = await fetch(`/api/challenges/${params.id}/`);
-        const updatedData = await updatedResponse.json();
-        setChallenge(updatedData);
-      }
-    } catch (e) { 
-      console.error('Error joining challenge:', e); 
-    } 
+  const handleJoinClick = () => {
+    setPageMode('join');
   };
 
-  const handleBack = () => {
+  const handleJoinSuccess = () => {
+    // 참여 성공 시 내 챌린지 페이지로 이동
+    router.push('/challenges/my');
+  };
+
+  const handleBackToDetails = () => {
+    setPageMode('details');
+  };
+
+  const handleBackToList = () => {
     router.push('/challenges');
   };
 
-  if (!challenge) {
+  const getDifficultyInfo = (targetCalorie: number) => {
+    if (targetCalorie <= 1200) return { label: '매우 어려움', color: 'text-red-500', emoji: '🔥🔥🔥🔥🔥' };
+    if (targetCalorie <= 1500) return { label: '어려움', color: 'text-orange-500', emoji: '🔥🔥🔥🔥' };
+    if (targetCalorie <= 1800) return { label: '보통', color: 'text-[var(--point-green)]', emoji: '🔥🔥🔥' };
+    if (targetCalorie <= 2200) return { label: '쉬움', color: 'text-blue-400', emoji: '🔥🔥' };
+    return { label: '매우 쉬움', color: 'text-gray-400', emoji: '🔥' };
+  };
+
+  if (loading) {
     return (
       <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="text-center">
-          <p className="text-xl">로딩 중...</p>
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--point-green)] mb-4"></div>
+          <p className="text-xl text-gray-400">챌린지 방 정보를 불러오는 중...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl flex flex-col space-y-6 animate-fade-in">
-        <header className="w-full flex justify-between items-center">
-          <h1 className="text-3xl font-black truncate" style={{ color: 'var(--point-green)' }}>
-            {challenge.title}
-          </h1>
-          <button 
-            onClick={handleBack} 
-            className="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+  if (error || !room) {
+    return (
+      <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">오류가 발생했습니다</h2>
+          <p className="text-gray-400 mb-6">{error}</p>
+          <button
+            onClick={handleBackToList}
+            className="bg-[var(--point-green)] text-black font-bold py-3 px-6 rounded-lg hover:bg-green-400 transition-colors"
           >
-            뒤로
+            챌린지 목록으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageMode === 'join') {
+    return (
+      <div className="bg-grid-pattern text-white min-h-screen p-4">
+        <ChallengeJoinForm
+          room={room}
+          onSuccess={handleJoinSuccess}
+          onCancel={handleBackToDetails}
+        />
+      </div>
+    );
+  }
+
+  const difficulty = getDifficultyInfo(room.target_calorie);
+
+  return (
+    <div className="bg-grid-pattern text-white min-h-screen p-4">
+      <div className="max-w-6xl mx-auto">
+        {/* 헤더 */}
+        <header className="flex justify-between items-center py-6">
+          <div>
+            <h1 className="text-4xl font-black mb-2" style={{ fontFamily: 'NanumGothic', color: 'var(--point-green)' }}>
+              챌린지 상세 정보
+            </h1>
+            <p className="text-gray-400">
+              챌린지 정보를 확인하고 참여해보세요
+            </p>
+          </div>
+          <button
+            onClick={handleBackToList}
+            className="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors"
+            style={{ fontFamily: 'NanumGothic' }}
+          >
+            목록으로
           </button>
         </header>
 
-        <div className="w-full bg-[var(--card-bg)] p-6 rounded-2xl space-y-4 text-left">
-          <p className="text-gray-300">{challenge.description}</p>
-          <p className="font-bold">
-            목표: {challenge.goal}{challenge.type === 'CALORIE_LIMIT' ? 'kcal 이하' : 'g 이상'}
-          </p>
-          <p className="text-sm text-gray-400">
-            생성자: {challenge.creator}
-          </p>
-          
-          {!isParticipant && (
-            <button 
-              onClick={handleJoinChallenge} 
-              className="w-full bg-teal-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105"
-            >
-              참가하기
-            </button>
-          )}
-          
-          {isParticipant && (
-            <div className="w-full bg-green-600/20 border border-green-500 p-3 rounded-lg text-center">
-              <p className="text-green-400 font-bold">✓ 참가 중</p>
-            </div>
-          )}
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* 왼쪽: 챌린지 방 정보 */}
+          <div className="space-y-6">
+            {/* 메인 정보 카드 */}
+            <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-bold text-white">{room.name}</h2>
+                <div className="bg-gray-800/50 px-4 py-2 rounded-full">
+                  <span className="text-[var(--point-green)] font-bold">활성</span>
+                </div>
+              </div>
 
-        <div className="w-full bg-[var(--card-bg)] p-6 rounded-2xl text-left">
-          <h2 className="text-xl font-bold mb-4">
-            참가자 랭킹 ({challenge.participant_count}명)
-          </h2>
-          <ul className="space-y-2">
-            {challenge.participants.map((p, i) => (
-              <li key={p} className="flex items-center justify-between p-2 bg-gray-800/50 rounded-md">
-                <span className="font-mono text-sm">
-                  #{i + 1} {p.substring(0, 12)}...
-                </span>
-              </li>
-            ))}
-          </ul>
-          
-          {challenge.participants.length === 0 && (
-            <p className="text-gray-400 text-center">아직 참가자가 없습니다.</p>
-          )}
+              <p className="text-gray-300 text-lg leading-relaxed mb-6">
+                {room.description}
+              </p>
+
+              {/* 핵심 정보 */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-800/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">목표 칼로리</div>
+                  <div className="text-2xl font-bold text-white">
+                    {room.target_calorie.toLocaleString()} kcal
+                  </div>
+                  <div className="text-xs text-gray-500">±{room.tolerance}kcal 허용</div>
+                </div>
+                <div className="bg-gray-800/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">현재 참여자</div>
+                  <div className="text-2xl font-bold text-white">
+                    {room.participant_count}명
+                  </div>
+                  <div className="text-xs text-gray-500">활발한 커뮤니티</div>
+                </div>
+              </div>
+
+              {/* 난이도 */}
+              <div className="bg-gray-800/30 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-gray-400 mb-1">난이도</div>
+                    <div className={`text-xl font-bold ${difficulty.color}`}>
+                      {difficulty.label}
+                    </div>
+                  </div>
+                  <div className="text-3xl">{difficulty.emoji}</div>
+                </div>
+              </div>
+
+              {/* 생성일 */}
+              <div className="text-sm text-gray-500 text-center">
+                📅 {new Date(room.created_at).toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}에 생성됨
+              </div>
+            </div>
+
+            {/* 추가 정보 */}
+            <div className="bg-[var(--card-bg)] rounded-2xl p-6 border border-gray-600">
+              <h3 className="text-xl font-bold text-white mb-4">💡 이런 분께 추천해요</h3>
+              <ul className="space-y-3 text-gray-300">
+                {room.target_calorie <= 1500 && (
+                  <>
+                    <li className="flex items-center gap-3">
+                      <span className="text-[var(--point-green)]">✓</span>
+                      체중 감량이 목표인 분
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="text-[var(--point-green)]">✓</span>
+                      강한 의지력을 가진 분
+                    </li>
+                  </>
+                )}
+                {room.target_calorie > 1500 && room.target_calorie <= 1800 && (
+                  <>
+                    <li className="flex items-center gap-3">
+                      <span className="text-[var(--point-green)]">✓</span>
+                      체중 유지가 목표인 분
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="text-[var(--point-green)]">✓</span>
+                      균형 잡힌 식습관을 원하는 분
+                    </li>
+                  </>
+                )}
+                {room.target_calorie > 1800 && (
+                  <>
+                    <li className="flex items-center gap-3">
+                      <span className="text-[var(--point-green)]">✓</span>
+                      체중 증량이나 근육량 증가가 목표인 분
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="text-[var(--point-green)]">✓</span>
+                      활동량이 많은 분
+                    </li>
+                  </>
+                )}
+                <li className="flex items-center gap-3">
+                  <span className="text-[var(--point-green)]">✓</span>
+                  꾸준한 식단 관리를 하고 싶은 분
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 오른쪽: 참여 섹션 */}
+          <div className="space-y-6">
+            {/* 참여 안내 */}
+            <div className="bg-gradient-to-br from-[var(--point-green)]/20 to-blue-500/20 rounded-2xl p-8 border border-[var(--point-green)]/30">
+              <div className="text-center">
+                <div className="text-4xl mb-4">🎯</div>
+                <h3 className="text-2xl font-bold text-white mb-4">
+                  지금 바로 챌린지에 참여하세요!
+                </h3>
+                <p className="text-gray-300 mb-6 leading-relaxed">
+                  AI 기반 식단 분석으로 자동 판정되며,<br />
+                  다른 사용자들과 실시간으로 경쟁할 수 있습니다.
+                </p>
+                <button
+                  onClick={handleJoinClick}
+                  className="w-full bg-[var(--point-green)] text-black font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-105"
+                >
+                  🚀 챌린지 참여하기
+                </button>
+              </div>
+            </div>
+
+            {/* 챌린지 특징 */}
+            <div className="bg-[var(--card-bg)] rounded-2xl p-6 border border-gray-600">
+              <h3 className="text-xl font-bold text-white mb-4">🌟 챌린지 특징</h3>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🤖</div>
+                  <div>
+                    <div className="font-semibold text-white">AI 자동 판정</div>
+                    <div className="text-sm text-gray-400">식단 사진만 올리면 자동으로 칼로리 분석</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🏆</div>
+                  <div>
+                    <div className="font-semibold text-white">실시간 순위</div>
+                    <div className="text-sm text-gray-400">연속 성공 일수로 다른 사용자와 경쟁</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🍕</div>
+                  <div>
+                    <div className="font-semibold text-white">치팅 시스템</div>
+                    <div className="text-sm text-gray-400">주간 치팅으로 부담 없는 챌린지</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🏅</div>
+                  <div>
+                    <div className="font-semibold text-white">배지 획득</div>
+                    <div className="text-sm text-gray-400">성취에 따른 다양한 배지 시스템</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 주의사항 */}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-yellow-400 mb-3">⚠️ 참여 전 확인사항</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li>• 챌린지 참여 후에는 설정 변경이 제한됩니다</li>
+                <li>• 하루에 최소 2회의 식사 기록이 필요합니다</li>
+                <li>• 23시 이후의 식사는 다음 날로 계산됩니다</li>
+                <li>• 연속 실패 시 순위가 초기화됩니다</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>

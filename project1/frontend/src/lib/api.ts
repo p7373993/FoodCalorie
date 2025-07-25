@@ -128,7 +128,7 @@ class ApiClient {
     return this.request('/api/challenges/rooms/');
   }
 
-  async getChallengeRoom(roomId: number): Promise<ApiResponse<ChallengeRoom>> {
+  async getChallengeRoom(roomId: number): Promise<ChallengeRoom> {
     return this.request(`/api/challenges/rooms/${roomId}/`);
   }
 
