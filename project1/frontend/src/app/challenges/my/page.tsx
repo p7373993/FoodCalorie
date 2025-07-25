@@ -4,12 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserChallenge } from '@/types';
 import { apiClient } from '@/lib/api';
+import CheatDayModal from '@/components/challenges/CheatDayModal';
+import ChallengeCompletionReport from '@/components/challenges/ChallengeCompletionReport';
 
 export default function MyChallengesPage() {
   const router = useRouter();
   const [challenges, setChallenges] = useState<UserChallenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCheatModalOpen, setIsCheatModalOpen] = useState(false);
+  const [selectedChallenge, setSelectedChallenge] = useState<UserChallenge | null>(null);
+  const [isCompletionReportOpen, setIsCompletionReportOpen] = useState(false);
+  const [completionChallenge, setCompletionChallenge] = useState<UserChallenge | null>(null);
 
   useEffect(() => {
     loadMyChallenges();
@@ -40,6 +46,16 @@ export default function MyChallengesPage() {
 
   const handleViewLeaderboard = (challenge: UserChallenge) => {
     router.push(`/challenges/leaderboard/${challenge.room}`);
+  };
+
+  const handleCheatRequest = (challenge: UserChallenge) => {
+    setSelectedChallenge(challenge);
+    setIsCheatModalOpen(true);
+  };
+
+  const handleViewReport = (challenge: UserChallenge) => {
+    setCompletionChallenge(challenge);
+    setIsCompletionReportOpen(true);
   };
 
   const getStatusColor = (challenge: UserChallenge) => {
@@ -207,7 +223,7 @@ export default function MyChallengesPage() {
                     </button>
                     
                     <button
-                      onClick={() => router.push('/challenges/cheat')}
+                      onClick={() => handleCheatRequest(challenge)}
                       className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
                       disabled={challenge.current_weekly_cheat_count >= challenge.user_weekly_cheat_limit}
                     >
@@ -216,7 +232,7 @@ export default function MyChallengesPage() {
 
                     {challenge.remaining_duration_days <= 0 && (
                       <button
-                        onClick={() => router.push('/challenges/report')}
+                        onClick={() => handleViewReport(challenge)}
                         className="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-500 transition-colors"
                       >
                         📋 완료 리포트
@@ -252,6 +268,41 @@ export default function MyChallengesPage() {
           <p>꾸준한 챌린지 참여로 건강한 식습관을 만들어보세요! 💪</p>
         </footer>
       </div>
+
+      {/* 치팅 모달 */}
+      {selectedChallenge && (
+        <CheatDayModal
+          isOpen={isCheatModalOpen}
+          onClose={() => {
+            setIsCheatModalOpen(false);
+            setSelectedChallenge(null);
+          }}
+          challenge={selectedChallenge}
+          onCheatUsed={() => {
+            // 치팅 사용 후 현황 새로고침
+            loadMyChallenges();
+          }}
+        />
+      )}
+
+      {/* 완료 리포트 모달 */}
+      {completionChallenge && (
+        <ChallengeCompletionReport
+          isOpen={isCompletionReportOpen}
+          onClose={() => {
+            setIsCompletionReportOpen(false);
+            setCompletionChallenge(null);
+          }}
+          challenge={completionChallenge}
+          onActionComplete={(action) => {
+            // 행동 완료 후 현황 새로고침
+            loadMyChallenges();
+            if (action === 'new_challenge') {
+              router.push('/challenges');
+            }
+          }}
+        />
+      )}
     </div>
   );
 } 

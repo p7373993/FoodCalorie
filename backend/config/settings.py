@@ -41,14 +41,17 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt',  # JWT 인증
+    'rest_framework_simplejwt.token_blacklist',  # JWT 토큰 블랙리스트
     'corsheaders',
     'channels',
     'rest_framework.authtoken',
+    'accounts',  # 사용자 인증 시스템
     'api_integrated.apps.ApiIntegratedConfig',  # 메인 API 앱
     'mlserver',  # MLServer 연동
-    'chegam',  # 체감 앱
+    # 'chegam',  # 체감 앱 (일시 비활성화 - UserProfile 충돌)
     'challenges.apps.ChallengesConfig',  # 챌린지 시스템
-    'calender.apps.CalenderConfig',  # 캘린더 앱
+    # 'calender.apps.CalenderConfig',  # 캘린더 앱 (일시 비활성화 - UserProfile 충돌)
 ]
 
 MIDDLEWARE = [
@@ -154,16 +157,57 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework 설정
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',  # 팀원 설정
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # JWT 인증 (기본)
+        'rest_framework.authentication.TokenAuthentication',  # 기존 시스템 호환
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',  # 팀원 설정
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
+# JWT 설정
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),  # Access Token 1시간
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # Refresh Token 30일
+    'ROTATE_REFRESH_TOKENS': True,  # Refresh Token 자동 갱신
+    'BLACKLIST_AFTER_ROTATION': True,  # 이전 Refresh Token 블랙리스트
+    'UPDATE_LAST_LOGIN': True,  # 로그인 시간 업데이트
+    
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+    
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+    
+    'JTI_CLAIM': 'jti',
+    
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
+
+# Frontend URL (비밀번호 재설정 등에 사용)
+FRONTEND_URL = 'http://localhost:3000'
+
+# 이메일 설정 (개발 환경)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'noreply@foodcalorie.com'
 
 # CORS 설정
 CORS_ALLOWED_ORIGINS = [
@@ -219,5 +263,21 @@ GEMINI_API_KEY = 'AIzaSyBHk7IcID52trC-d2rZQzFrpPKH-1sCjKo'  # 실제 Gemini API 
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Email settings (개발 환경용)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # 개발용 (콘솔 출력)
+DEFAULT_FROM_EMAIL = 'noreply@foodcalorie.com'
+
+# 프로덕션 환경에서는 실제 SMTP 설정 사용
+if not DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+
+# Frontend URL (비밀번호 재설정 링크용)
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 

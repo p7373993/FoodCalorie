@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import ChallengeRoom, UserChallenge, CheatDayRequest, DailyChallengeRecord, UserChallengeBadge
 from .serializers import (
-    ChallengeRoomSerializer, ChallengeJoinSerializer, 
+    ChallengeRoomSerializer, UserChallengeCreateSerializer, 
     UserChallengeSerializer, CheatDayRequestSerializer,
     CheatStatusSerializer
 )
@@ -32,7 +32,7 @@ class JoinChallengeView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        serializer = ChallengeJoinSerializer(data=request.data)
+        serializer = UserChallengeCreateSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response({
                 'success': False,

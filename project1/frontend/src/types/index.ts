@@ -76,6 +76,7 @@ export interface ChallengeRoom {
 
 export interface UserChallenge {
   id: number;
+  user: number;
   room: number;
   room_name: string;
   target_calorie: number;
@@ -180,6 +181,41 @@ export interface ChallengeStatistics {
   average_calories: number;
   remaining_days: number;
   days_since_start: number;
+}
+
+export interface ChallengeReportData {
+  challenge_id: number;
+  challenge_room: ChallengeRoom;
+  completion_date: string;
+  total_days: number;
+  success_days: number;
+  max_streak: number;
+  current_streak: number;
+  success_rate: number;
+  average_calorie_intake: number;
+  total_cheat_days_used: number;
+  earned_badges: UserChallengeBadge[];
+  weekly_breakdown: {
+    week: number;
+    success_count: number;
+    total_count: number;
+    cheat_used: number;
+  }[];
+  achievement_level: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
+  completion_message: string;
+  recommendations: string[];
+}
+
+export interface ChallengeAction {
+  action: 'extend' | 'new_challenge' | 'complete';
+  extension_days?: number;
+  new_challenge_room_id?: number;
+}
+
+export interface BadgeAnimation {
+  badge: ChallengeBadge;
+  isNew: boolean;
+  animation: 'bounce' | 'glow' | 'shake' | 'none';
 }
 
 // Component Props types
