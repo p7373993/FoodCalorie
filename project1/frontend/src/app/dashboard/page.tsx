@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
 import AdvancedInsightModal from '@/components/ui/AdvancedInsightModal';
+import PersonalDashboard from '@/components/dashboard/PersonalDashboard';
 
 interface GamificationData {
   points: number;
@@ -108,6 +109,14 @@ export default function DashboardPage() {
             새 분석
           </button>
         </header>
+
+        {/* 챌린지 현황판 섹션 */}
+        <div className="w-full">
+          <PersonalDashboard 
+            onNavigateToChallenge={() => router.push('/challenges')}
+            onNavigateToLeaderboard={() => router.push('/challenges/leaderboard')}
+          />
+        </div>
 
         <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 text-left flex flex-col justify-center">

@@ -76,6 +76,7 @@ export interface ChallengeRoom {
 
 export interface UserChallenge {
   id: number;
+  user: number;
   room: number;
   room_name: string;
   target_calorie: number;
