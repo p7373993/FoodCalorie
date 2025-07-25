@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMyActiveChallenge, useLeaderboard, useCheatDayStatus } from '@/hooks/useChallengeQueries';
 import { useActiveChallengeData, useChallengeAuth } from '@/contexts/ChallengeContext';
@@ -17,6 +17,14 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const router = useRouter();
   const { isAuthenticated } = useChallengeAuth();
   const { activeChallenge, activeChallengeRoom } = useActiveChallengeData();
+  
+  // 실제 로그인 상태 확인 (localStorage 토큰 기반)
+  const [realAuthState, setRealAuthState] = useState(false);
+  
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    setRealAuthState(!!token);
+  }, []);
   
   // React Query 훅들로 데이터 관리
   const { 
@@ -47,7 +55,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const currentRoom = activeChallengeRoom;
 
   // 인증되지 않은 경우
-  if (!isAuthenticated) {
+  if (!realAuthState) {
     return (
       <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
         <div className="text-center">

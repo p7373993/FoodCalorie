@@ -30,13 +30,19 @@ export function Navigation() {
   useEffect(() => {
     // 클라이언트 사이드에서만 실행
     if (typeof window !== 'undefined') {
-      setUsername(localStorage.getItem('username'));
+      const user = localStorage.getItem('user');
+      if (user) {
+        const userData = JSON.parse(user);
+        setUsername(userData.username);
+      }
     }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('username');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('profile');
     router.push('/login');
   };
 

@@ -3,7 +3,6 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useState } from 'react';
 import { ChallengeProvider } from '@/contexts/ChallengeContext';
 import ConditionalNavigation from '@/components/layout/ConditionalNavigation';
@@ -59,15 +58,6 @@ export default function RootLayout({
                 {children}
               </main>
             </div>
-            
-            {/* React Query Devtools - 개발 환경에서만 표시 */}
-            {process.env.NODE_ENV === 'development' && (
-              <ReactQueryDevtools 
-                initialIsOpen={false}
-                position="bottom-right"
-                buttonPosition="bottom-right"
-              />
-            )}
           </ChallengeProvider>
         </QueryClientProvider>
       </body>

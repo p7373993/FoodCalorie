@@ -1373,7 +1373,7 @@ class AdminUserBulkActionView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ==================== 관리자 기능 API ====================
+# 관리자 기능 API
 
 from .decorators import IsAdminUser, IsSuperUser
 from .serializers import AdminUserListSerializer, AdminUserDetailSerializer
@@ -1839,7 +1839,9 @@ class AdminStatisticsView(APIView):
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# ==================== 관리자 기능 API ====================
+# ========================
+# 관리자 기능 API Views
+# ========================
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AdminUserListView(APIView):

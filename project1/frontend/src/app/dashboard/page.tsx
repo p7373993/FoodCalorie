@@ -6,6 +6,7 @@ import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
 import AdvancedInsightModal from '@/components/ui/AdvancedInsightModal';
 import PersonalDashboard from '@/components/dashboard/PersonalDashboard';
+import UserInfo from '@/components/auth/UserInfo';
 
 interface GamificationData {
   points: number;
@@ -98,8 +99,11 @@ export default function DashboardPage() {
   const maxKcal = 3000;
 
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-4xl flex flex-col items-center justify-center space-y-6 animate-fade-in">
+    <>
+      <UserInfo />
+      <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-4xl flex flex-col items-center justify-center space-y-6 animate-fade-in">
+        {/* 
         <header className="w-full flex justify-between items-center">
           <h1 className="text-4xl font-black" style={{ color: 'var(--point-green)' }}>대시보드</h1>
           <button 
@@ -109,12 +113,12 @@ export default function DashboardPage() {
             새 분석
           </button>
         </header>
+        */}
 
         {/* 챌린지 현황판 섹션 */}
         <div className="w-full">
           <PersonalDashboard 
             onNavigateToChallenge={() => router.push('/challenges')}
-            onNavigateToLeaderboard={() => router.push('/challenges/leaderboard')}
           />
         </div>
 
@@ -246,5 +250,6 @@ export default function DashboardPage() {
         onClose={() => setIsInsightModalOpen(false)} 
       />
     </div>
+    </>
   );
 }
