@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'mlserver',  # MLServer 연동
     'chegam',  # 체감 앱
     'challenges.apps.ChallengesConfig',  # 챌린지 시스템
-    'calender.apps.CalenderConfig',  # 캘린더 앱
+    # 'calender.apps.CalenderConfig',  # 캘린더 앱 (일시 비활성화 - UserProfile 충돌)
 ]
 
 MIDDLEWARE = [

@@ -24,7 +24,7 @@ urlpatterns = [
     path('api/auth/', include('accounts.urls')),  # 사용자 인증 API
     path('api/', include('api_integrated.urls')),  # 팀원의 완성된 API
     path('api/challenges/', include('challenges.urls')),  # 챌린지 API
-    path('api/calendar/', include('calender.urls')),  # 캘린더 API
+    # path('api/calendar/', include('calender.urls')),  # 캘린더 API (일시 비활성화)
     path('mlserver/', include('mlserver.urls')),  # MLServer 연동 유지
     path('', include('chegam.urls')),  # 체감 API
 ]

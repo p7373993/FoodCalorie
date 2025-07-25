@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
     TokenVerifyView,
+    TokenBlacklistView,
 )
 from . import views
 
@@ -17,6 +18,7 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
     
     # 인증 관련 API
     path('register/', views.RegisterView.as_view(), name='register'),

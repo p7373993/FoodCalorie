@@ -102,16 +102,110 @@ class RegisterView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
-    """로그인 API - 임시 구현"""
+    """
+    로그인 API 뷰
+    POST /api/auth/login/
+    
+    요구사항:
+    1. 이메일/비밀번호 검증 로직
+    2. JWT 토큰 생성 및 응답 처리
+    3. "로그인 상태 유지" 옵션 처리 (Refresh Token 만료 시간 연장)
+    4. 로그인 실패 시 에러 메시지 처리
+    5. 계정 잠금 기능 (보안)
+    """
     permission_classes = [AllowAny]
+    serializer_class = LoginSerializer
     
     def post(self, request):
-        # TODO: 로그인 로직 구현
-        return Response({
-            'message': '로그인 API - 구현 예정',
-            'data': request.data
-        }, status=status.HTTP_200_OK)
+        """로그인 처리"""
+        email = request.data.get('email', '')
+        
+        # 계정 잠금 확인
+        if LoginAttemptService.is_account_locked(email):
+            remaining_time = LoginAttemptService.get_lockout_remaining_time(email)
+            minutes = remaining_time // 60
+            seconds = remaining_time % 60
+            
+            return Response({
+                'success': False,
+                'message': f'계정이 잠금되었습니다. {minutes}분 {seconds}초 후에 다시 시도해주세요.',
+                'locked_until': remaining_time,
+                'error_code': 'ACCOUNT_LOCKED'
+            }, status=status.HTTP_423_LOCKED)
+        
+        serializer = self.serializer_class(data=request.data)
+        
+        if serializer.is_valid():
+            try:
+                user = serializer.validated_data['user']
+                remember_me = serializer.validated_data.get('remember_me', False)
+                
+                # JWT 토큰 생성
+                tokens = JWTAuthService.generate_tokens_with_extended_refresh(
+                    user, extend_refresh=remember_me
+                )
+                
+                # 로그인 시도 기록 (성공)
+                LoginAttemptService.record_attempt(
+                    request, email, user, success=True
+                )
+                
+                # 응답 데이터 구성
+                response_data = {
+                    'success': True,
+                    'message': '로그인이 완료되었습니다.',
+                    'user': {
+                        'id': user.id,
+                        'email': user.email,
+                        'username': user.username,
+                    },
+                    'profile': UserProfileSerializer(user.userprofile).data,
+                    'auth': {
+                        'access_token': tokens['access_token'],
+                        'refresh_token': tokens['refresh_token'],
+                        'token_type': 'Bearer',
+                        'access_expires_at': tokens['access_expires_at'].isoformat(),
+                        'refresh_expires_at': tokens['refresh_expires_at'].isoformat(),
+                        'remember_me': remember_me
+                    }
+                }
+                
+                return Response(response_data, status=status.HTTP_200_OK)
+                
+            except Exception as e:
+                # 로그인 시도 기록 (실패)
+                LoginAttemptService.record_attempt(
+                    request, email, None, success=False
+                )
+                
+                return Response({
+                    'success': False,
+                    'message': '로그인 처리 중 오류가 발생했습니다.',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        else:
+            # 유효성 검사 실패 시 로그인 시도 기록
+            LoginAttemptService.record_attempt(
+                request, email, None, success=False
+            )
+            
+            # 구체적인 에러 메시지 추출
+            error_message = '로그인 정보가 올바르지 않습니다.'
+            if 'non_field_errors' in serializer.errors:
+                error_message = serializer.errors['non_field_errors'][0]
+            elif 'email' in serializer.errors:
+                error_message = serializer.errors['email'][0]
+            elif 'password' in serializer.errors:
+                error_message = serializer.errors['password'][0]
+            
+            return Response({
+                'success': False,
+                'message': error_message,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LogoutView(APIView):
