@@ -37,7 +37,9 @@ urlpatterns = [
     
     # 관리자 기능
     path('admin/users/', views.AdminUserListView.as_view(), name='admin_user_list'),
-    path('admin/users/<int:pk>/', views.AdminUserDetailView.as_view(), name='admin_user_detail'),
+    path('admin/users/bulk-action/', views.AdminUserBulkActionView.as_view(), name='admin_user_bulk_action'),
+    path('admin/users/<int:user_id>/', views.AdminUserDetailView.as_view(), name='admin_user_detail'),
+    path('admin/statistics/', views.AdminStatisticsView.as_view(), name='admin_statistics'),
     
     # Router URLs
     path('', include(router.urls)),

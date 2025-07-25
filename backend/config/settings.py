@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',  # JWT 인증
     'rest_framework_simplejwt.token_blacklist',  # JWT 토큰 블랙리스트
+    'django_filters',  # Django 필터링
     'corsheaders',
     'channels',
     'rest_framework.authtoken',
