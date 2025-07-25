@@ -344,7 +344,7 @@ class MLServerClient:
         from difflib import SequenceMatcher
         
         try:
-            csv_path = os.path.join(os.path.dirname(__file__), '..', '음식만개등급화.csv')
+            csv_path = os.path.join(os.path.dirname(__file__), '..', 'korean_food_nutri_score_final.csv')
             
             if not os.path.exists(csv_path):
                 logger.warning(f"CSV 파일을 찾을 수 없습니다: {csv_path}")
@@ -353,7 +353,7 @@ class MLServerClient:
             best_match = None
             best_similarity = 0.0
             
-            with open(csv_path, 'r', encoding='utf-8') as file:
+            with open(csv_path, 'r', encoding='utf-8-sig') as file:
                 reader = csv.DictReader(file)
                 
                 for row in reader:
@@ -368,13 +368,23 @@ class MLServerClient:
                     
                     if similarity > best_similarity and similarity > 0.6:  # 60% 이상 유사도
                         best_similarity = similarity
+                        
+                        # 디버깅을 위한 로그 추가
+                        if csv_food_name == '약과':
+                            logger.info(f"[DEBUG] 약과 CSV 데이터:")
+                            logger.info(f"[DEBUG] 에너지(kcal): {row['에너지(kcal)']}")
+                            logger.info(f"[DEBUG] 단백질(g): {row['단백질(g)']}")
+                            logger.info(f"[DEBUG] 탄수화물(g): {row['탄수화물(g)']}")
+                            logger.info(f"[DEBUG] 지방(g): {row['지방(g)']}")
+                            logger.info(f"[DEBUG] Nutri_Score: {row['Nutri_Score']}")
+                        
                         best_match = {
                             'matched_name': csv_food_name,
                             'calories': float(row['에너지(kcal)']),
                             'protein': float(row['단백질(g)']),
-                            'carbs': float(row['당류(g)']),
-                            'fat': float(row['포화지방산(g)']),
-                            'grade': row['kfni_grade'],
+                            'carbs': float(row['탄수화물(g)']),
+                            'fat': float(row['지방(g)']),
+                            'grade': row['Nutri_Score'],
                             'similarity': similarity
                         }
             
