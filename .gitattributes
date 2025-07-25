@@ -1,0 +1,41 @@
+# 줄바꿈 문자 설정
+* text=auto
+
+# Python 파일은 LF 사용
+*.py text eol=lf
+
+# JavaScript/TypeScript 파일은 LF 사용
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.jsx text eol=lf
+
+# JSON 파일은 LF 사용
+*.json text eol=lf
+
+# CSS/SCSS 파일은 LF 사용
+*.css text eol=lf
+*.scss text eol=lf
+
+# HTML 파일은 LF 사용
+*.html text eol=lf
+
+# Markdown 파일은 LF 사용
+*.md text eol=lf
+
+# 설정 파일들은 LF 사용
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# 바이너리 파일들은 변환하지 않음
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary 
