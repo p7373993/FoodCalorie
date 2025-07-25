@@ -1,150 +1,100 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserChallenge, LeaderboardEntry } from '@/types';
-import { apiClient } from '@/lib/api';
+import { useMyActiveChallenge, useLeaderboard, useCheatDayStatus } from '@/hooks/useChallengeQueries';
+import { useActiveChallengeData, useChallengeAuth } from '@/contexts/ChallengeContext';
 import CheatDayModal from '@/components/challenges/CheatDayModal';
 import ChallengeCompletionReport from '@/components/challenges/ChallengeCompletionReport';
 
 interface PersonalDashboardProps {
   onNavigateToChallenge?: () => void;
-  onNavigateToLeaderboard?: () => void;
 }
 
-const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
-  onNavigateToChallenge,
-  onNavigateToLeaderboard,
+const PersonalDashboard: React.FC<PersonalDashboardProps> = ({ 
+  onNavigateToChallenge = () => {} 
 }) => {
   const router = useRouter();
-  const [currentChallenge, setCurrentChallenge] = useState<UserChallenge | null>(null);
-  const [myRank, setMyRank] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const { isAuthenticated } = useChallengeAuth();
+  const { activeChallenge, activeChallengeRoom } = useActiveChallengeData();
+  
+  // React Query 훅들로 데이터 관리
+  const { 
+    data: challengeResponse, 
+    isLoading: challengeLoading, 
+    error: challengeError,
+    refetch: refetchChallenge 
+  } = useMyActiveChallenge();
+
+  const { 
+    data: leaderboardResponse, 
+    isLoading: leaderboardLoading 
+  } = useLeaderboard(
+    challengeResponse?.data?.room || 0,
+    { limit: 10 }
+  );
+
+  const { 
+    data: cheatStatusResponse 
+  } = useCheatDayStatus(challengeResponse?.data?.id);
+
+  // 로컬 상태
   const [isCheatModalOpen, setIsCheatModalOpen] = useState(false);
   const [isCompletionReportOpen, setIsCompletionReportOpen] = useState(false);
 
-  useEffect(() => {
-    loadPersonalData();
-    
-    // 10초마다 자동 새로고침 (실시간 업데이트)
-    const interval = setInterval(() => {
-      refreshData();
-    }, 10000);
+  // 현재 챌린지 데이터 (React Query 우선, Context 백업)
+  const currentChallenge = challengeResponse?.data || activeChallenge;
+  const currentRoom = activeChallengeRoom;
 
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadPersonalData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // 내 챌린지 정보 조회
-      const challengeResponse = await apiClient.getMyChallenges();
-      
-      if (challengeResponse.success && challengeResponse.data && 
-          challengeResponse.data.active_challenges && 
-          challengeResponse.data.active_challenges.length > 0) {
-        const activeChallenge = challengeResponse.data.active_challenges[0]; // 첫 번째 활성 챌린지
-        setCurrentChallenge(activeChallenge);
-
-        // 순위 정보 조회
-        try {
-          const leaderboardResponse = await apiClient.getLeaderboard(activeChallenge.room);
-          if (leaderboardResponse.success && leaderboardResponse.data) {
-            // 리더보드 응답 구조에 따라 적절히 처리
-            if (Array.isArray(leaderboardResponse.data)) {
-              // 배열 형태의 응답
-              const myRankData = leaderboardResponse.data.find((entry: LeaderboardEntry) => 
-                entry.user_id === activeChallenge.user || entry.is_me === true
-              );
-              setMyRank(myRankData?.rank || null);
-            } else if (leaderboardResponse.data.my_rank) {
-              // 객체 형태의 응답에서 my_rank 속성 사용
-              setMyRank(leaderboardResponse.data.my_rank);
-            }
-          }
-        } catch (rankError) {
-          console.warn('순위 정보 로드 실패:', rankError);
-          setMyRank(null);
-        }
-      } else {
-        setCurrentChallenge(null);
-        setMyRank(null);
-      }
-    } catch (err) {
-      console.error('개인 현황 로드 오류:', err);
-      setError('개인 현황을 불러오는 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const refreshData = async () => {
-    try {
-      setRefreshing(true);
-      await loadPersonalData();
-    } catch (err) {
-      console.warn('자동 새로고침 실패:', err);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const getStatusColor = (challenge: UserChallenge) => {
-    if (challenge.remaining_duration_days <= 0) return 'text-red-400';
-    if (challenge.current_streak_days >= 7) return 'text-[var(--point-green)]';
-    if (challenge.current_streak_days >= 3) return 'text-yellow-400';
-    return 'text-gray-400';
-  };
-
-  const getProgressPercentage = (challenge: UserChallenge) => {
-    const totalDays = challenge.user_challenge_duration_days;
-    const passedDays = totalDays - challenge.remaining_duration_days;
-    return Math.min((passedDays / totalDays) * 100, 100);
-  };
-
-  const getStreakEmoji = (streakDays: number) => {
-    if (streakDays >= 30) return '🔥🔥🔥🔥🔥';
-    if (streakDays >= 14) return '🔥🔥🔥🔥';
-    if (streakDays >= 7) return '🔥🔥🔥';
-    if (streakDays >= 3) return '🔥🔥';
-    if (streakDays >= 1) return '🔥';
-    return '😴';
-  };
-
-  const getSuccessRate = (challenge: UserChallenge) => {
-    const totalDays = challenge.total_success_days + challenge.total_failure_days;
-    if (totalDays === 0) return 0;
-    return Math.round((challenge.total_success_days / totalDays) * 100);
-  };
-
-  if (loading) {
+  // 인증되지 않은 경우
+  if (!isAuthenticated) {
     return (
       <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
-        <div className="flex flex-col items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--point-green)] mb-4"></div>
-          <p className="text-gray-400">개인 현황을 불러오는 중...</p>
+        <div className="text-center">
+          <div className="text-6xl mb-6">🔐</div>
+          <h3 className="text-2xl font-bold text-white mb-4">로그인이 필요합니다</h3>
+          <p className="text-gray-400 mb-8">
+            챌린지 현황을 확인하려면 먼저 로그인해주세요.
+          </p>
+          <button
+            onClick={() => router.push('/login')}
+            className="bg-[var(--point-green)] text-black font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-105"
+          >
+            🚀 로그인하기
+          </button>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  // 로딩 상태
+  if (challengeLoading) {
     return (
-      <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-red-500/30">
+      <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
         <div className="text-center">
-          <div className="text-red-500 mb-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--point-green)] mx-auto mb-4"></div>
+          <p className="text-gray-400">챌린지 현황을 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 에러 상태
+  if (challengeError) {
+    return (
+      <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
+        <div className="text-center">
+          <div className="text-red-400 mb-4">
             <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">데이터 로드 실패</h3>
-          <p className="text-gray-400 mb-4">{error}</p>
+          <p className="text-gray-400 mb-4">
+            {challengeError?.message || '알 수 없는 오류가 발생했습니다.'}
+          </p>
           <button
-            onClick={loadPersonalData}
+            onClick={() => refetchChallenge()}
             className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg hover:bg-green-400 transition-colors"
           >
             다시 시도
@@ -154,6 +104,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     );
   }
 
+  // 참여 중인 챌린지가 없는 경우
   if (!currentChallenge) {
     return (
       <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
@@ -174,74 +125,75 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     );
   }
 
+  // 내 순위 찾기
+  const myRank = leaderboardResponse?.data?.leaderboard?.find(
+    (entry: any) => entry.is_me || entry.user_id === currentChallenge.user
+  )?.rank || leaderboardResponse?.data?.my_rank;
+
+  // 진행률 계산
+  const getProgressPercentage = () => {
+    const totalDays = currentChallenge.user_challenge_duration_days || 1;
+    const passedDays = totalDays - currentChallenge.remaining_duration_days;
+    return Math.min((passedDays / totalDays) * 100, 100);
+  };
+
   return (
     <div className="space-y-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'NanumGothic' }}>
-            내 챌린지 현황
-          </h2>
-          <p className="text-gray-400">실시간으로 업데이트되는 내 챌린지 진행 상황</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          {/* 실시간 업데이트 상태 */}
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-yellow-400 animate-pulse' : 'bg-[var(--point-green)]'}`}></div>
-            {refreshing ? '업데이트 중...' : '실시간 연결'}
-          </div>
-          
+        <h2 className="text-3xl font-bold text-white" style={{ fontFamily: 'NanumGothic' }}>
+          🏆 나의 챌린지
+        </h2>
+        {!challengeLoading && (
           <button
-            onClick={refreshData}
-            className="bg-gray-700 text-white p-2 rounded-lg hover:bg-gray-600 transition-colors"
-            disabled={refreshing}
+            onClick={() => refetchChallenge()}
+            className="text-gray-400 hover:text-white transition-colors"
+            title="새로고침"
           >
-            <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-        </div>
+        )}
       </div>
 
-      {/* 메인 현황 카드 */}
-      <div className="bg-gradient-to-br from-[var(--card-bg)] to-gray-800/50 rounded-2xl p-8 border border-[var(--point-green)]/30">
+      {/* 메인 대시보드 카드 */}
+      <div className="bg-[var(--card-bg)] rounded-2xl p-8 border border-gray-600">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* 왼쪽: 챌린지 정보 */}
-          <div className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white">{currentChallenge.room_name}</h3>
-              <div className={`px-4 py-2 rounded-full text-sm font-medium ${
-                currentChallenge.status === 'active' 
-                  ? 'bg-[var(--point-green)]/20 text-[var(--point-green)]' 
-                  : 'bg-gray-600/20 text-gray-400'
-              }`}>
-                {currentChallenge.status === 'active' ? '진행 중' : currentChallenge.status}
-              </div>
+          <div className="lg:col-span-2 space-y-6">
+            {/* 챌린지 제목 및 기본 정보 */}
+            <div>
+              <h3 className="text-2xl font-bold text-white mb-2">
+                {currentRoom?.name || '챌린지'}
+              </h3>
+              <p className="text-gray-400">
+                목표 칼로리: <span className="text-[var(--point-green)] font-bold">{currentChallenge.target_calorie}kcal</span>
+              </p>
             </div>
 
-            {/* 핵심 지표 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {/* 주요 지표들 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-1">
-                  {currentChallenge.target_calorie.toLocaleString()}
-                </div>
-                <div className="text-sm text-gray-400">목표 칼로리</div>
-              </div>
-              <div className="text-center">
-                <div className={`text-3xl font-bold mb-1 ${getStatusColor(currentChallenge)}`}>
+                <div className="text-3xl font-bold text-[var(--point-green)]">
                   {currentChallenge.current_streak_days}
                 </div>
                 <div className="text-sm text-gray-400">연속 성공</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-1">
+                <div className="text-3xl font-bold text-blue-400">
                   {currentChallenge.max_streak_days}
                 </div>
                 <div className="text-sm text-gray-400">최고 기록</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-1">
+                <div className="text-3xl font-bold text-yellow-400">
+                  {myRank || '-'}
+                </div>
+                <div className="text-sm text-gray-400">내 순위</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-400">
                   {currentChallenge.remaining_duration_days}
                 </div>
                 <div className="text-sm text-gray-400">남은 일수</div>
@@ -249,99 +201,67 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
             </div>
 
             {/* 진행률 바 */}
-            <div className="mb-6">
+            <div>
               <div className="flex justify-between text-sm text-gray-400 mb-2">
                 <span>챌린지 진행률</span>
-                <span>{Math.round(getProgressPercentage(currentChallenge))}%</span>
+                <span>{Math.round(getProgressPercentage())}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div
                   className="bg-gradient-to-r from-[var(--point-green)] to-blue-500 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${getProgressPercentage(currentChallenge)}%` }}
+                  style={{ width: `${getProgressPercentage()}%` }}
                 />
               </div>
             </div>
 
-            {/* 추가 통계 */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-800/30 rounded-lg p-4 text-center">
-                <div className="text-lg font-bold text-white">{getSuccessRate(currentChallenge)}%</div>
-                <div className="text-xs text-gray-400">총 성공률</div>
-              </div>
-              <div className="bg-gray-800/30 rounded-lg p-4 text-center">
-                <div className="text-lg font-bold text-white">
-                  {currentChallenge.current_weekly_cheat_count} / {currentChallenge.user_weekly_cheat_limit}
+            {/* 치팅 현황 */}
+            <div className="bg-gray-800/30 rounded-lg p-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h4 className="text-lg font-bold text-white">이번 주 치팅</h4>
+                  <p className="text-gray-400 text-sm">
+                    {currentChallenge.current_weekly_cheat_count} / {currentChallenge.user_weekly_cheat_limit} 사용
+                  </p>
                 </div>
-                <div className="text-xs text-gray-400">이번 주 치팅</div>
-              </div>
-              <div className="bg-gray-800/30 rounded-lg p-4 text-center">
-                <div className="text-lg font-bold text-white">
-                  {myRank || '순위 미확인'}
+                <div className="text-3xl">
+                  {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit ? '🚫' : '🍕'}
                 </div>
-                <div className="text-xs text-gray-400">현재 순위</div>
               </div>
             </div>
           </div>
 
-          {/* 오른쪽: 동기부여 섹션 */}
-          <div className="flex flex-col justify-between">
-            {/* 연속 기록 표시 */}
-            <div className="text-center mb-6">
-              <div className="text-6xl mb-4">
-                {getStreakEmoji(currentChallenge.current_streak_days)}
-              </div>
-              <h4 className="text-xl font-bold text-white mb-2">
-                {currentChallenge.current_streak_days}일 연속 성공!
-              </h4>
-              <p className="text-gray-400 text-sm">
-                {currentChallenge.current_streak_days >= 7 
-                  ? '🎉 정말 대단해요! 계속 유지하세요!'
-                  : currentChallenge.current_streak_days >= 3 
-                  ? '💪 좋은 페이스입니다!'
-                  : '🔥 시작이 반이에요!'}
-              </p>
-            </div>
-
-            {/* 액션 버튼들 */}
-                         <div className="space-y-3">
-               <button
-                 onClick={() => {
-                   if (currentChallenge) {
-                     // 특정 챌린지 방의 리더보드로 이동
-                     router.push(`/challenges/leaderboard/${currentChallenge.room}`);
-                   } else if (onNavigateToLeaderboard) {
-                     onNavigateToLeaderboard();
-                   }
-                 }}
-                 className="w-full bg-[var(--point-green)] text-black font-bold py-3 px-4 rounded-lg hover:bg-green-400 transition-colors"
-               >
-                 🏆 순위표 보기
-               </button>
-              
+          {/* 오른쪽: 액션 버튼들 */}
+          <div className="space-y-4">
+            <button
+              onClick={() => router.push(`/challenges/leaderboard/${currentChallenge.room}`)}
+              className="w-full bg-[var(--point-green)] text-black font-bold py-3 px-4 rounded-lg hover:bg-green-400 transition-colors"
+            >
+              🏆 순위 보기
+            </button>
+            
+            <button
+              onClick={() => router.push('/challenges/my')}
+              className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-500 transition-colors"
+            >
+              📊 상세 통계
+            </button>
+            
+            {currentChallenge.remaining_duration_days <= 0 ? (
               <button
-                onClick={() => {/* TODO: 통계 페이지로 이동 */}}
-                className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-500 transition-colors"
+                onClick={() => setIsCompletionReportOpen(true)}
+                className="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-500 transition-colors"
               >
-                📊 상세 통계
+                🏆 완료 리포트 보기
               </button>
-              
-                             {currentChallenge.remaining_duration_days <= 0 ? (
-                 <button
-                   onClick={() => setIsCompletionReportOpen(true)}
-                   className="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-500 transition-colors"
-                 >
-                   🏆 완료 리포트 보기
-                 </button>
-               ) : (
-                 <button
-                   onClick={() => setIsCheatModalOpen(true)}
-                   className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
-                   disabled={currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit}
-                 >
-                   🍕 치팅 사용 {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit && '(한도 초과)'}
-                 </button>
-               )}
-            </div>
+            ) : (
+              <button
+                onClick={() => setIsCheatModalOpen(true)}
+                className="w-full bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-500 transition-colors"
+                disabled={currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit}
+              >
+                🍕 치팅 사용 {currentChallenge.current_weekly_cheat_count >= currentChallenge.user_weekly_cheat_limit && '(한도 초과)'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -367,31 +287,9 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           </div>
         </div>
 
-        {/* 개인 목표 정보 */}
-        <div className="bg-[var(--card-bg)] rounded-xl p-6 border border-gray-600">
-          <h4 className="text-lg font-bold text-white mb-4">🎯 개인 목표</h4>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">현재 체중:</span>
-              <span className="text-white">{currentChallenge.user_weight}kg</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">목표 체중:</span>
-              <span className="text-white">{currentChallenge.user_target_weight}kg</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">변화 목표:</span>
-              <span className="text-white">
-                {currentChallenge.user_weight - currentChallenge.user_target_weight > 0 ? '-' : '+'}
-                {Math.abs(currentChallenge.user_weight - currentChallenge.user_target_weight)}kg
-              </span>
-            </div>
-          </div>
-        </div>
-
         {/* 성과 요약 */}
         <div className="bg-[var(--card-bg)] rounded-xl p-6 border border-gray-600">
-          <h4 className="text-lg font-bold text-white mb-4">🏅 성과 요약</h4>
+          <h4 className="text-lg font-bold text-white mb-4">📈 성과 요약</h4>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-400">총 성공:</span>
@@ -402,10 +300,42 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               <span className="text-red-400">{currentChallenge.total_failure_days}일</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">평균 성공률:</span>
-              <span className="text-white">{getSuccessRate(currentChallenge)}%</span>
+              <span className="text-gray-400">성공률:</span>
+              <span className="text-white">
+                {currentChallenge.total_success_days + currentChallenge.total_failure_days > 0 
+                  ? Math.round((currentChallenge.total_success_days / (currentChallenge.total_success_days + currentChallenge.total_failure_days)) * 100)
+                  : 0}%
+              </span>
             </div>
           </div>
+        </div>
+
+        {/* 실시간 순위 (간단 버전) */}
+        <div className="bg-[var(--card-bg)] rounded-xl p-6 border border-gray-600">
+          <h4 className="text-lg font-bold text-white mb-4">🏆 실시간 순위</h4>
+          {leaderboardLoading ? (
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--point-green)] mx-auto"></div>
+            </div>
+          ) : leaderboardResponse?.data?.leaderboard ? (
+            <div className="space-y-2 text-sm">
+              {leaderboardResponse.data.leaderboard.slice(0, 3).map((entry: any, index: number) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg ${index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}`}>
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                    </span>
+                    <span className={entry.is_me ? 'text-[var(--point-green)] font-bold' : 'text-white'}>
+                      {entry.is_me ? '나' : `사용자${entry.rank}`}
+                    </span>
+                  </div>
+                  <span className="text-gray-400">{entry.current_streak}일</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-sm">순위 정보를 불러올 수 없습니다.</p>
+          )}
         </div>
       </div>
 
@@ -417,7 +347,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           challenge={currentChallenge}
           onCheatUsed={() => {
             // 치팅 사용 후 현황 새로고침
-            loadPersonalData();
+            refetchChallenge();
           }}
         />
       )}
@@ -430,7 +360,7 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           challenge={currentChallenge}
           onActionComplete={(action) => {
             // 행동 완료 후 현황 새로고침
-            loadPersonalData();
+            refetchChallenge();
             if (action === 'new_challenge') {
               router.push('/challenges');
             }
