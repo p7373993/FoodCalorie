@@ -71,10 +71,31 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate_password(self, value):
         """비밀번호 강도 검증"""
-        try:
-            validate_password(value)
-        except ValidationError as e:
-            raise serializers.ValidationError(list(e.messages))
+        # 비밀번호 길이 검증
+        if len(value) < 8:
+            raise serializers.ValidationError("비밀번호는 최소 8자 이상이어야 합니다.")
+        
+        # 비밀번호 복잡성 검증
+        import re
+        
+        # 영문, 숫자, 특수문자 포함 여부 확인
+        has_letter = re.search(r'[a-zA-Z]', value)
+        has_digit = re.search(r'\d', value)
+        has_special = re.search(r'[!@#$%^&*(),.?":{}|<>]', value)
+        
+        if not has_letter:
+            raise serializers.ValidationError("비밀번호에는 영문자가 포함되어야 합니다.")
+        
+        if not has_digit:
+            raise serializers.ValidationError("비밀번호에는 숫자가 포함되어야 합니다.")
+        
+        if not has_special:
+            raise serializers.ValidationError("비밀번호에는 특수문자가 포함되어야 합니다.")
+        
+        # 너무 간단한 비밀번호 검증
+        if value.lower() in ['password', '123456', 'qwerty', 'admin']:
+            raise serializers.ValidationError("너무 간단한 비밀번호는 사용할 수 없습니다.")
+        
         return value
 
     def validate(self, attrs):

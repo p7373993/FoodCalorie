@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
 import AdvancedInsightModal from '@/components/ui/AdvancedInsightModal';
-import PersonalDashboard from '@/components/dashboard/PersonalDashboard';
 import UserInfo from '@/components/auth/UserInfo';
 
 interface GamificationData {
@@ -115,11 +114,45 @@ export default function DashboardPage() {
         </header>
         */}
 
-        {/* 챌린지 현황판 섹션 */}
-        <div className="w-full">
-          <PersonalDashboard 
-            onNavigateToChallenge={() => router.push('/challenges')}
-          />
+        {/* 주간 칼로리 섭취량 */}
+        <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-left mb-4">주간 칼로리 섭취량</h2>
+          <div className="flex justify-between items-end h-48 space-x-2">
+            {weeklyData.map((data, index) => (
+              <div key={index} className="flex-1 flex flex-col items-center justify-end">
+                <div className="w-full h-full flex items-end">
+                  <div 
+                    className="w-full bg-[var(--point-green)] rounded-t-md animate-bar-up" 
+                    style={{ 
+                      height: `${(data.kcal / maxKcal) * 100}%`, 
+                      animationDelay: `${index * 100}ms` 
+                    }}
+                  ></div>
+                </div>
+                <span className="text-xs mt-2">{data.day}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 주간 체중 변화 */}
+        <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-left">주간 체중 변화</h2>
+            <button 
+              onClick={() => setIsWeightModalOpen(true)} 
+              className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
+            >
+              기록하기
+            </button>
+          </div>
+          <div className="h-48 flex items-center justify-center text-gray-400">
+            {weightHistory.length > 1 ? (
+              `최근 체중: ${weightHistory[0].weight}kg`
+            ) : (
+              "체중 기록이 더 필요합니다."
+            )}
+          </div>
         </div>
 
         <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -188,68 +221,22 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-
-        <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 text-left">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-bold">체중 기록</h2>
-              <p className="text-sm text-gray-400">오늘의 체중을 기록하고 변화를 확인하세요.</p>
-            </div>
-            <button 
-              onClick={() => setIsWeightModalOpen(true)} 
-              className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
-            >
-              기록하기
-            </button>
-          </div>
         </div>
 
-        <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-left mb-4">주간 칼로리 섭취량</h2>
-          <div className="flex justify-between items-end h-48 space-x-2">
-            {weeklyData.map((data, index) => (
-              <div key={index} className="flex-1 flex flex-col items-center justify-end">
-                <div className="w-full h-full flex items-end">
-                  <div 
-                    className="w-full bg-[var(--point-green)] rounded-t-md animate-bar-up" 
-                    style={{ 
-                      height: `${(data.kcal / maxKcal) * 100}%`, 
-                      animationDelay: `${index * 100}ms` 
-                    }}
-                  ></div>
-                </div>
-                <span className="text-xs mt-2">{data.day}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-left mb-4">주간 체중 변화</h2>
-          <div className="h-48 flex items-center justify-center text-gray-400">
-            {weightHistory.length > 1 ? (
-              `최근 체중: ${weightHistory[0].weight}kg`
-            ) : (
-              "체중 기록이 더 필요합니다."
-            )}
-          </div>
-        </div>
+        <WeightRecordModal 
+          isOpen={isWeightModalOpen} 
+          onClose={() => setIsWeightModalOpen(false)} 
+          onSave={handleSaveWeight} 
+        />
+        <WeeklyReportModal 
+          isOpen={isReportModalOpen} 
+          onClose={() => setIsReportModalOpen(false)} 
+        />
+        <AdvancedInsightModal 
+          isOpen={isInsightModalOpen} 
+          onClose={() => setIsInsightModalOpen(false)} 
+        />
       </div>
-
-      <WeightRecordModal 
-        isOpen={isWeightModalOpen} 
-        onClose={() => setIsWeightModalOpen(false)} 
-        onSave={handleSaveWeight} 
-      />
-      <WeeklyReportModal 
-        isOpen={isReportModalOpen} 
-        onClose={() => setIsReportModalOpen(false)} 
-      />
-      <AdvancedInsightModal 
-        isOpen={isInsightModalOpen} 
-        onClose={() => setIsInsightModalOpen(false)} 
-      />
-    </div>
     </>
   );
 }

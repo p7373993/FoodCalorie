@@ -13,21 +13,33 @@ interface SignUpFormData {
   nickname: string;
 }
 
+interface FieldErrors {
+  email?: string[];
+  password?: string[];
+  password_confirm?: string[];
+  nickname?: string[];
+}
+
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const router = useRouter();
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setError: setFormError,
+    clearErrors,
   } = useForm<SignUpFormData>();
 
   const onSubmit = async (data: SignUpFormData) => {
     setIsLoading(true);
     setError('');
+    setFieldErrors({});
+    clearErrors();
 
     try {
       const requestData = {
@@ -51,7 +63,23 @@ export default function SignUpPage() {
         router.push('/login?registered=true');
       } else {
         const errorData = await response.json();
-        setError(errorData.message || '회원가입에 실패했습니다.');
+        
+        // 백엔드에서 반환하는 상세 에러 메시지 처리
+        if (errorData.errors) {
+          setFieldErrors(errorData.errors);
+          
+          // 각 필드별로 폼 에러 설정
+          Object.entries(errorData.errors).forEach(([field, messages]) => {
+            if (Array.isArray(messages) && messages.length > 0) {
+              setFormError(field as keyof SignUpFormData, {
+                type: 'server',
+                message: messages[0]
+              });
+            }
+          });
+        } else {
+          setError(errorData.message || '회원가입에 실패했습니다.');
+        }
       }
     } catch (error) {
       setError('네트워크 오류가 발생했습니다.');
@@ -85,7 +113,9 @@ export default function SignUpPage() {
                   className="w-full pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-gray-800 text-white text-base placeholder-gray-400"
                 />
               </div>
-              {errors.nickname && (
+              {fieldErrors.nickname && fieldErrors.nickname.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.nickname[0]}</p>
+              ) : errors.nickname && (
                 <p className="text-sm text-red-400 mt-1">{errors.nickname.message}</p>
               )}
             </div>
@@ -107,7 +137,9 @@ export default function SignUpPage() {
                   className="w-full pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-gray-800 text-white text-base placeholder-gray-400"
                 />
               </div>
-              {errors.email && (
+              {fieldErrors.email && fieldErrors.email.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.email[0]}</p>
+              ) : errors.email && (
                 <p className="text-sm text-red-400 mt-1">{errors.email.message}</p>
               )}
             </div>
@@ -136,7 +168,9 @@ export default function SignUpPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {errors.password && (
+              {fieldErrors.password && fieldErrors.password.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.password[0]}</p>
+              ) : errors.password && (
                 <p className="text-sm text-red-400 mt-1">{errors.password.message}</p>
               )}
             </div>
@@ -161,12 +195,14 @@ export default function SignUpPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {errors.password_confirm && (
+              {fieldErrors.password_confirm && fieldErrors.password_confirm.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.password_confirm[0]}</p>
+              ) : errors.password_confirm && (
                 <p className="text-sm text-red-400 mt-1">{errors.password_confirm.message}</p>
               )}
             </div>
 
-            {/* 에러 메시지 */}
+            {/* 일반 에러 메시지 */}
             {error && (
               <div className="text-sm text-red-400 bg-red-900/20 border border-red-500/30 rounded-xl p-3">
                 {error}
