@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChallengeRoom, ChallengeJoinRequest } from '@/types';
 import { apiClient } from '@/lib/api';
+import { useJoinChallenge } from '@/hooks/useChallengeQueries';
 
 interface ChallengeJoinFormProps {
   room: ChallengeRoom;
@@ -37,9 +38,11 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
     minMeals: 2,
     cutoffTime: '23:00',
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recommendedCalorie, setRecommendedCalorie] = useState<number>(0);
+  
+  // React Query 뮤테이션 사용
+  const joinChallengeMutation = useJoinChallenge();
 
   // 추천 칼로리 계산
   const calculateRecommendedCalorie = (height: number, weight: number, targetWeight: number) => {
@@ -127,34 +130,36 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
   };
 
   const handleSubmit = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    setError(null);
 
-      const joinRequest: ChallengeJoinRequest = {
-        room_id: room.id,
-        user_height: userInfo.height,
-        user_weight: userInfo.weight,
-        user_target_weight: userInfo.targetWeight,
-        user_challenge_duration_days: userInfo.duration,
-        user_weekly_cheat_limit: userInfo.cheatLimit,
-        min_daily_meals: userInfo.minMeals,
-        challenge_cutoff_time: userInfo.cutoffTime,
-      };
+    const joinRequest: ChallengeJoinRequest = {
+      room_id: room.id,
+      user_height: userInfo.height,
+      user_weight: userInfo.weight,
+      user_target_weight: userInfo.targetWeight,
+      user_challenge_duration_days: userInfo.duration,
+      user_weekly_cheat_limit: userInfo.cheatLimit,
+      min_daily_meals: userInfo.minMeals,
+      challenge_cutoff_time: userInfo.cutoffTime,
+    };
 
-      const response = await apiClient.joinChallengeRoom(joinRequest);
-      
-      if (response.success) {
-        onSuccess?.();
-      } else {
-        setError(response.message || '챌린지 참여 중 오류가 발생했습니다.');
+    joinChallengeMutation.mutate(joinRequest, {
+      onSuccess: (response) => {
+        if (response.success) {
+          onSuccess?.();
+        } else {
+          setError(response.message || '챌린지 참여 중 오류가 발생했습니다.');
+        }
+      },
+      onError: (err: any) => {
+        console.error('Error joining challenge:', err);
+        if (err?.message?.includes('이미') && err?.message?.includes('참여')) {
+          setError('이미 다른 챌린지에 참여 중입니다. 하나의 챌린지만 참여할 수 있습니다.');
+        } else {
+          setError(err?.message || '챌린지 참여 중 오류가 발생했습니다.');
+        }
       }
-    } catch (err) {
-      console.error('Error joining challenge:', err);
-      setError('챌린지 참여 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   const renderUserInfoStep = () => (
@@ -477,7 +482,7 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
         <button
           onClick={currentStep === 'info' ? onCancel : handleBack}
           className="px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
-          disabled={loading}
+          disabled={joinChallengeMutation.isPending}
         >
           {currentStep === 'info' ? '취소' : '이전'}
         </button>
@@ -485,9 +490,9 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
         <button
           onClick={currentStep === 'confirmation' ? handleSubmit : handleNext}
           className="px-6 py-3 bg-[var(--point-green)] text-black font-bold rounded-lg hover:bg-green-400 transition-colors disabled:opacity-50"
-          disabled={loading || (currentStep === 'info' && (!userInfo.height || !userInfo.weight || !userInfo.targetWeight))}
+          disabled={joinChallengeMutation.isPending || (currentStep === 'info' && (!userInfo.height || !userInfo.weight || !userInfo.targetWeight))}
         >
-          {loading ? '처리 중...' : currentStep === 'confirmation' ? '🚀 챌린지 시작!' : '다음'}
+          {joinChallengeMutation.isPending ? '처리 중...' : currentStep === 'confirmation' ? '🚀 챌린지 시작!' : '다음'}
         </button>
       </div>
     </div>

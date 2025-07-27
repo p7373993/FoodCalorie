@@ -57,8 +57,10 @@ class ChallengeApiClient {
         ...options.headers,
       };
 
-      if (this.authToken) {
-        headers.Authorization = `Bearer ${this.authToken}`;
+      // 인증 토큰 처리 - localStorage에서 직접 가져오기
+      const token = this.authToken || (typeof window !== 'undefined' ? localStorage.getItem('authToken') : null);
+      if (token) {
+        headers.Authorization = `Token ${token}`;
       }
 
       const response = await fetch(url, {

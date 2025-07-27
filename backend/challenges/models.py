@@ -38,7 +38,8 @@ class UserChallenge(models.Model):
     STATUS_CHOICES = [
         ('active', '진행중'),
         ('inactive', '비활성'),
-        ('completed', '완료')
+        ('completed', '완료'),
+        ('quit', '포기')
     ]
     
     CHEAT_LIMIT_CHOICES = [

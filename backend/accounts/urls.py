@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-    TokenVerifyView,
-    TokenBlacklistView,
-)
+# JWT 일시 비활성화
+# from rest_framework_simplejwt.views import (
+#     TokenObtainPairView,
+#     TokenRefreshView,
+#     TokenVerifyView,
+#     TokenBlacklistView,
+# )
 from . import views
 
 # DRF Router 설정
@@ -14,11 +15,11 @@ router = DefaultRouter()
 app_name = 'accounts'
 
 urlpatterns = [
-    # JWT 토큰 관리
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
-    path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    # JWT 토큰 관리 (일시 비활성화)
+    # path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    # path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
     
     # 인증 관련 API
     path('register/', views.RegisterView.as_view(), name='register'),

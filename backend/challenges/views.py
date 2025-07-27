@@ -29,7 +29,7 @@ class ChallengeRoomViewSet(viewsets.ReadOnlyModelViewSet):
 
 class JoinChallengeView(APIView):
     """챌린지 참여 API"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # 임시로 인증 없이 테스트
     
     def post(self, request):
         serializer = UserChallengeCreateSerializer(data=request.data, context={'request': request})
@@ -43,45 +43,42 @@ class JoinChallengeView(APIView):
         
         try:
             with transaction.atomic():
-                # 챌린지 방 조회
-                room = get_object_or_404(ChallengeRoom, 
-                                       id=serializer.validated_data['room_id'],
-                                       is_active=True)
+                # 챌린지 방은 시리얼라이저에서 이미 검증됨
+                room = serializer.validated_data['room']
                 
-                # 이미 해당 방에 참여 중인지 확인
-                existing_challenge = UserChallenge.objects.filter(
-                    user=request.user,
-                    room=room,
+                # 임시로 테스트 사용자 생성 (인증 없이 테스트용)
+                from django.contrib.auth.models import User
+                test_user, created = User.objects.get_or_create(
+                    username='test_user',
+                    defaults={'email': 'test@example.com'}
+                )
+                
+                # 중복 참여 방지: 활성 챌린지가 있는지 확인 (모든 방)
+                existing_active_challenge = UserChallenge.objects.filter(
+                    user=test_user,
                     status='active'
                 ).first()
                 
-                if existing_challenge:
+                if existing_active_challenge:
                     return Response({
                         'success': False,
-                        'error': 'ALREADY_JOINED',
-                        'message': '이미 해당 챌린지에 참여 중입니다.',
+                        'error': 'ALREADY_IN_CHALLENGE',
+                        'message': f'이미 "{existing_active_challenge.room.name}" 챌린지에 참여 중입니다. 하나의 챌린지만 참여할 수 있습니다.',
                         'details': {
-                            'current_room': room.name,
-                            'joined_at': existing_challenge.challenge_start_date
+                            'current_room': existing_active_challenge.room.name,
+                            'current_room_id': existing_active_challenge.room.id,
+                            'joined_at': existing_active_challenge.challenge_start_date,
+                            'remaining_days': existing_active_challenge.remaining_duration_days
                         }
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # 새 챌린지 참여 생성
-                user_challenge = UserChallenge.objects.create(
-                    user=request.user,
-                    room=room,
-                    user_height=serializer.validated_data['user_height'],
-                    user_weight=serializer.validated_data['user_weight'],
-                    user_target_weight=serializer.validated_data['user_target_weight'],
-                    user_challenge_duration_days=serializer.validated_data['user_challenge_duration_days'],
-                    user_weekly_cheat_limit=serializer.validated_data['user_weekly_cheat_limit'],
-                    min_daily_meals=serializer.validated_data['min_daily_meals'],
-                    challenge_cutoff_time=serializer.validated_data['challenge_cutoff_time'],
-                    remaining_duration_days=serializer.validated_data['user_challenge_duration_days'],
-                    status='active'
-                )
+                # 새 챌린지 참여 생성 (시리얼라이저 사용)
+                validated_data = serializer.validated_data.copy()
+                validated_data['user'] = test_user
+                validated_data['status'] = 'active'
+                user_challenge = serializer.save(user=test_user, status='active')
                 
-                logger.info(f"User {request.user.id} joined challenge room {room.name}")
+                logger.info(f"User {test_user.id} joined challenge room {room.name}")
                 
                 # 응답 데이터
                 response_data = UserChallengeSerializer(user_challenge).data
@@ -103,13 +100,20 @@ class JoinChallengeView(APIView):
 
 class MyChallengeView(APIView):
     """내 챌린지 현황 API"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # 임시로 인증 없이 테스트
     
     def get(self, request):
         try:
-            # 현재 사용자의 활성 챌린지 조회
+            # 임시로 테스트 사용자 사용
+            from django.contrib.auth.models import User
+            test_user, created = User.objects.get_or_create(
+                username='test_user',
+                defaults={'email': 'test@example.com'}
+            )
+            
+            # 테스트 사용자의 활성 챌린지 조회
             active_challenges = UserChallenge.objects.filter(
-                user=request.user,
+                user=test_user,
                 status='active'
             ).select_related('room').order_by('-created_at')
             
@@ -218,53 +222,52 @@ class ExtendChallengeView(APIView):
 
 
 class LeaveChallengeView(APIView):
-    """챌린지 탈퇴 API"""
-    permission_classes = [IsAuthenticated]
+    """챌린지 포기/탈퇴 API"""
+    permission_classes = []  # 임시로 인증 없이 테스트
     
-    def delete(self, request):
+    def post(self, request):
         try:
             challenge_id = request.data.get('challenge_id')
             
             if not challenge_id:
                 return Response({
                     'success': False,
-                    'error': 'MISSING_CHALLENGE_ID',
-                    'message': '탈퇴할 챌린지 ID가 필요합니다.'
+                    'message': '포기할 챌린지 ID가 필요합니다.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
+            # 임시로 테스트 사용자 사용
+            from django.contrib.auth.models import User
+            test_user = User.objects.get(username='test_user')
+            
             # 사용자의 활성 챌린지 조회
-            user_challenge = get_object_or_404(
-                UserChallenge,
+            user_challenge = UserChallenge.objects.get(
                 id=challenge_id,
-                user=request.user,
+                user=test_user,
                 status='active'
             )
             
-            # 챌린지 탈퇴 처리
-            with transaction.atomic():
-                user_challenge.status = 'inactive'
-                user_challenge.save()
+            # 챌린지 포기 처리
+            user_challenge.status = 'inactive'
+            user_challenge.save()
+            
+            return Response({
+                'success': True,
+                'message': f'"{user_challenge.room.name}" 챌린지를 포기했습니다.',
+                'data': {
+                    'challenge_id': challenge_id,
+                    'room_name': user_challenge.room.name
+                }
+            })
                 
-                logger.info(f"User {request.user.id} left challenge {challenge_id} ({user_challenge.room.name})")
-                
-                return Response({
-                    'success': True,
-                    'message': f'{user_challenge.room.name} 챌린지에서 탈퇴했습니다.',
-                    'data': {
-                        'challenge_id': challenge_id,
-                        'room_name': user_challenge.room.name,
-                        'final_streak': user_challenge.current_streak_days,
-                        'total_success_days': user_challenge.total_success_days,
-                        'left_at': timezone.now().isoformat()
-                    }
-                })
-                
-        except Exception as e:
-            logger.error(f"Error leaving challenge: {str(e)}")
+        except UserChallenge.DoesNotExist:
             return Response({
                 'success': False,
-                'error': 'SERVER_ERROR',
-                'message': '챌린지 탈퇴 중 오류가 발생했습니다.'
+                'message': '해당 챌린지를 찾을 수 없습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'오류: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

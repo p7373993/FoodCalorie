@@ -34,8 +34,8 @@ class ApiClient {
       ...options,
     };
 
-    // 인증 토큰이 있으면 추가
-    const token = localStorage.getItem('authToken');
+    // 인증 토큰이 있으면 추가 (선택적)
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (token) {
       config.headers = {
         ...config.headers,
@@ -125,19 +125,44 @@ class ApiClient {
   // 새로운 챌린지 시스템 API
   // 챌린지 방 관리
   async getChallengeRooms(): Promise<PaginatedResponse<ChallengeRoom>> {
-    return this.request('/api/challenges/rooms/');
+    try {
+      const response = await this.request('/api/challenges/rooms/');
+      return response;
+    } catch (error) {
+      console.error('Error fetching challenge rooms:', error);
+      throw error;
+    }
   }
 
   async getChallengeRoom(roomId: number): Promise<ChallengeRoom> {
-    return this.request(`/api/challenges/rooms/${roomId}/`);
+    try {
+      const response = await this.request(`/api/challenges/rooms/${roomId}/`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching challenge room:', error);
+      throw error;
+    }
   }
 
   // 챌린지 참여 관리
   async joinChallengeRoom(joinData: ChallengeJoinRequest): Promise<ApiResponse<UserChallenge>> {
-    return this.request('/api/challenges/join/', {
-      method: 'POST',
-      body: JSON.stringify(joinData),
-    });
+    try {
+      const response = await this.request('/api/challenges/join/', {
+        method: 'POST',
+        body: JSON.stringify(joinData),
+      });
+      return {
+        success: true,
+        data: response,
+        message: '챌린지 참여가 완료되었습니다.'
+      };
+    } catch (error) {
+      console.error('Error joining challenge room:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '챌린지 참여 중 오류가 발생했습니다.'
+      };
+    }
   }
 
   async getMyChallenges(): Promise<ApiResponse<{
@@ -158,13 +183,27 @@ class ApiClient {
     });
   }
 
-  async leaveChallenge(challengeId: number): Promise<ApiResponse<any>> {
-    return this.request('/api/challenges/my/leave/', {
-      method: 'DELETE',
-      body: JSON.stringify({
-        challenge_id: challengeId,
-      }),
-    });
+  async leaveChallenge(challengeId: number, reason?: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await this.request('/api/challenges/leave/', {
+        method: 'POST',
+        body: JSON.stringify({
+          challenge_id: challengeId,
+          reason: reason || '사용자 요청'
+        }),
+      });
+      return {
+        success: true,
+        data: response,
+        message: '챌린지를 포기했습니다.'
+      };
+    } catch (error) {
+      console.error('Error leaving challenge:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '챌린지 포기 중 오류가 발생했습니다.'
+      };
+    }
   }
 
   // 치팅 기능

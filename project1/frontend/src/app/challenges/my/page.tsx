@@ -16,6 +16,8 @@ export default function MyChallengesPage() {
   const [selectedChallenge, setSelectedChallenge] = useState<UserChallenge | null>(null);
   const [isCompletionReportOpen, setIsCompletionReportOpen] = useState(false);
   const [completionChallenge, setCompletionChallenge] = useState<UserChallenge | null>(null);
+  const [isQuitModalOpen, setIsQuitModalOpen] = useState(false);
+  const [quitChallenge, setQuitChallenge] = useState<UserChallenge | null>(null);
 
   useEffect(() => {
     loadMyChallenges();
@@ -56,6 +58,33 @@ export default function MyChallengesPage() {
   const handleViewReport = (challenge: UserChallenge) => {
     setCompletionChallenge(challenge);
     setIsCompletionReportOpen(true);
+  };
+
+  const handleQuitChallenge = (challenge: UserChallenge) => {
+    setQuitChallenge(challenge);
+    setIsQuitModalOpen(true);
+  };
+
+  const handleConfirmQuit = async (reason: string) => {
+    if (!quitChallenge) return;
+
+    try {
+      const response = await apiClient.leaveChallenge(quitChallenge.id);
+      if (response.success) {
+        // 성공 시 목록 새로고침
+        loadMyChallenges();
+        setIsQuitModalOpen(false);
+        setQuitChallenge(null);
+        
+        // 성공 메시지 표시 (선택적)
+        alert(`"${quitChallenge.room_name}" 챌린지를 포기했습니다.`);
+      } else {
+        alert(response.message || '챌린지 포기 중 오류가 발생했습니다.');
+      }
+    } catch (err) {
+      console.error('Error quitting challenge:', err);
+      alert('챌린지 포기 중 오류가 발생했습니다.');
+    }
   };
 
   const getStatusColor = (challenge: UserChallenge) => {
@@ -229,6 +258,13 @@ export default function MyChallengesPage() {
                     >
                       🍕 치팅 사용
                     </button>
+                    
+                    <button
+                      onClick={() => handleQuitChallenge(challenge)}
+                      className="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-500 transition-colors"
+                    >
+                      🚪 챌린지 포기
+                    </button>
 
                     {challenge.remaining_duration_days <= 0 && (
                       <button
@@ -302,6 +338,52 @@ export default function MyChallengesPage() {
             }
           }}
         />
+      )}
+
+      {/* 챌린지 포기 확인 모달 */}
+      {quitChallenge && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 ${isQuitModalOpen ? 'block' : 'hidden'}`}>
+          <div className="bg-[var(--card-bg)] rounded-2xl p-8 max-w-md w-full mx-4 border border-gray-600">
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h3 className="text-2xl font-bold text-white mb-2">챌린지를 포기하시겠습니까?</h3>
+              <p className="text-gray-400">
+                "{quitChallenge.room_name}" 챌린지를 포기하면 현재까지의 기록이 저장되지만 더 이상 참여할 수 없습니다.
+              </p>
+            </div>
+
+            <div className="bg-gray-800/30 rounded-lg p-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-400">현재 연속 기록:</span>
+                  <span className="text-white ml-2 font-bold">{quitChallenge.current_streak_days}일</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">총 성공 일수:</span>
+                  <span className="text-white ml-2 font-bold">{quitChallenge.total_success_days}일</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setIsQuitModalOpen(false);
+                  setQuitChallenge(null);
+                }}
+                className="flex-1 bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleConfirmQuit('사용자 요청')}
+                className="flex-1 bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-500 transition-colors"
+              >
+                포기하기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

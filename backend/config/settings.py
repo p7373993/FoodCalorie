@@ -41,11 +41,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework_simplejwt',  # JWT 인증
-    'rest_framework_simplejwt.token_blacklist',  # JWT 토큰 블랙리스트
-    'django_filters',  # Django 필터링
+    # 'rest_framework_simplejwt',  # JWT 인증 (일시 비활성화)
+    # 'rest_framework_simplejwt.token_blacklist',  # JWT 토큰 블랙리스트 (일시 비활성화)
+    # 'django_filters',  # Django 필터링 (일시 비활성화)
     'corsheaders',
-    'channels',
+    # 'channels',  # 일시 비활성화
     'rest_framework.authtoken',
     'accounts',  # 사용자 인증 시스템
     'api_integrated.apps.ApiIntegratedConfig',  # 메인 API 앱
@@ -158,8 +158,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework 설정
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'accounts.authentication.JWTAuthentication',  # 커스텀 JWT 인증 (기본)
-        'accounts.authentication.OptionalJWTAuthentication',  # 선택적 JWT 인증  
+        'rest_framework.authentication.TokenAuthentication',  # 토큰 인증
         'rest_framework.authentication.SessionAuthentication',  # 관리자 패널용
         'rest_framework.authentication.BasicAuthentication',  # 기본 인증
     ],

@@ -52,22 +52,26 @@ class UserChallengeSerializer(serializers.ModelSerializer):
 
 class UserChallengeCreateSerializer(serializers.ModelSerializer):
     """챌린지 참여 생성 시리얼라이저"""
+    room_id = serializers.IntegerField(write_only=True)
+    min_daily_meals = serializers.IntegerField(default=2)
+    challenge_cutoff_time = serializers.TimeField(default='23:00')
     
     class Meta:
         model = UserChallenge
         fields = [
-            'room', 'user_height', 'user_weight', 'user_target_weight',
-            'user_challenge_duration_days', 'user_weekly_cheat_limit'
+            'room_id', 'user_height', 'user_weight', 'user_target_weight',
+            'user_challenge_duration_days', 'user_weekly_cheat_limit',
+            'min_daily_meals', 'challenge_cutoff_time'
         ]
     
     def validate(self, data):
         """챌린지 참여 검증"""
-        user = self.context['request'].user
-        room = data['room']
-        
-        # 이미 해당 방에 참여 중인지 확인
-        if UserChallenge.objects.filter(user=user, room=room, status='active').exists():
-            raise serializers.ValidationError("이미 해당 챌린지에 참여 중입니다.")
+        # room_id를 room 객체로 변환
+        try:
+            room = ChallengeRoom.objects.get(id=data['room_id'], is_active=True)
+            data['room'] = room
+        except ChallengeRoom.DoesNotExist:
+            raise serializers.ValidationError("존재하지 않는 챌린지 방입니다.")
         
         # 키, 몸무게 검증
         if data['user_height'] < 100 or data['user_height'] > 250:
@@ -87,7 +91,8 @@ class UserChallengeCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """챌린지 참여 생성"""
-        validated_data['user'] = self.context['request'].user
+        # room_id 제거 (이미 room으로 변환됨)
+        validated_data.pop('room_id', None)
         validated_data['remaining_duration_days'] = validated_data['user_challenge_duration_days']
         return super().create(validated_data)
 
