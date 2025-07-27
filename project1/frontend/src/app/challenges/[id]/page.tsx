@@ -15,6 +15,7 @@ export default function ChallengeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageMode, setPageMode] = useState<PageMode>('details');
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadChallengeRoom = async () => {
@@ -48,8 +49,25 @@ export default function ChallengeDetailPage() {
     }
   }, [params.id]);
 
-  const handleJoinClick = () => {
-    setPageMode('join');
+  const handleJoinClick = async () => {
+    try {
+      // 먼저 현재 참여 중인 챌린지가 있는지 확인
+      const myChallengesResponse = await apiClient.getMyChallenges();
+      const activeChallenge = myChallengesResponse?.data?.active_challenges?.find((challenge: any) => challenge.status === 'active');
+      
+      if (activeChallenge) {
+        // 이미 참여 중인 경우 알림 표시
+        setJoinError(`이미 "${activeChallenge.room_name}" 챌린지에 참여 중입니다. 새로운 챌린지에 참여하려면 기존 챌린지를 포기해야 합니다.`);
+        return;
+      }
+      
+      // 참여 중이 아닌 경우 참여 폼으로 이동
+      setJoinError(null);
+      setPageMode('join');
+    } catch (err) {
+      console.error('Error checking current challenges:', err);
+      setJoinError('챌린지 참여 상태를 확인하는 중 오류가 발생했습니다.');
+    }
   };
 
   const handleJoinSuccess = () => {
@@ -63,6 +81,28 @@ export default function ChallengeDetailPage() {
 
   const handleBackToList = () => {
     router.push('/challenges');
+  };
+
+  const handleLeaveAndJoin = async () => {
+    try {
+      // 현재 활성 챌린지 정보를 가져옴
+      const myChallengesResponse = await apiClient.getMyChallenges();
+      const activeChallenge = myChallengesResponse?.data?.active_challenges?.find((challenge: any) => challenge.status === 'active');
+      
+      if (activeChallenge) {
+        // 기존 챌린지 포기
+        await apiClient.leaveChallenge(activeChallenge.id);
+        
+        // 포기 성공 후 참여 폼으로 이동
+        setJoinError(null);
+        setPageMode('join');
+      } else {
+        setJoinError('활성 챌린지를 찾을 수 없습니다.');
+      }
+    } catch (err) {
+      console.error('Error leaving challenge:', err);
+      setJoinError('기존 챌린지 포기 중 오류가 발생했습니다.');
+    }
   };
 
   const getDifficultyInfo = (targetCalorie: number) => {
@@ -260,6 +300,31 @@ export default function ChallengeDetailPage() {
                   AI 기반 식단 분석으로 자동 판정되며,<br />
                   다른 사용자들과 실시간으로 경쟁할 수 있습니다.
                 </p>
+                
+                {/* 참여 에러 메시지 */}
+                {joinError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
+                    <p className="text-red-400 text-sm mb-3 text-center">{joinError}</p>
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={() => {
+                          // 기존 챌린지 포기 후 새 챌린지 참여
+                          handleLeaveAndJoin();
+                        }}
+                        className="px-4 py-2 bg-yellow-500 text-black text-sm font-medium rounded-lg hover:bg-yellow-400 transition-colors"
+                      >
+                        기존 챌린지 포기하고 참여
+                      </button>
+                      <button
+                        onClick={() => setJoinError(null)}
+                        className="px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-500 transition-colors"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
                 <button
                   onClick={handleJoinClick}
                   className="w-full bg-[var(--point-green)] text-black font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-105"

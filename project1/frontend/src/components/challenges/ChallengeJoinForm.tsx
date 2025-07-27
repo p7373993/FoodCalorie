@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChallengeRoom, ChallengeJoinRequest } from '@/types';
 import { apiClient } from '@/lib/api';
-import { useJoinChallenge } from '@/hooks/useChallengeQueries';
+import { useJoinChallenge, useLeaveChallenge } from '@/hooks/useChallengeQueries';
 
 interface ChallengeJoinFormProps {
   room: ChallengeRoom;
@@ -43,6 +43,7 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
   
   // React Query 뮤테이션 사용
   const joinChallengeMutation = useJoinChallenge();
+  const leaveChallengeMutation = useLeaveChallenge();
 
   // 추천 칼로리 계산
   const calculateRecommendedCalorie = (height: number, weight: number, targetWeight: number) => {
@@ -153,13 +154,51 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
       },
       onError: (err: any) => {
         console.error('Error joining challenge:', err);
-        if (err?.message?.includes('이미') && err?.message?.includes('참여')) {
-          setError('이미 다른 챌린지에 참여 중입니다. 하나의 챌린지만 참여할 수 있습니다.');
+        
+        // 백엔드에서 반환하는 구체적인 에러 메시지 처리
+        if (err?.response?.data) {
+          const errorData = err.response.data;
+          if (errorData.error === 'ALREADY_IN_CHALLENGE') {
+            setError(errorData.message || '이미 다른 챌린지에 참여 중입니다.');
+          } else if (errorData.error === 'VALIDATION_ERROR') {
+            setError(errorData.message || '입력 데이터가 올바르지 않습니다.');
+          } else {
+            setError(errorData.message || '챌린지 참여 중 오류가 발생했습니다.');
+          }
         } else {
           setError(err?.message || '챌린지 참여 중 오류가 발생했습니다.');
         }
       }
     });
+  };
+
+  const handleLeaveAndJoin = async () => {
+    setError(null);
+    
+    // 먼저 현재 활성 챌린지 정보를 가져옴
+    try {
+      const myChallengesResponse = await apiClient.getMyChallenges();
+      const activeChallenge = myChallengesResponse?.data?.active_challenges?.find((challenge: any) => challenge.status === 'active');
+      
+      if (activeChallenge) {
+        // 기존 챌린지 포기
+        leaveChallengeMutation.mutate(activeChallenge.id, {
+          onSuccess: () => {
+            // 포기 성공 후 새 챌린지 참여
+            handleSubmit();
+          },
+          onError: (err: any) => {
+            console.error('Error leaving challenge:', err);
+            setError('기존 챌린지 포기 중 오류가 발생했습니다.');
+          }
+        });
+      } else {
+        setError('활성 챌린지를 찾을 수 없습니다.');
+      }
+    } catch (err) {
+      console.error('Error getting my challenges:', err);
+      setError('챌린지 정보를 불러오는 중 오류가 발생했습니다.');
+    }
   };
 
   const renderUserInfoStep = () => (
@@ -473,7 +512,36 @@ const ChallengeJoinForm: React.FC<ChallengeJoinFormProps> = ({
       {/* 에러 메시지 */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
-          <p className="text-red-400 text-sm">{error}</p>
+          <p className="text-red-400 text-sm mb-3">{error}</p>
+          
+          {/* 기존 챌린지 포기 옵션 */}
+          {error.includes('이미 다른 챌린지에 참여 중입니다') && (
+            <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+              <p className="text-yellow-400 text-sm mb-2">
+                💡 새로운 챌린지에 참여하려면 기존 챌린지를 포기해야 합니다.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    // 기존 챌린지 포기 후 새 챌린지 참여
+                    handleLeaveAndJoin();
+                  }}
+                  className="px-4 py-2 bg-yellow-500 text-black text-sm font-medium rounded-lg hover:bg-yellow-400 transition-colors"
+                >
+                  기존 챌린지 포기하고 참여
+                </button>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    onCancel?.();
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

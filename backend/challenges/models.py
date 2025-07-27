@@ -49,7 +49,7 @@ class UserChallenge(models.Model):
         (3, '3회')
     ]
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='challenges')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_challenges')
     room = models.ForeignKey(ChallengeRoom, on_delete=models.CASCADE, related_name='participants')
     
     # 사용자 설정
@@ -91,12 +91,18 @@ class UserChallenge(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'user_challenges'
-        unique_together = ['user', 'room']  # 한 방에 한 번만 참여
-        ordering = ['-current_streak_days', '-challenge_start_date']
+        db_table = 'user_challenge'
+        unique_together = ['user', 'room', 'status']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['room', 'status']),
+            models.Index(fields=['current_streak_days']),
+            models.Index(fields=['challenge_start_date']),
+            models.Index(fields=['status', 'remaining_duration_days']),
+        ]
     
     def __str__(self):
-        return f"{self.user.username} - {self.room.name}"
+        return f"{self.user.username} - {self.room.name} ({self.status})"
     
     @property
     def is_active(self):
@@ -114,22 +120,29 @@ class DailyChallengeRecord(models.Model):
     user_challenge = models.ForeignKey(UserChallenge, on_delete=models.CASCADE, related_name='daily_records')
     date = models.DateField()
     
-    # 일일 결과
-    total_calories = models.FloatField(validators=[MinValueValidator(0)])
-    target_calories = models.FloatField(validators=[MinValueValidator(0)])
-    is_success = models.BooleanField()
-    is_cheat_day = models.BooleanField(default=False)
+    # 판정 결과
+    total_calories = models.FloatField(default=0, help_text="해당 날짜 총 칼로리")
+    target_calories = models.FloatField(default=0, help_text="목표 칼로리")
+    is_success = models.BooleanField(default=False, help_text="성공 여부")
+    is_cheat_day = models.BooleanField(default=False, help_text="치팅 사용 여부")
     
-    # 메타데이터
-    meal_count = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    # 식사 정보
+    meal_count = models.IntegerField(default=0, help_text="해당 날짜 식사 횟수")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        db_table = 'daily_challenge_records'
+        db_table = 'daily_challenge_record'
         unique_together = ['user_challenge', 'date']
+        indexes = [
+            models.Index(fields=['user_challenge', 'date']),
+            models.Index(fields=['date']),
+            models.Index(fields=['is_success']),
+            models.Index(fields=['is_cheat_day']),
+        ]
         ordering = ['-date']
-    
+
     def __str__(self):
         return f"{self.user_challenge.user.username} - {self.date} ({'성공' if self.is_success else '실패'})"
     
