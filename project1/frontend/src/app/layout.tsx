@@ -5,7 +5,7 @@ import './globals.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ChallengeProvider } from '@/contexts/ChallengeContext';
-import ConditionalNavigation from '@/components/layout/ConditionalNavigation';
+
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -53,10 +53,7 @@ export default function RootLayout({
         <QueryClientProvider client={queryClient}>
           <ChallengeProvider>
             <div className="min-h-screen bg-[var(--main-bg)]">
-              <ConditionalNavigation />
-              <main className="container mx-auto px-4 py-8">
-                {children}
-              </main>
+              {children}
             </div>
           </ChallengeProvider>
         </QueryClientProvider>

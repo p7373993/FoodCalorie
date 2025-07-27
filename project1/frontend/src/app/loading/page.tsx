@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import UserInfo from '@/components/auth/UserInfo';
 
 export default function LoadingPage() {
   const router = useRouter();
@@ -99,12 +100,14 @@ export default function LoadingPage() {
   }, [router]);
 
   const handleCancel = () => {
-    router.push('/');
+    router.push('/dashboard');
   };
 
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4 pt-8">
-      <div className="w-full max-w-2xl text-center flex flex-col items-center space-y-8 animate-fade-in">
+    <>
+      <UserInfo />
+      <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4 pt-8">
+        <div className="w-full max-w-2xl text-center flex flex-col items-center space-y-8 animate-fade-in">
         <div className="animate-logo-pulse">
           <h1 className="text-6xl font-black" style={{ color: 'var(--point-green)' }}>체감</h1>
         </div>
@@ -113,13 +116,9 @@ export default function LoadingPage() {
           <h3 className="text-lg font-bold" style={{ color: 'var(--point-green)' }}>오늘의 다이어트 팁!</h3>
           <p className="text-md mt-2 text-gray-300 transition-opacity duration-500">{tips[currentTipIndex]}</p>
         </div>
-        <button
-          onClick={handleCancel}
-          className="w-full max-w-xs bg-gray-700 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105"
-        >
-          분석 취소
-        </button>
+
+        </div>
       </div>
-    </div>
+    </>
   );
 }

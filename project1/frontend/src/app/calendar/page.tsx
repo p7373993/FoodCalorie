@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import UserInfo from '@/components/auth/UserInfo';
 import {
   LineChart,
   Line,
@@ -417,16 +418,13 @@ export default function CalendarPage() {
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <>
+      <UserInfo />
+      <div className="bg-gray-900 text-white min-h-screen p-4">
+        <div className="max-w-7xl mx-auto space-y-6">
         <header className="flex justify-between items-center">
           <h1 className="text-4xl font-black text-green-400">식단 캘린더</h1>
-          <button
-            onClick={handleBack}
-            className="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
-          >
-            뒤로
-          </button>
+
         </header>
 
         {/* 오늘의 영양소 현황 */}
@@ -1000,7 +998,8 @@ export default function CalendarPage() {
             ))}
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

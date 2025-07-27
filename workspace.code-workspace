@@ -25,7 +25,8 @@
             "**/.venv": true,
             "**/__pycache__": true,
             "**/.next": true
-        }
+        },
+        "typescript.autoClosingTags": false
     },
     "extensions": {
         "recommendations": [

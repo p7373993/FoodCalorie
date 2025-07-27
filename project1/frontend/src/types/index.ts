@@ -246,3 +246,87 @@ export interface WeightRecordModalProps extends ModalProps {
 export interface FormattedAiResponseProps {
   text: string;
 }
+
+// 사용자 인증 관련 타입들
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  is_active: boolean;
+  date_joined: string;
+}
+
+export interface UserProfile {
+  id: number;
+  user: number;
+  nickname: string;
+  height?: number;
+  weight?: number;
+  age?: number;
+  gender?: 'male' | 'female';
+  profile_image?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  user: User;
+  profile: UserProfile;
+  auth: {
+    access_token: string;
+    refresh_token: string;
+  };
+}
+
+export interface LoginData {
+  email: string;
+  password: string;
+  remember_me?: boolean;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  password_confirm: string;
+  nickname: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface ProfileUpdateData {
+  nickname?: string;
+  height?: number;
+  weight?: number;
+  age?: number;
+  gender?: 'male' | 'female';
+  first_name?: string;
+  last_name?: string;
+}
+
+export interface PasswordChangeData {
+  current_password: string;
+  new_password: string;
+  new_password_confirm: string;
+}
+
+export interface Badge {
+  id: number;
+  name: string;
+  description: string;
+  iconUrl?: string;
+  condition_type: string;
+  condition_value: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UserBadge {
+  id: number;
+  user: number;
+  badge: Badge;
+  isAcquired: boolean;
+  acquiredDate?: string;
+}

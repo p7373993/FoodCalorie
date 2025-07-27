@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChallengeRoom } from '@/types';
 import ChallengeRoomList from '@/components/challenges/ChallengeRoomList';
+import UserInfo from '@/components/auth/UserInfo';
 
 export default function ChallengeListPage() {
   const router = useRouter();
@@ -15,17 +16,15 @@ export default function ChallengeListPage() {
     router.push(`/challenges/${room.id}`);
   };
 
-  const handleGoToDashboard = () => {
-    router.push('/dashboard');
-  };
-
   const handleGoToMyChallenges = () => {
     router.push('/challenges/my');
   };
 
   return (
-    <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4">
-      <div className="w-full max-w-7xl flex flex-col space-y-6 animate-fade-in">
+    <>
+      <UserInfo />
+      <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4">
+        <div className="w-full max-w-7xl flex flex-col space-y-6 animate-fade-in">
         {/* 헤더 */}
         <header className="w-full flex justify-between items-center py-6">
           <div>
@@ -39,17 +38,10 @@ export default function ChallengeListPage() {
           <div className="flex gap-3">
             <button 
               onClick={handleGoToMyChallenges} 
-              className="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors"
-              style={{ fontFamily: 'NanumGothic' }}
-            >
-              내 챌린지
-            </button>
-            <button 
-              onClick={handleGoToDashboard} 
               className="bg-[var(--point-green)] text-black font-bold py-3 px-6 rounded-lg hover:bg-green-400 transition-colors"
               style={{ fontFamily: 'NanumGothic' }}
             >
-              대시보드로
+              내 챌린지
             </button>
           </div>
         </header>
@@ -89,7 +81,8 @@ export default function ChallengeListPage() {
           <p>새로운 챌린지 방은 관리자가 주기적으로 추가합니다.</p>
           <p>궁금한 점이 있으시면 설정에서 문의해주세요.</p>
         </footer>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
