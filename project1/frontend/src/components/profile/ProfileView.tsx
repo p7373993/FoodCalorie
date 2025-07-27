@@ -85,15 +85,6 @@ export function ProfileView({ user, profile, onEditClick }: ProfileViewProps) {
           <h3 className="text-sm font-medium text-white mb-3">기본 정보</h3>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-gray-400">이름</span>
-              <span className="font-medium text-white">
-                {user.first_name && user.last_name 
-                  ? `${user.last_name}${user.first_name}` 
-                  : '미설정'
-                }
-              </span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-gray-400">닉네임</span>
               <span className="font-medium text-white">{profile.nickname}</span>
             </div>
@@ -164,13 +155,11 @@ export function ProfileView({ user, profile, onEditClick }: ProfileViewProps) {
               {Math.round(
                 ([
                   profile.nickname,
-                  user.first_name,
-                  user.last_name,
                   profile.gender,
                   profile.age,
                   profile.height,
                   profile.weight
-                ].filter(Boolean).length / 7) * 100
+                ].filter(Boolean).length / 5) * 100
               )}%
             </span>
           </div>
@@ -181,13 +170,11 @@ export function ProfileView({ user, profile, onEditClick }: ProfileViewProps) {
                 width: `${Math.round(
                   ([
                     profile.nickname,
-                    user.first_name,
-                    user.last_name,
                     profile.gender,
                     profile.age,
                     profile.height,
                     profile.weight
-                  ].filter(Boolean).length / 7) * 100
+                  ].filter(Boolean).length / 5) * 100
                 )}%` 
               }}
             ></div>

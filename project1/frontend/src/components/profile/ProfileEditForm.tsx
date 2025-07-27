@@ -12,8 +12,6 @@ interface ProfileEditFormProps {
 
 interface FormData {
   nickname: string;
-  first_name: string;
-  last_name: string;
   gender: 'male' | 'female' | '';
   age: number | '';
   height: number | '';
@@ -27,14 +25,12 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
   const [imagePreview, setImagePreview] = useState<string | null>(profile.profile_image || null);
   const [formData, setFormData] = useState<FormData>({
     nickname: profile.nickname,
-    first_name: user.first_name || '',
-    last_name: user.last_name || '',
     gender: profile.gender || '',
     age: profile.age || '',
     height: profile.height || '',
     weight: profile.weight || ''
   });
-  const [formErrors, setFormErrors] = useState<Partial<FormData>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,7 +45,7 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
   };
 
   const validateForm = (): boolean => {
-    const errors: Partial<FormData> = {};
+    const errors: Record<string, string> = {};
 
     if (!formData.nickname) {
       errors.nickname = '닉네임을 입력해주세요.';
@@ -59,23 +55,25 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
       errors.nickname = '닉네임은 50자 이하여야 합니다.';
     }
 
-    if (formData.last_name && formData.last_name.length > 30) {
-      errors.last_name = '성은 30자 이하여야 합니다.';
+    if (!formData.gender) {
+      errors.gender = '성별을 선택해주세요.';
     }
 
-    if (formData.first_name && formData.first_name.length > 30) {
-      errors.first_name = '이름은 30자 이하여야 합니다.';
-    }
-
-    if (formData.age && (Number(formData.age) < 1 || Number(formData.age) > 150)) {
+    if (!formData.age) {
+      errors.age = '나이를 입력해주세요.';
+    } else if (Number(formData.age) < 1 || Number(formData.age) > 150) {
       errors.age = '올바른 나이를 입력해주세요.';
     }
 
-    if (formData.height && (Number(formData.height) < 50 || Number(formData.height) > 300)) {
+    if (!formData.height) {
+      errors.height = '키를 입력해주세요.';
+    } else if (Number(formData.height) < 50 || Number(formData.height) > 300) {
       errors.height = '올바른 키를 입력해주세요.';
     }
 
-    if (formData.weight && (Number(formData.weight) < 10 || Number(formData.weight) > 500)) {
+    if (!formData.weight) {
+      errors.weight = '몸무게를 입력해주세요.';
+    } else if (Number(formData.weight) < 10 || Number(formData.weight) > 500) {
       errors.weight = '올바른 몸무게를 입력해주세요.';
     }
 
@@ -95,8 +93,6 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
       // API 호출 시뮬레이션 (실제로는 백엔드 API를 호출해야 함)
       const updateData: ProfileUpdateData = {
         nickname: formData.nickname,
-        first_name: formData.first_name || undefined,
-        last_name: formData.last_name || undefined,
         gender: formData.gender || undefined,
         age: formData.age ? Number(formData.age) : undefined,
         height: formData.height ? Number(formData.height) : undefined,
@@ -116,16 +112,6 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
         updated_at: new Date().toISOString()
       };
 
-      // 사용자 정보도 업데이트
-      const updatedUser: User = {
-        ...user,
-        first_name: formData.first_name || undefined,
-        last_name: formData.last_name || undefined
-      };
-
-      // localStorage 업데이트
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-
       onSave(updatedProfile);
     } catch (error) {
       console.error('Profile update failed:', error);
@@ -139,7 +125,11 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
     setFormData(prev => ({ ...prev, [field]: value }));
     // 입력 시 해당 필드의 에러 제거
     if (formErrors[field]) {
-      setFormErrors(prev => ({ ...prev, [field]: undefined }));
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
     }
   };
 
@@ -204,7 +194,9 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-white mb-2">성별</label>
+          <label className="block text-sm font-medium text-white mb-2">
+            성별 <span className="text-red-400">*</span>
+          </label>
           <select
             value={formData.gender}
             onChange={(e) => handleInputChange('gender', e.target.value)}
@@ -214,38 +206,15 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
             <option value="male">남성</option>
             <option value="female">여성</option>
           </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-white mb-2">성</label>
-          <input
-            value={formData.last_name}
-            onChange={(e) => handleInputChange('last_name', e.target.value)}
-            type="text"
-            className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[var(--point-green)] focus:border-transparent"
-            placeholder="성을 입력하세요"
-          />
-          {formErrors.last_name && (
-            <p className="mt-1 text-sm text-red-400">{formErrors.last_name}</p>
+          {formErrors.gender && (
+            <p className="mt-1 text-sm text-red-400">{formErrors.gender}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-white mb-2">이름</label>
-          <input
-            value={formData.first_name}
-            onChange={(e) => handleInputChange('first_name', e.target.value)}
-            type="text"
-            className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[var(--point-green)] focus:border-transparent"
-            placeholder="이름을 입력하세요"
-          />
-          {formErrors.first_name && (
-            <p className="mt-1 text-sm text-red-400">{formErrors.first_name}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-white mb-2">나이</label>
+          <label className="block text-sm font-medium text-white mb-2">
+            나이 <span className="text-red-400">*</span>
+          </label>
           <input
             value={formData.age}
             onChange={(e) => handleInputChange('age', e.target.value)}
@@ -259,7 +228,9 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-white mb-2">키 (cm)</label>
+          <label className="block text-sm font-medium text-white mb-2">
+            키 (cm) <span className="text-red-400">*</span>
+          </label>
           <input
             value={formData.height}
             onChange={(e) => handleInputChange('height', e.target.value)}
@@ -274,7 +245,9 @@ export function ProfileEditForm({ user, profile, onSave, onCancel }: ProfileEdit
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-white mb-2">몸무게 (kg)</label>
+          <label className="block text-sm font-medium text-white mb-2">
+            몸무게 (kg) <span className="text-red-400">*</span>
+          </label>
           <input
             value={formData.weight}
             onChange={(e) => handleInputChange('weight', e.target.value)}

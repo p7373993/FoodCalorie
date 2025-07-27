@@ -302,8 +302,6 @@ export interface ProfileUpdateData {
   weight?: number;
   age?: number;
   gender?: 'male' | 'female';
-  first_name?: string;
-  last_name?: string;
 }
 
 export interface PasswordChangeData {
