@@ -252,7 +252,7 @@ export default function ResultPage() {
             </h2>
             <div className="flex justify-center items-center space-x-4 mb-4">
               <span className="text-sm text-gray-400">
-                질량: {analysisResult?.total_mass || 0}g
+                질량: {Math.round((analysisResult?.total_mass || 0) * 10) / 10}g
               </span>
               <span className={`px-2 py-1 rounded text-xs font-bold ${
                 analysisResult?.overall_grade === 'A' ? 'bg-green-500' :
@@ -364,7 +364,7 @@ export default function ResultPage() {
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-400">
-                          <div>질량: {food.mass}g</div>
+                          <div>질량: {Math.round((food.mass || 0) * 10) / 10}g</div>
                           <div>칼로리: {food.calories}kcal</div>
                           <div>단백질: {food.protein}g</div>
                           <div>탄수화물: {food.carbs}g</div>

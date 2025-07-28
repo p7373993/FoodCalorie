@@ -2,7 +2,6 @@
 .kiro/
 .taskmaster/
 .cursor/
-.env.example
 backend/db.sqlite3
 
 # Logs

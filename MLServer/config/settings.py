@@ -16,7 +16,10 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 if dotenv_path.exists():
     load_dotenv(dotenv_path=dotenv_path, override=True)
     print(f"✅ .env 파일을 명시적으로 로드했습니다: {dotenv_path}")
-# else 블록 제거: .env 파일이 없을 때는 아무 메시지도 출력하지 않음
+else:
+    print(f"⚠️  경고: .env 파일이 존재하지 않습니다: {dotenv_path}")
+    print(f"⚠️  API 키가 설정되지 않으면 LLM 기능이 제한될 수 있습니다.")
+    print(f"⚠️  .env.example 파일을 참고하여 .env 파일을 생성하세요.")
 
 
 class Settings(BaseSettings):

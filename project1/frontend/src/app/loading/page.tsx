@@ -24,6 +24,8 @@ export default function LoadingPage() {
     const taskId = sessionStorage.getItem('mlTaskId');
 
     if (taskId) {
+      let hasReceivedProcessingUpdate = false; // 실제 처리 중 메시지를 받았는지 추적
+      
       // API 클라이언트를 통해 WebSocket URL 생성
       const connectWebSocket = async () => {
         const { apiClient } = await import('@/lib/api');
@@ -39,10 +41,14 @@ export default function LoadingPage() {
           console.log('WebSocket 메시지 수신:', data);
 
           if (data.type === 'task.completed') {
-            // 분석 완료 시 결과 저장하고 결과 페이지로 이동
-            console.log('분석 완료, 결과:', data.data);
-            sessionStorage.setItem('analysisResult', JSON.stringify(data.data));
-            router.push('/result');
+            // 실제 처리 과정을 거쳤거나, 이미 완료된 작업인 경우에만 결과 페이지로 이동
+            if (hasReceivedProcessingUpdate || data.data?.status === 'completed') {
+              console.log('분석 완료, 결과:', data.data);
+              sessionStorage.setItem('analysisResult', JSON.stringify(data.data));
+              router.push('/result');
+            } else {
+              console.log('처리 과정 없이 완료 메시지 수신, 대기 중...');
+            }
           } else if (data.type === 'task.failed') {
             // 분석 실패 시 에러 처리
             console.error('Analysis failed:', data.data?.error || '알 수 없는 오류');
@@ -58,44 +64,50 @@ export default function LoadingPage() {
             sessionStorage.setItem('analysisResult', JSON.stringify(fallbackResult));
             router.push('/result');
           } else if (data.type === 'task.update') {
-            // 진행상황 업데이트 (필요시 UI 업데이트)
+            // 진행상황 업데이트 - 실제 처리 중임을 표시
+            hasReceivedProcessingUpdate = true;
             console.log('진행상황:', data.data?.progress || 0, data.data?.message || '처리 중...');
+          } else if (data.type === 'task.not_found') {
+            // 작업을 찾을 수 없는 경우 기본 결과로 이동
+            console.warn('작업을 찾을 수 없음, 기본 결과로 이동');
+            const fallbackResult = {
+              result: {
+                calories: 580,
+                food_type: '작업 없음',
+                estimated_mass: 0,
+                confidence_score: 0
+              }
+            };
+            sessionStorage.setItem('analysisResult', JSON.stringify(fallbackResult));
+            router.push('/result');
           }
         };
 
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
           // WebSocket 연결 실패 시 5초 후 결과 페이지로 이동
-          setTimeout(() => {
+          const timer = setTimeout(() => {
+            const fallbackResult = {
+              result: {
+                calories: 580,
+                food_type: '연결 실패',
+                estimated_mass: 0,
+                confidence_score: 0
+              }
+            };
+            sessionStorage.setItem('analysisResult', JSON.stringify(fallbackResult));
             router.push('/result');
           }, 5000);
+
+          return () => clearTimeout(timer);
         };
 
         ws.onclose = () => {
           console.log('WebSocket 연결 종료');
         };
-
-        return ws;
       };
 
-      let cleanup: (() => void) | undefined;
-      
-      connectWebSocket().then(ws => {
-        cleanup = () => {
-          ws.close();
-        };
-      });
-      
-      return () => {
-        if (cleanup) cleanup();
-      };
-    } else {
-      // taskId가 없으면 5초 후 결과 페이지로 이동 (기존 동작)
-      const timer = setTimeout(() => {
-        router.push('/result');
-      }, 5000);
-
-      return () => clearTimeout(timer);
+      connectWebSocket();
     }
   }, [router]);
 
