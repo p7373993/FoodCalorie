@@ -7,34 +7,54 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface SignUpFormData {
-  username: string;
   email: string;
   password: string;
+  password_confirm: string;
+  nickname: string;
+}
+
+interface FieldErrors {
+  email?: string[];
+  password?: string[];
+  password_confirm?: string[];
+  nickname?: string[];
 }
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const router = useRouter();
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setError: setFormError,
+    clearErrors,
   } = useForm<SignUpFormData>();
 
   const onSubmit = async (data: SignUpFormData) => {
     setIsLoading(true);
     setError('');
+    setFieldErrors({});
+    clearErrors();
 
     try {
-      const response = await fetch('http://localhost:8000/api/register/', {
+      const requestData = {
+        email: data.email,
+        password: data.password,
+        password_confirm: data.password_confirm,
+        nickname: data.nickname,
+      };
+
+      const response = await fetch('http://localhost:8000/api/auth/register/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(requestData),
       });
 
       if (response.ok) {
@@ -43,7 +63,23 @@ export default function SignUpPage() {
         router.push('/login?registered=true');
       } else {
         const errorData = await response.json();
-        setError(errorData.message || '회원가입에 실패했습니다.');
+        
+        // 백엔드에서 반환하는 상세 에러 메시지 처리
+        if (errorData.errors) {
+          setFieldErrors(errorData.errors);
+          
+          // 각 필드별로 폼 에러 설정
+          Object.entries(errorData.errors).forEach(([field, messages]) => {
+            if (Array.isArray(messages) && messages.length > 0) {
+              setFormError(field as keyof SignUpFormData, {
+                type: 'server',
+                message: messages[0]
+              });
+            }
+          });
+        } else {
+          setError(errorData.message || '회원가입에 실패했습니다.');
+        }
       }
     } catch (error) {
       setError('네트워크 오류가 발생했습니다.');
@@ -53,108 +89,148 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 card-cute">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
         {/* 페이지 헤더 */}
         <div className="text-center space-y-2 mb-14">
-          <h1 className="text-3xl font-noto text-foreground mb-1">회원가입</h1>
+          <h1 className="text-5xl font-bold text-green-400 mb-4">체감</h1>
+          <p className="text-lg text-gray-300">오로지 한 장으로 변화한!</p>
+          <h2 className="text-2xl font-bold text-white mt-8">회원가입</h2>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* 사용자 이름 입력 필드 */}
-          <div>
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                {...register('username', {
-                  required: '사용자 이름을 입력해주세요.',
-                })}
-                type="text"
-                placeholder="사용자 이름을 입력하세요."
-                className="w-full pl-10 pr-4 py-3 border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white font-noto text-base shadow-sm placeholder:text-xs placeholder:text-muted-foreground"
-              />
+        <div className="bg-gray-900/30 backdrop-blur-sm rounded-2xl p-8">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* 닉네임 입력 필드 */}
+            <div>
+              <div className="relative">
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  {...register('nickname', {
+                    required: '닉네임을 입력해주세요.',
+                  })}
+                  type="text"
+                  placeholder="닉네임을 입력하세요."
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-gray-800 text-white text-base placeholder-gray-400"
+                />
+              </div>
+              {fieldErrors.nickname && fieldErrors.nickname.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.nickname[0]}</p>
+              ) : errors.nickname && (
+                <p className="text-sm text-red-400 mt-1">{errors.nickname.message}</p>
+              )}
             </div>
-            {errors.username && (
-              <p className="text-sm text-destructive mt-1 font-noto">{errors.username.message}</p>
+
+            {/* 이메일 입력 필드 */}
+            <div>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  {...register('email', {
+                    required: '이메일을 입력해주세요.',
+                    pattern: {
+                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                      message: '유효한 이메일 주소를 입력해주세요.',
+                    },
+                  })}
+                  type="email"
+                  placeholder="이메일을 입력하세요."
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-gray-800 text-white text-base placeholder-gray-400"
+                />
+              </div>
+              {fieldErrors.email && fieldErrors.email.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.email[0]}</p>
+              ) : errors.email && (
+                <p className="text-sm text-red-400 mt-1">{errors.email.message}</p>
+              )}
+            </div>
+
+            {/* 비밀번호 입력 필드 */}
+            <div>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  {...register('password', {
+                    required: '비밀번호를 입력해주세요.',
+                    minLength: {
+                      value: 8,
+                      message: '비밀번호는 최소 8자 이상이어야 합니다.',
+                    },
+                  })}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="비밀번호를 입력하세요."
+                  className="w-full pl-10 pr-12 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-gray-800 text-white text-base placeholder-gray-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-green-400 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {fieldErrors.password && fieldErrors.password.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.password[0]}</p>
+              ) : errors.password && (
+                <p className="text-sm text-red-400 mt-1">{errors.password.message}</p>
+              )}
+            </div>
+
+            {/* 비밀번호 확인 입력 필드 */}
+            <div>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  {...register('password_confirm', {
+                    required: '비밀번호 확인을 입력해주세요.',
+                  })}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="비밀번호를 다시 입력하세요."
+                  className="w-full pl-10 pr-12 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-gray-800 text-white text-base placeholder-gray-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-green-400 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {fieldErrors.password_confirm && fieldErrors.password_confirm.length > 0 ? (
+                <p className="text-sm text-red-400 mt-1">{fieldErrors.password_confirm[0]}</p>
+              ) : errors.password_confirm && (
+                <p className="text-sm text-red-400 mt-1">{errors.password_confirm.message}</p>
+              )}
+            </div>
+
+            {/* 일반 에러 메시지 */}
+            {error && (
+              <div className="text-sm text-red-400 bg-red-900/20 border border-red-500/30 rounded-xl p-3">
+                {error}
+              </div>
             )}
-          </div>
 
-          {/* 이메일 입력 필드 */}
-          <div>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                {...register('email', {
-                  required: '이메일을 입력해주세요.',
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: '유효한 이메일 주소를 입력해주세요.',
-                  },
-                })}
-                type="email"
-                placeholder="이메일을 입력하세요."
-                className="w-full pl-10 pr-4 py-3 border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white font-noto text-base shadow-sm placeholder:text-xs placeholder:text-muted-foreground"
-              />
-            </div>
-            {errors.email && (
-              <p className="text-sm text-destructive mt-1 font-noto">{errors.email.message}</p>
-            )}
-          </div>
+            {/* 회원가입 버튼 */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full rounded-2xl py-3 px-4 text-base font-bold bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? '회원가입 중...' : '회원가입'}
+            </button>
+            {/* 로그인 페이지로 이동 버튼 */}
+            <Link
+              href="/login"
+              className="w-full rounded-2xl py-3 px-4 text-base font-bold text-green-400 bg-transparent border border-green-400 hover:bg-green-400 hover:text-black transition-colors flex items-center justify-center mt-2"
+            >
+              로그인 페이지로
+            </Link>
+          </form>
+        </div>
 
-          {/* 비밀번호 입력 필드 */}
-          <div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <input
-                {...register('password', {
-                  required: '비밀번호를 입력해주세요.',
-                  minLength: {
-                    value: 6,
-                    message: '비밀번호는 최소 6자 이상이어야 합니다.',
-                  },
-                })}
-                type={showPassword ? 'text' : 'password'}
-                placeholder="비밀번호를 입력하세요."
-                className="w-full pl-10 pr-12 py-3 border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white font-noto text-base shadow-sm placeholder:text-xs placeholder:text-muted-foreground"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            {errors.password && (
-              <p className="text-sm text-destructive mt-1 font-noto">{errors.password.message}</p>
-            )}
-          </div>
-
-          {/* 에러 메시지 */}
-          {error && (
-            <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-3 font-noto">
-              {error}
-            </div>
-          )}
-
-          {/* 회원가입 버튼 */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full rounded-2xl py-3 px-4 text-base font-bold shadow-md font-noto"
-            style={{ background: '#011936', color: '#fff' }}
-          >
-            {isLoading ? '회원가입 중...' : '회원가입'}
-          </button>
-          {/* 로그인 페이지로 이동 버튼 */}
-          <Link
-            href="/login"
-            className="w-full rounded-2xl py-3 px-4 text-base font-bold shadow-md font-noto text-[#011936] bg-white border border-[#011936] flex items-center justify-center mt-2"
-            style={{}}
-          >
-            로그인 페이지로
-          </Link>
-        </form>
+        {/* 저작권 */}
+        <div className="text-center mt-8">
+          <p className="text-sm text-gray-500">© 2024 Chegam. All Rights Reserved.</p>
+        </div>
       </div>
     </div>
   );

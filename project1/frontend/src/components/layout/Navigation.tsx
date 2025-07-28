@@ -13,6 +13,7 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import { UserDropdown } from './UserDropdown';
 
 const navigationItems = [
   { href: '/dashboard', label: '대시보드', icon: Home },
@@ -30,13 +31,19 @@ export function Navigation() {
   useEffect(() => {
     // 클라이언트 사이드에서만 실행
     if (typeof window !== 'undefined') {
-      setUsername(localStorage.getItem('username'));
+      const user = localStorage.getItem('user');
+      if (user) {
+        const userData = JSON.parse(user);
+        setUsername(userData.username);
+      }
     }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('username');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('profile');
     router.push('/login');
   };
 
@@ -74,26 +81,7 @@ export function Navigation() {
 
           {/* 사용자 메뉴 */}
           <div className="hidden md:flex items-center space-x-4">
-            {username && (
-              <Link
-                href={`/profile/${username}`}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-sm font-bold transition-colors
-                  ${pathname.startsWith(`/profile/${username}`)
-                    ? 'bg-white text-[#011936]'
-                    : 'text-white hover:bg-[#233a50] hover:text-white'}
-                `}
-              >
-                <User className="w-4 h-4" />
-                <span>{username}</span>
-              </Link>
-            )}
-            <button 
-              onClick={handleLogout}
-              className="flex items-center space-x-2 px-3 py-2 rounded-xl text-sm font-bold text-white hover:bg-[#233a50] transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>로그아웃</span>
-            </button>
+            <UserDropdown />
           </div>
 
           {/* 모바일 메뉴 버튼 */}
@@ -137,10 +125,10 @@ export function Navigation() {
             
             {username && (
               <Link
-                href={`/profile/${username}`}
+                href="/profile"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors
-                  ${pathname.startsWith(`/profile/${username}`)
+                  ${pathname === '/profile'
                     ? 'bg-white text-[#011936]'
                     : 'text-white hover:bg-[#233a50] hover:text-white'}
                 `}

@@ -16,7 +16,7 @@ urlpatterns = [
     path('join/', views.JoinChallengeView.as_view(), name='join-challenge'),
     path('my/', views.MyChallengeView.as_view(), name='my-challenge'),
     path('my/extend/', views.ExtendChallengeView.as_view(), name='extend-challenge'),
-    path('my/leave/', views.LeaveChallengeView.as_view(), name='leave-challenge'),
+    path('leave/', views.LeaveChallengeView.as_view(), name='leave-challenge'),
     
     # 치팅 기능
     path('cheat/', views.RequestCheatDayView.as_view(), name='request-cheat'),

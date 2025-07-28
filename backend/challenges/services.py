@@ -6,6 +6,8 @@ from .models import (
     UserChallenge, DailyChallengeRecord, CheatDayRequest, 
     ChallengeBadge, UserChallengeBadge, MEAL_TIME_RANGES
 )
+from .cache import ChallengeCache, CachedLeaderboardService, CachedUserStatsService, invalidate_cache_on_change
+from .optimizations import OptimizedChallengeQueries, BulkOperations, PerformanceMonitor
 import logging
 from datetime import date, timedelta, time
 
@@ -15,11 +17,17 @@ logger = logging.getLogger('challenges')
 class ChallengeJudgmentService:
     """챌린지 판정 서비스"""
     
+    @PerformanceMonitor.measure_query_time
+    @invalidate_cache_on_change(['user_cache', 'leaderboard'])
     def judge_daily_challenge(self, user_challenge: UserChallenge, target_date: date):
         """
-        특정 날짜의 일일 챌린지 판정
+        특정 날짜의 일일 챌린지 판정 (캐시 최적화 적용)
         """
         with transaction.atomic():
+            # 캐시에서 일일 기록 확인
+            cache_key_params = {'user_id': user_challenge.user.id, 'date': target_date.isoformat()}
+            cached_record = ChallengeCache.get('daily_record', **cache_key_params)
+            
             # 해당 날짜의 총 칼로리 계산
             total_calories = self._calculate_daily_calories(user_challenge.user, target_date)
             target_calories = user_challenge.room.target_calorie
@@ -48,6 +56,16 @@ class ChallengeJudgmentService:
                 }
             )
             
+            # 일일 기록 캐시 저장
+            record_data = {
+                'total_calories': total_calories,
+                'target_calories': target_calories,
+                'is_success': is_success,
+                'is_cheat_day': is_cheat_day,
+                'meal_count': daily_record.meal_count
+            }
+            ChallengeCache.set('daily_record', record_data, **cache_key_params)
+            
             # 연속 성공 일수 업데이트
             self._update_streak(user_challenge, target_date, is_success, is_cheat_day)
             
@@ -56,6 +74,10 @@ class ChallengeJudgmentService:
             
             # 배지 확인
             self._check_and_award_badges(user_challenge)
+            
+            # 관련 캐시 무효화
+            ChallengeCache.invalidate_user_cache(user_challenge.user.id)
+            ChallengeCache.invalidate_room_cache(user_challenge.room.id)
             
             logger.info(f"Daily judgment completed: User {user_challenge.user.id}, Date {target_date}, Success: {is_success}")
             
@@ -280,31 +302,11 @@ class ChallengeStatisticsService:
             'challenge_progress': round((total_days / user_challenge.user_challenge_duration_days * 100), 1)
         }
     
+    @PerformanceMonitor.measure_query_time
     def get_leaderboard(self, room_id: int, limit: int = 50) -> list:
-        """리더보드 조회"""
-        participants = UserChallenge.objects.filter(
-            room_id=room_id,
-            status='active'
-        ).select_related('user').order_by(
-            '-current_streak_days',
-            '-total_success_days',
-            'challenge_start_date'
-        )[:limit]
-        
-        leaderboard = []
-        for rank, participant in enumerate(participants, 1):
-            leaderboard.append({
-                'rank': rank,
-                'username': participant.user.username,
-                'user_id': participant.user.id,
-                'current_streak': participant.current_streak_days,
-                'max_streak': participant.max_streak_days,
-                'total_success_days': participant.total_success_days,
-                'challenge_start_date': participant.challenge_start_date,
-                'last_activity': participant.last_activity_date
-            })
-        
-        return leaderboard
+        """리더보드 조회 (최적화된 쿼리 사용)"""
+        # 캐시된 리더보드 서비스 사용
+        return CachedLeaderboardService.get_leaderboard(room_id, limit)
 
 
 class WeeklyResetService:
