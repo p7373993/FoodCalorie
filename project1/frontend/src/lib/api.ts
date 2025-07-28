@@ -34,14 +34,14 @@ class ApiClient {
       ...options,
     };
 
-    // 인증 토큰이 있으면 추가 (선택적)
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (token) {
-      config.headers = {
-        ...config.headers,
-        'Authorization': `Token ${token}`,
-      };
-    }
+    // 인증 토큰이 있으면 추가 (선택적) - 임시로 비활성화
+    // const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    // if (token) {
+    //   config.headers = {
+    //     ...config.headers,
+    //     'Authorization': `Token ${token}`,
+    //   };
+    // }
 
     const response = await fetch(url, config);
     
@@ -286,6 +286,37 @@ class ApiClient {
       body: JSON.stringify({
         type,
         meal_data: data,
+      }),
+    });
+  }
+
+  // 캘린더 관련 API
+  async getCalendarData() {
+    return this.request('/api/calendar/data/');
+  }
+
+  async updateCalendarProfile(profileData: {
+    calorie_goal?: number;
+    protein_goal?: number;
+    carbs_goal?: number;
+    fat_goal?: number;
+  }) {
+    return this.request('/api/calendar/profile/', {
+      method: 'POST',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  async getMealsByDate(date: string) {
+    return this.request(`/api/calendar/meals/?date=${date}`);
+  }
+
+  async setDailyGoal(date: string, goalText: string) {
+    return this.request('/api/calendar/daily-goal/', {
+      method: 'POST',
+      body: JSON.stringify({
+        date,
+        goal_text: goalText,
       }),
     });
   }
