@@ -25,7 +25,7 @@ class ChallengeRoom(models.Model):
     )
     tolerance = models.IntegerField(
         default=50, validators=[MinValueValidator(0), MaxValueValidator(200)]
-    )  # ±50kcal
+    )  # +50kcal (단방향 허용오차)
     description = models.TextField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

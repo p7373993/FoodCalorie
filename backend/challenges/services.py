@@ -171,8 +171,8 @@ class ChallengeJudgmentService:
         if is_cheat_day:
             return True  # 치팅 데이는 무조건 성공 처리
 
-        # 1. 목표 칼로리 ±tolerance 범위 내인지 확인
-        calorie_success = abs(total_calories - target_calories) <= tolerance
+        # 1. 목표 칼로리 +tolerance 이하인지 확인 (단방향 허용오차)
+        calorie_success = total_calories <= (target_calories + tolerance)
 
         # 2. 유효한 식사 횟수 체크 (새로운 규칙)
         valid_meal_count = self._count_valid_meals(user_challenge, target_date)

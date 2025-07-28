@@ -3,8 +3,12 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 # 내부 모듈 임포트
-from . import endpoints
-from .schemas import HealthCheckResponse
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from api import endpoints
+from api.schemas import HealthCheckResponse
 from core.estimation_service import mass_estimation_service
 from config.settings import settings
 import logging

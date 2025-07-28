@@ -21,6 +21,10 @@ urlpatterns = [
     path('users/<str:username>/badges', UserBadgesView.as_view(), name='user-badges'),
     path('users/profile/stats', UserProfileStatsView.as_view(), name='user-profile-stats'),
     path('users/statistics', UserStatisticsView.as_view(), name='user-statistics'),
+    
+    # 캘린더 API 엔드포인트 추가
+    path('calendar/data/', MonthlyLogView.as_view(), name='calendar-data'),
+    
     # Custom API views will be added here
     # path('challenge-main/', include('api.challenges.urls')),  # 임시 주석 처리
 ]

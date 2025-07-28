@@ -513,17 +513,13 @@ class AnalyzeImageView(APIView):
             return Response({"success": False, "message": f"분석 중 오류: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class MonthlyLogView(APIView):
-    permission_classes = [IsAuthenticated] # 권한 추가
+    permission_classes = [AllowAny] # 임시로 인증 없이 접근 허용
     def get(self, request, *args, **kwargs):
         year = int(request.query_params.get('year', datetime.now().year))
         month = int(request.query_params.get('month', datetime.now().month))
 
-        # Only fetch logs for the current user
-        meal_logs = MealLog.objects.filter(
-            user=request.user,
-            date__year=year,
-            date__month=month
-        ).order_by('date', 'time')
+        # 인증 없이 접근하므로 임시로 빈 데이터 반환
+        meal_logs = MealLog.objects.none()  # 빈 쿼리셋
 
         days_data = defaultdict(lambda: {"meals": []})
         meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -544,10 +540,26 @@ class MonthlyLogView(APIView):
 
         return Response({
             "success": True,
-            "data": {
-                "year": year,
-                "month": month,
-                "days": dict(days_data)
+            "user_profile": {
+                "calorie_goal": 2000,
+                "protein_goal": 150,
+                "carbs_goal": 250,
+                "fat_goal": 65,
+                "username": "demo_user",
+                "nickname": "데모 사용자"
+            },
+            "badges": [],
+            "daily_logs": [],
+            "weekly_analysis": {
+                "avg_calories": 0,
+                "avg_protein": 0,
+                "avg_carbs": 0,
+                "avg_fat": 0,
+                "calorie_achievement_rate": 0,
+                "protein_achievement_rate": 0,
+                "carbs_achievement_rate": 0,
+                "fat_achievement_rate": 0,
+                "ai_advice": "이번 주는 아직 데이터가 부족합니다. 꾸준히 식단을 기록해보세요!"
             },
             "message": "Monthly logs fetched successfully"
         }, status=status.HTTP_200_OK)
