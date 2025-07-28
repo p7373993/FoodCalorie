@@ -100,6 +100,7 @@ export default function ResultPage() {
   const [aiCoaching, setAiCoaching] = useState(''); 
   const [isCoachingLoading, setIsCoachingLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [showFoodDetails, setShowFoodDetails] = useState(false);
 
   useEffect(() => {
     // 세션 스토리지에서 이미지 URL과 분석 결과 가져오기
@@ -163,7 +164,7 @@ export default function ResultPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'meal_feedback',
+          type: 'detailed_meal_analysis',
           meal_data: {
             food_name: analysisResult?.food_name || '분석된 음식',
             calories: analysisResult?.total_calories || 0,
@@ -172,7 +173,9 @@ export default function ResultPage() {
             fat: analysisResult?.total_fat || 0,
             mass: analysisResult?.total_mass || 0,
             grade: analysisResult?.overall_grade || 'B',
-            food_details: analysisResult?.food_details || []
+            confidence: analysisResult?.confidence_score || 0.5,
+            food_details: analysisResult?.food_details || [],
+            needs_manual_input: analysisResult?.needs_manual_input || false
           }
         })
       });
@@ -305,67 +308,79 @@ export default function ResultPage() {
           {/* 음식별 상세 정보 */}
           {analysisResult?.food_details && analysisResult.food_details.length > 0 && (
             <div>
-              <h3 className="text-lg font-bold mb-3 text-gray-300">음식별 상세 정보</h3>
-              <div className="space-y-2">
-                {analysisResult.food_details.map((food: any, index: number) => (
-                  <div key={index} className="p-3 bg-gray-800/30 rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium">{food.name}</span>
-                        {food.matched_name && food.matched_name !== food.name && (
+              <button
+                onClick={() => setShowFoodDetails(!showFoodDetails)}
+                className="w-full flex items-center justify-between p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 transition-colors"
+              >
+                <h3 className="text-lg font-bold text-gray-300">음식별 상세 정보</h3>
+                <span className={`text-gray-400 transition-transform ${showFoodDetails ? 'rotate-180' : ''}`}>
+                  ▼
+                </span>
+              </button>
+              
+              {showFoodDetails && (
+                <div className="mt-3 space-y-2 animate-fade-in">
+                  {analysisResult.food_details.map((food: any, index: number) => (
+                    <div key={index} className="p-3 bg-gray-800/30 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium">{food.name}</span>
+                          {food.matched_name && food.matched_name !== food.name && (
+                            <span className="text-xs text-gray-500">
+                              (매칭: {food.matched_name})
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {food.needs_manual_input ? (
+                            <span className="px-2 py-1 rounded text-xs bg-gray-600 text-white">
+                              수동입력필요
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              food.grade === 'A' ? 'bg-green-500' :
+                              food.grade === 'B' ? 'bg-yellow-500' :
+                              food.grade === 'C' ? 'bg-orange-500' :
+                              food.grade === 'D' ? 'bg-red-500' :
+                              food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
+                            }`}>
+                              {food.grade === 'UNKNOWN' ? '미확인' : food.grade}
+                            </span>
+                          )}
                           <span className="text-xs text-gray-500">
-                            (매칭: {food.matched_name})
+                            {Math.round(food.confidence * 100)}%
                           </span>
-                        )}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {food.needs_manual_input ? (
-                          <span className="px-2 py-1 rounded text-xs bg-gray-600 text-white">
-                            수동입력필요
-                          </span>
-                        ) : (
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            food.grade === 'A' ? 'bg-green-500' :
-                            food.grade === 'B' ? 'bg-yellow-500' :
-                            food.grade === 'C' ? 'bg-orange-500' :
-                            food.grade === 'D' ? 'bg-red-500' :
-                            food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
-                          }`}>
-                            {food.grade === 'UNKNOWN' ? '미확인' : food.grade}
-                          </span>
-                        )}
-                        <span className="text-xs text-gray-500">
-                          {Math.round(food.confidence * 100)}%
-                        </span>
-                      </div>
+                      
+                      {food.needs_manual_input ? (
+                        <div className="text-center py-4">
+                          <p className="text-yellow-400 text-sm mb-2">
+                            데이터베이스에 없는 음식입니다. 직접 입력해주세요.
+                          </p>
+                          <button className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                            영양정보 직접 입력
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-400">
+                          <div>질량: {food.mass}g</div>
+                          <div>칼로리: {food.calories}kcal</div>
+                          <div>단백질: {food.protein}g</div>
+                          <div>탄수화물: {food.carbs}g</div>
+                          <div>지방: {food.fat}g</div>
+                        </div>
+                      )}
+                      
+                      {!food.found_in_db && !food.needs_manual_input && (
+                        <div className="mt-2 text-xs text-yellow-400">
+                          ⚠️ 추정값입니다. 정확한 정보를 위해 직접 입력을 권장합니다.
+                        </div>
+                      )}
                     </div>
-                    
-                    {food.needs_manual_input ? (
-                      <div className="text-center py-4">
-                        <p className="text-yellow-400 text-sm mb-2">
-                          데이터베이스에 없는 음식입니다. 직접 입력해주세요.
-                        </p>
-                        <button className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
-                          영양정보 직접 입력
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-400">
-                        <div>질량: {food.mass}g</div>
-                        <div>칼로리: {food.calories}kcal</div>
-                        <div>단백질: {food.protein}g</div>
-                        <div>지방: {food.fat}g</div>
-                      </div>
-                    )}
-                    
-                    {!food.found_in_db && !food.needs_manual_input && (
-                      <div className="mt-2 text-xs text-yellow-400">
-                        ⚠️ 추정값입니다. 정확한 정보를 위해 직접 입력을 권장합니다.
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -383,17 +398,36 @@ export default function ResultPage() {
             </div>
           )}
           
+          {/* AI 식단 코칭 */}
           <div className="text-left">
             <button 
               onClick={handleGetCoaching} 
               disabled={isCoachingLoading} 
-              className="w-full bg-teal-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-teal-500 to-blue-500 text-white font-bold py-4 rounded-lg transition-all duration-300 hover:scale-105 hover:shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {isCoachingLoading ? <span className="spinner"></span> : `✨ AI 식단 코칭 받기`}
+              {isCoachingLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>AI가 분석 중...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span>✨</span>
+                  <span>AI 식단 코칭 받기</span>
+                  <span>🤖</span>
+                </div>
+              )}
             </button>
+            
             {aiCoaching && (
-              <div className="mt-4 p-4 bg-gray-800/70 rounded-lg">
-                <FormattedAiResponse text={aiCoaching} />
+              <div className="mt-6 p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl border border-gray-700/50 animate-fade-in">
+                <div className="flex items-center space-x-2 mb-4">
+                  <span className="text-2xl">🤖</span>
+                  <h4 className="text-lg font-bold text-teal-400">AI 영양 코치의 조언</h4>
+                </div>
+                <div className="prose prose-invert max-w-none">
+                  <FormattedAiResponse text={aiCoaching} />
+                </div>
               </div>
             )}
           </div>
