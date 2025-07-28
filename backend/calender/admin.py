@@ -1,12 +1,12 @@
 from django.contrib import admin
-from .models import UserProfile, DailyGoal, Badge, UserBadge, WeeklyAnalysis
+from .models import CalendarUserProfile, DailyGoal, Badge, UserBadge, WeeklyAnalysis
 
 
-@admin.register(UserProfile)
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'name', 'calorie_goal', 'protein_goal', 'created_at']
+@admin.register(CalendarUserProfile)
+class CalendarUserProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'calorie_goal', 'protein_goal', 'created_at']
     list_filter = ['created_at']
-    search_fields = ['user__username', 'name']
+    search_fields = ['user__username']
 
 
 @admin.register(DailyGoal)

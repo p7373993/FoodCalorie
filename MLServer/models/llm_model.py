@@ -9,6 +9,7 @@ import base64
 
 from config.settings import settings
 from utils.base_model import BaseModel
+from utils.density_calculator import density_calculator
 
 class LLMMassEstimator(BaseModel):
     """
@@ -32,7 +33,7 @@ class LLMMassEstimator(BaseModel):
             self._log_error("설정 실패", e)
             self._model = None
     
-    def estimate_mass_from_features(self, features: dict, debug_helper=None) -> dict:
+    def estimate_mass_from_features(self, features: dict, debug_helper=None, image: np.ndarray = None) -> dict:
         if self._model is None:
             return {"error": "LLM 모델이 초기화되지 않았습니다."}
         
@@ -53,36 +54,72 @@ class LLMMassEstimator(BaseModel):
         for i, food in enumerate(food_objects):
             logging.info(f"음식 {i+1}/{len(food_objects)} 처리 중: 픽셀 면적 {food.get('pixel_area', 0):,}, 신뢰도 {food.get('confidence', 0):.3f}, bbox {food.get('bbox', [])}")
             
-            prompt = self._build_prompt_for_food(features, food, i)
-            try:
-                response = self._model.generate_content(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=settings.LLM_TEMPERATURE, 
-                        top_p=settings.LLM_TOP_P,
-                        candidate_count=1  # 완전히 결정론적
-                    ),
+            # 1단계: 부피 계산 (기존 방식)
+            volume_info = self._calculate_volume_from_features(features, food, i)
+            
+            # 2단계: 음식 이름 식별 및 밀도 조회 (이미지 기반)
+            food_name = food.get('class_name', '알수없음')
+            food_mask = food.get('mask')  # 음식 마스크 정보
+            
+            # 이미지와 마스크를 함께 전달하여 정확한 음식 식별 + 밀도 조회
+            density_info = density_calculator.get_food_density_from_llm(
+                food_name, 
+                food_class=food_name,
+                image=image,
+                food_mask=food_mask
+            )
+            
+            # 3단계: 부피 × 밀도로 최종 질량 계산
+            if volume_info.get("volume_cm3", 0) > 0:
+                mass_calculation = density_calculator.calculate_mass_from_volume(
+                    volume_info["volume_cm3"], 
+                    density_info
                 )
-                mass_info = self._parse_response(response.text)
-                if debug_helper:
-                    debug_helper.log_initial_mass_calculation_debug(features, prompt, response.text, mass_info, food_index=i)
                 
-                # 음식별 정보 추가
-                mass_info["food_index"] = i
-                mass_info["food_bbox"] = food.get("bbox", [])
-                mass_info["food_pixel_area"] = food.get("pixel_area", 0)
-                food_estimations.append(mass_info)
-                
-                logging.info(f"음식 {i+1} 질량 추정 완료: {mass_info.get('estimated_mass_g', 0):.1f}g")
-                    
-            except Exception as e:
-                logging.error(f"음식 {i} 질량 추정 중 오류 발생: {e}")
-                food_estimations.append({
-                    "error": str(e),
-                    "food_index": i,
-                    "food_bbox": food.get("bbox", []),
-                    "food_pixel_area": food.get("pixel_area", 0)
-                })
+                # 결과 통합
+                mass_info = {
+                    "estimated_mass_g": mass_calculation["estimated_mass_g"],
+                    "confidence": mass_calculation["confidence"],
+                    "reasoning": mass_calculation["reasoning"],
+                    "calculation_method": "volume_density_based",
+                    "volume_info": volume_info,
+                    "density_info": density_info,
+                    "calculation_steps": mass_calculation.get("calculation_steps", [])
+                }
+            else:
+                # 부피 계산 실패시 기존 LLM 방식 사용
+                logging.warning(f"음식 {i+1} 부피 계산 실패, LLM 직접 추정 사용")
+                prompt = self._build_prompt_for_food(features, food, i)
+                try:
+                    response = self._model.generate_content(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            temperature=settings.LLM_TEMPERATURE, 
+                            top_p=settings.LLM_TOP_P,
+                            candidate_count=1
+                        ),
+                    )
+                    mass_info = self._parse_response(response.text)
+                    mass_info["calculation_method"] = "llm_direct_estimation"
+                    mass_info["density_info"] = density_info  # 참고용
+                except Exception as e:
+                    logging.error(f"음식 {i} LLM 직접 추정 실패: {e}")
+                    mass_info = {
+                        "error": str(e),
+                        "estimated_mass_g": 100.0,  # 기본값
+                        "confidence": 0.2
+                    }
+            
+            if debug_helper:
+                debug_helper.log_initial_mass_calculation_debug(features, "", "", mass_info, food_index=i)
+            
+            # 음식별 정보 추가
+            mass_info["food_index"] = i
+            mass_info["food_bbox"] = food.get("bbox", [])
+            mass_info["food_pixel_area"] = food.get("pixel_area", 0)
+            food_estimations.append(mass_info)
+            
+            logging.info(f"음식 {i+1} 질량 추정 완료: {mass_info.get('estimated_mass_g', 0):.1f}g (방법: {mass_info.get('calculation_method', 'unknown')})")
         
         return {
             "food_estimations": food_estimations,
@@ -187,17 +224,25 @@ class LLMMassEstimator(BaseModel):
             if depth_scale_info.get('pixel_per_cm2_ratio'):
                 prompt += f"  - 면적 비율: {depth_scale_info.get('pixel_per_cm2_ratio'):.2f} pixels/cm²\n"
         
-        prompt += "\n🎯 계산 과제:\n위 정보를 바탕으로 이 음식의 질량을 g(그램) 단위로 추정하세요. 부피(cm³)를 먼저 계산한 후, 일반적인 음식 밀도(약 0.8~1.2 g/cm³)를 적용하세요.\n"
+        prompt += "\n🎯 계산 과제:\n위 정보를 바탕으로 이 음식의 질량을 g(그램) 단위로 추정하세요.\n"
         prompt += "\n💡 계산 가이드:\n"
         if has_reference and has_depth_scale and depth_scale_info.get('pixel_per_cm2_ratio'):
             prompt += "1. '픽셀 면적'을 '면적 비율'로 나누어 음식의 실제 면적(cm²)을 계산하세요.\n"
             prompt += "2. '깊이 변화량'과 '깊이 스케일'을 곱하여 음식의 실제 높이(cm)를 추정하세요.\n"
             prompt += "3. 추정된 실제 면적과 높이를 곱해 부피(cm³)를 계산하세요. (형태 보정 계수 0.6 적용)\n"
-            prompt += "4. 계산된 부피에 음식의 예상 밀도(g/cm³)를 곱해 최종 질량(g)을 계산하세요.\n"
+            prompt += "4. 이 음식의 구체적인 밀도(g/cm³)를 결정하세요:\n"
+            prompt += "   - 밥류: 1.2-1.5 g/cm³\n"
+            prompt += "   - 빵류: 0.2-0.5 g/cm³\n"
+            prompt += "   - 고기류: 0.9-1.1 g/cm³\n"
+            prompt += "   - 채소류: 0.8-1.0 g/cm³\n"
+            prompt += "   - 과일류: 0.8-1.0 g/cm³\n"
+            prompt += "   - 국물류: 1.0-1.1 g/cm³\n"
+            prompt += "5. 계산된 부피에 결정된 밀도를 곱해 최종 질량(g)을 계산하세요.\n"
         else:
-            prompt += "정확한 스케일 정보가 없으므로, 음식의 픽셀 면적과 일반적인 음식 크기를 고려하여 경험적으로 추정하세요. 신뢰도를 낮게 설정하세요.\n"
+            prompt += "정확한 스케일 정보가 없으므로, 음식의 픽셀 면적과 일반적인 음식 크기를 고려하여 경험적으로 추정하세요.\n"
+            prompt += "음식별 적절한 밀도를 선택하여 적용하세요. 신뢰도를 낮게 설정하세요.\n"
         
-        prompt += '\n📋 응답 형식 (JSON):\n{"estimated_mass_g": <추정 질량(g)>, "confidence": <신뢰도(0.0~1.0)>, "reasoning": "<계산 과정 및 근거 요약>"}'
+        prompt += '\n📋 응답 형식 (JSON):\n{"estimated_mass_g": <추정 질량(g)>, "volume_cm3": <계산된 부피>, "density_g_per_cm3": <사용된 밀도>, "confidence": <신뢰도(0.0~1.0)>, "reasoning": "<계산 과정 및 근거 요약>"}'
         return prompt.strip()
 
     def _build_prompt(self, features: dict) -> str:
@@ -236,8 +281,84 @@ class LLMMassEstimator(BaseModel):
             prompt += "4. 계산된 부피에 음식의 예상 밀도(g/cm³)를 곱해 최종 질량(g)을 계산하세요.\n"
         else:
             prompt += "정확한 스케일 정보가 없으므로, 음식의 픽셀 면적과 일반적인 음식 크기를 고려하여 경험적으로 추정하세요. 신뢰도를 낮게 설정하세요.\n"
-        prompt += '\n📋 응답 형식 (JSON):\n{"estimated_mass_g": <추정 질량(g)>, "confidence": <신뢰도(0.0~1.0)>, "reasoning": "<계산 과정 및 근거 요약>"}'
+        prompt += '\n📋 응답 형식 (JSON):\n{"estimated_mass_g": <추정 질량(g)>, "volume_cm3": <계산된 부피>, "density_g_per_cm3": <사용된 밀도>, "confidence": <신뢰도(0.0~1.0)>, "reasoning": "<계산 과정 및 근거 요약>"}'
         return prompt.strip()
+
+    def _calculate_volume_from_features(self, features: dict, food: dict, food_index: int) -> dict:
+        """특징 정보로부터 부피 계산"""
+        try:
+            # 기준 물체 정보 확인
+            reference_objects = features.get("reference_objects", [])
+            depth_scale_info = features.get("depth_scale_info", {})
+            has_reference = len(reference_objects) > 0
+            has_depth_scale = depth_scale_info.get('has_scale', False)
+            
+            # 음식 객체 정보
+            pixel_area = food.get('pixel_area', 0)
+            depth_info = food.get('depth_info', {})
+            depth_variation = depth_info.get('depth_variation', 0.0)
+            
+            if has_reference and has_depth_scale and depth_scale_info.get('pixel_per_cm2_ratio'):
+                # 정확한 스케일 기반 계산
+                pixel_per_cm2_ratio = depth_scale_info.get('pixel_per_cm2_ratio')
+                depth_scale_cm_per_unit = depth_scale_info.get('depth_scale_cm_per_unit', 0.0)
+                
+                # 실제 면적 계산
+                real_area_cm2 = pixel_area / pixel_per_cm2_ratio
+                
+                # 실제 높이 계산
+                real_height_cm = depth_variation * depth_scale_cm_per_unit
+                
+                # 부피 계산 (형태 보정 적용)
+                shape_factor = 0.6  # 음식의 일반적인 형태 보정
+                volume_cm3 = real_area_cm2 * real_height_cm * shape_factor
+                
+                return {
+                    "volume_cm3": volume_cm3,
+                    "real_area_cm2": real_area_cm2,
+                    "real_height_cm": real_height_cm,
+                    "shape_factor": shape_factor,
+                    "calculation_method": "reference_scaled",
+                    "confidence": 0.8,
+                    "pixel_per_cm2_ratio": pixel_per_cm2_ratio,
+                    "depth_scale_cm_per_unit": depth_scale_cm_per_unit
+                }
+            else:
+                # 경험적 추정 (기준 물체 없음)
+                logging.warning(f"음식 {food_index+1}: 기준 물체 없음, 경험적 부피 추정 사용")
+                
+                # 기본 픽셀-실제 크기 변환 (설정값 사용)
+                pixel_to_cm = settings.DEFAULT_PIXEL_TO_CM
+                estimated_area_cm2 = pixel_area * (pixel_to_cm ** 2)
+                estimated_height_cm = depth_variation * pixel_to_cm * 0.1  # 깊이 스케일 추정
+                
+                # 최소/최대 제한
+                estimated_height_cm = max(0.5, min(estimated_height_cm, 10.0))
+                
+                shape_factor = 0.5  # 불확실성으로 인한 보수적 계수
+                volume_cm3 = estimated_area_cm2 * estimated_height_cm * shape_factor
+                
+                # 합리적 범위로 제한
+                volume_cm3 = max(5.0, min(volume_cm3, 500.0))
+                
+                return {
+                    "volume_cm3": volume_cm3,
+                    "real_area_cm2": estimated_area_cm2,
+                    "real_height_cm": estimated_height_cm,
+                    "shape_factor": shape_factor,
+                    "calculation_method": "empirical_estimation",
+                    "confidence": 0.4,
+                    "pixel_to_cm": pixel_to_cm
+                }
+                
+        except Exception as e:
+            logging.error(f"부피 계산 오류: {e}")
+            return {
+                "volume_cm3": 50.0,  # 기본값
+                "calculation_method": "fallback",
+                "confidence": 0.2,
+                "error": str(e)
+            }
 
     def _parse_response(self, response_text: str) -> dict:
         try:
@@ -376,8 +497,11 @@ class LLMMassEstimator(BaseModel):
             if final_mass is None:
                 multimodal_mass = food_info.get('verified_mass_g', 0)
                 initial_mass = 0
+                initial_estimation_data = None
+                
                 if "food_estimations" in initial_estimation and i < len(initial_estimation["food_estimations"]):
-                    initial_mass = initial_estimation["food_estimations"][i].get("estimated_mass_g", 0)
+                    initial_estimation_data = initial_estimation["food_estimations"][i]
+                    initial_mass = initial_estimation_data.get("estimated_mass_g", 0)
 
                 # 기준 객체 신뢰도가 높을 때 가중 평균 적용
                 if reference_confidence >= 0.5 and initial_mass > 0 and multimodal_mass > 0:
@@ -386,9 +510,35 @@ class LLMMassEstimator(BaseModel):
                     logging.info(f"기준물체 신뢰도 높음: 가중 평균 적용 {initial_mass:.1f}g(70%) + {multimodal_mass:.1f}g(30%) = {final_mass:.1f}g")
                 else:
                     # 기존 로직 유지 (신뢰도 낮을 때)
-                    final_mass = multimodal_mass
-                    verification_method = "multimodal_estimation"
-                    logging.info(f"기준물체 신뢰도 낮음: 멀티모달 추정값 사용 {final_mass:.1f}g")
+                    # 하지만 초기 추정에서 밀도 정보가 있다면 활용
+                    if initial_estimation_data and initial_estimation_data.get("calculation_method") == "volume_density_based":
+                        # 부피-밀도 기반 계산이었다면, 멀티모달 결과와 비교하여 조정
+                        volume_info = initial_estimation_data.get("volume_info", {})
+                        density_info = initial_estimation_data.get("density_info", {})
+                        
+                        if volume_info.get("volume_cm3", 0) > 0:
+                            # 멀티모달이 제안한 질량을 역산하여 밀도 확인
+                            implied_density = multimodal_mass / volume_info["volume_cm3"] if volume_info["volume_cm3"] > 0 else 1.0
+                            original_density = density_info.get("density_g_per_cm3", 1.0)
+                            
+                            # 밀도 차이가 크면 멀티모달 결과 우선, 작으면 초기 추정 우선
+                            density_ratio = abs(implied_density - original_density) / original_density
+                            
+                            if density_ratio < 0.3:  # 30% 이내 차이
+                                final_mass = initial_mass * 0.8 + multimodal_mass * 0.2
+                                verification_method = "density_consistent_weighted"
+                                logging.info(f"밀도 일관성 확인: 초기 추정 우선 {final_mass:.1f}g")
+                            else:
+                                final_mass = multimodal_mass
+                                verification_method = "multimodal_density_adjusted"
+                                logging.info(f"밀도 불일치: 멀티모달 결과 사용 {final_mass:.1f}g")
+                        else:
+                            final_mass = multimodal_mass
+                            verification_method = "multimodal_estimation"
+                    else:
+                        final_mass = multimodal_mass
+                        verification_method = "multimodal_estimation"
+                        logging.info(f"기준물체 신뢰도 낮음: 멀티모달 추정값 사용 {final_mass:.1f}g")
 
             food_verifications.append({
                 "food_index": i,

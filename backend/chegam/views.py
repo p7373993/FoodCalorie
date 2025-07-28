@@ -160,6 +160,8 @@ def ai_coaching_view(request):
     try:
         if coaching_type == 'meal_feedback':
             result = AICoachingService.get_meal_coaching(meal_data)
+        elif coaching_type == 'detailed_meal_analysis':
+            result = AICoachingService.get_detailed_meal_analysis(meal_data)
         elif coaching_type == 'weekly_report':
             user_data = AICoachingService.get_user_weekly_data(request.user)
             result = AICoachingService.generate_weekly_report(user_data)

@@ -45,14 +45,14 @@ INSTALLED_APPS = [
     # 'rest_framework_simplejwt.token_blacklist',  # JWT 토큰 블랙리스트 (일시 비활성화)
     # 'django_filters',  # Django 필터링 (일시 비활성화)
     'corsheaders',
-    # 'channels',  # 일시 비활성화
+    'channels',  # WebSocket 지원을 위해 활성화
     'rest_framework.authtoken',
     'accounts',  # 사용자 인증 시스템
     'api_integrated.apps.ApiIntegratedConfig',  # 메인 API 앱
     'mlserver',  # MLServer 연동
     # 'chegam',  # 체감 앱 (일시 비활성화 - UserProfile 충돌)
     'challenges.apps.ChallengesConfig',  # 챌린지 시스템
-    # 'calender.apps.CalenderConfig',  # 캘린더 앱 (일시 비활성화 - UserProfile 충돌)
+    'calender.apps.CalenderConfig',  # 캘린더 앱
 ]
 
 MIDDLEWARE = [

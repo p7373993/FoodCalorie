@@ -280,11 +280,11 @@ class DebugHelper:
             print(f"        실제 크기: {ref.get('real_size', {})}")
     
     def log_initial_mass_calculation_debug(self, features: Dict, prompt: str, response: str, parsed_result: Dict, food_index: int = 0):
-        """초기 질량 측정 과정을 상세히 디버그 출력합니다."""
+        """새로운 시스템의 질량 측정 과정을 상세히 디버그 출력합니다."""
         if not self.enable_debug:
             return
             
-        print(f"\n🔬 음식 {food_index + 1} 초기 질량 측정 과정 상세 분석:")
+        print(f"\n🔬 음식 {food_index + 1} 새로운 질량 측정 과정 상세 분석:")
         print(f"{'='*60}")
         
         # 1. 입력 데이터 분석
@@ -296,7 +296,7 @@ class DebugHelper:
         if food_objects and food_index < len(food_objects):
             food = food_objects[food_index]
             print(f"   🍽️ 음식 {food_index + 1} 정보:")
-            print(f"      - 종류: {food.get('class_name', 'unknown')}")
+            print(f"      - YOLO 클래스: {food.get('class_name', 'unknown')}")
             print(f"      - 픽셀 면적: {food.get('pixel_area', 0):,}픽셀")
             print(f"      - 신뢰도: {food.get('confidence', 0):.3f}")
             print(f"      - 위치: {food.get('bbox', [])}")
@@ -305,12 +305,6 @@ class DebugHelper:
             depth_info = food.get('depth_info', {})
             print(f"      - 평균 깊이: {depth_info.get('mean_depth', 0):.3f}")
             print(f"      - 깊이 변화량: {depth_info.get('depth_variation', 0):.3f}")
-            
-            # 실제 크기 정보
-            real_volume_info = food.get('real_volume_info', {})
-            if real_volume_info:
-                print(f"      - 실제 면적: {real_volume_info.get('real_area_cm2', 0):.2f}cm²")
-                print(f"      - 실제 부피: {real_volume_info.get('real_volume_cm3', 0):.2f}cm³")
         
         if reference_objects:
             ref = reference_objects[0]
@@ -336,37 +330,43 @@ class DebugHelper:
         else:
             print(f"   ⚠️ 깊이 스케일: 계산 실패 또는 정보 없음")
         
-        # 2. LLM 프롬프트 분석
-        print(f"\n🤖 LLM 프롬프트 분석:")
-        print(f"   - 프롬프트 길이: {len(prompt)} 문자")
-        print(f"   - 계산 가이드 포함: {'예' if '계산 가이드' in prompt else '아니오'}")
-        print(f"   - 기준 물체 정보 포함: {'예' if '기준 물체' in prompt else '아니오'}")
-        print(f"   - 깊이 스케일 정보 포함: {'예' if '깊이 스케일' in prompt else '아니오'}")
+        # 2. 새로운 시스템 단계별 분석
+        print(f"\n🔄 새로운 시스템 처리 단계:")
         
-        # 3. LLM 응답 분석
-        print(f"\n🎯 LLM 응답 분석:")
-        print(f"   - 응답 길이: {len(response)} 문자")
-        print(f"   - JSON 형식: {'예' if '{' in response and '}' in response else '아니오'}")
+        # 부피 계산 정보
+        volume_info = parsed_result.get('volume_info', {})
+        if volume_info:
+            print(f"   📊 1단계 - 부피 계산:")
+            print(f"      - 계산 방법: {volume_info.get('calculation_method', 'unknown')}")
+            print(f"      - 계산된 부피: {volume_info.get('volume_cm3', 0):.1f} cm³")
+            print(f"      - 실제 면적: {volume_info.get('real_area_cm2', 0):.1f} cm²")
+            print(f"      - 실제 높이: {volume_info.get('real_height_cm', 0):.1f} cm")
+            print(f"      - 형태 보정 계수: {volume_info.get('shape_factor', 0.6):.2f}")
+            print(f"      - 신뢰도: {volume_info.get('confidence', 0):.3f}")
         
-        if parsed_result:
-            estimated_mass = parsed_result.get('estimated_mass_g', parsed_result.get('mass', 0))
-            confidence = parsed_result.get('confidence', 0)
-            reasoning = parsed_result.get('reasoning', '')
-            
-            print(f"   📊 파싱된 결과:")
-            print(f"      - 추정 질량: {estimated_mass:.1f}g")
-            print(f"      - 신뢰도: {confidence:.3f}")
-            print(f"      - 추정 근거: {reasoning[:200]}{'...' if len(reasoning) > 200 else ''}")
-            
-            # 계산 과정 추출 시도
-            if '부피' in reasoning or 'cm³' in reasoning:
-                print(f"      - 부피 계산: 포함됨")
-            if '밀도' in reasoning or 'g/cm³' in reasoning:
-                print(f"      - 밀도 적용: 포함됨")
-            if '면적' in reasoning or 'cm²' in reasoning:
-                print(f"      - 면적 계산: 포함됨")
-        else:
-            print(f"   ❌ 파싱 실패")
+        # 밀도 조회 정보
+        density_info = parsed_result.get('density_info', {})
+        if density_info:
+            print(f"   🧪 2단계 - 밀도 조회:")
+            print(f"      - 식별된 음식: {density_info.get('food_name', 'unknown')}")
+            print(f"      - 조회된 밀도: {density_info.get('density_g_per_cm3', 0):.2f} g/cm³")
+            print(f"      - 음식 카테고리: {density_info.get('food_category', 'unknown')}")
+            print(f"      - 조리 상태: {density_info.get('cooking_state', 'unknown')}")
+            print(f"      - 신뢰도: {density_info.get('confidence', 0):.3f}")
+            print(f"      - 폴백 사용: {'예' if density_info.get('fallback') else '아니오'}")
+        
+        # 최종 질량 계산
+        calculation_steps = parsed_result.get('calculation_steps', [])
+        if calculation_steps:
+            print(f"   ⚖️ 3단계 - 질량 계산:")
+            for step in calculation_steps:
+                print(f"      - {step}")
+        
+        print(f"\n📋 최종 결과:")
+        print(f"   - 계산 방법: {parsed_result.get('calculation_method', 'unknown')}")
+        print(f"   - 추정 질량: {parsed_result.get('estimated_mass_g', 0):.1f}g")
+        print(f"   - 전체 신뢰도: {parsed_result.get('confidence', 0):.3f}")
+        print(f"   - 추정 근거: {parsed_result.get('reasoning', 'N/A')}")
         
         # 4. 계산 방법 분석
         print(f"\n🧮 계산 방법 분석:")
@@ -377,6 +377,7 @@ class DebugHelper:
             print(f"   ✅ 정확한 스케일 계산 가능")
             print(f"      - 기준 물체를 통한 스케일링")
             print(f"      - 깊이 정보를 통한 3D 추정")
+            print(f"      - 이미지 기반 음식 식별")
         elif has_reference:
             print(f"   ⚠️ 부분적 스케일 계산")
             print(f"      - 기준 물체는 있으나 깊이 스케일 없음")
