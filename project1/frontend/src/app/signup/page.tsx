@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form';
 import { Eye, EyeOff, Mail, Lock, User as UserIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
+import { useRequireGuest } from '@/hooks/useAuthGuard';
 
 interface SignUpFormData {
   email: string;
@@ -21,6 +23,7 @@ interface FieldErrors {
 }
 
 export default function SignUpPage() {
+  const { canRender, isLoading: authLoading } = useRequireGuest('/upload');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,6 +37,11 @@ export default function SignUpPage() {
     setError: setFormError,
     clearErrors,
   } = useForm<SignUpFormData>();
+
+  // 인증 확인 중이거나 이미 로그인된 사용자면 로딩 화면 표시
+  if (authLoading || !canRender) {
+    return <AuthLoadingScreen message="회원가입 페이지를 불러오고 있습니다..." />;
+  }
 
   const onSubmit = async (data: SignUpFormData) => {
     setIsLoading(true);

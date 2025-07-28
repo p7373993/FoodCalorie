@@ -14,6 +14,7 @@ import {
   X
 } from 'lucide-react';
 import { UserDropdown } from './UserDropdown';
+import { useAuthActions } from '@/contexts/AuthContext';
 
 const navigationItems = [
   { href: '/dashboard', label: '대시보드', icon: Home },
@@ -39,11 +40,10 @@ export function Navigation() {
     }
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('profile');
+  const { logout } = useAuthActions();
+
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 

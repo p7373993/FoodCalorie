@@ -2,22 +2,23 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuthState } from '@/contexts/AuthContext';
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuthState();
   
   useEffect(() => {
-    // 로그인 상태 확인
-    const token = localStorage.getItem('access_token');
-    
-    if (token) {
-      // 로그인된 사용자 → 이미지 업로드 화면 (핵심 기능)
-      router.replace('/upload');
-    } else {
-      // 비로그인 사용자 → 로그인 페이지
-      router.replace('/login');
+    if (!isLoading) {
+      if (isAuthenticated) {
+        // 로그인된 사용자 → 이미지 업로드 화면 (핵심 기능)
+        router.replace('/upload');
+      } else {
+        // 비로그인 사용자 → 로그인 페이지
+        router.replace('/login');
+      }
     }
-  }, [router]);
+  }, [router, isAuthenticated, isLoading]);
 
   // 리다이렉트 중 표시할 로딩 화면
   return (

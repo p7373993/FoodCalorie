@@ -1,27 +1,27 @@
-from django.shortcuts import render
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+
 from django.contrib.auth import authenticate, get_user_model
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import get_token
 from django.db import transaction
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import timedelta
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserProfileSerializer, 
     PasswordChangeSerializer, PasswordResetRequestSerializer, 
     PasswordResetConfirmSerializer, AdminUserListSerializer, AdminUserDetailSerializer
 )
-from .services import JWTAuthService, LoginAttemptService, PasswordResetService
+from .services import LoginAttemptService, PasswordResetService
 from .models import LoginAttempt, UserProfile
 from .decorators import IsAdminUser
+from .permissions import IsAuthenticatedWithProperError, IsAdminUserWithProperError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,10 @@ def is_admin_user(view_func):
         if not request.user.is_authenticated:
             return Response({
                 'success': False,
-                'message': '인증이 필요합니다.',
-                'error_code': 'AUTHENTICATION_REQUIRED'
+                'message': '인증이 필요합니다. 다시 로그인해주세요.',
+                'error_code': 'AUTHENTICATION_REQUIRED',
+                'redirect_url': '/login',
+                'session_expired': True
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # 관리자 권한 확인
@@ -50,7 +52,8 @@ def is_admin_user(view_func):
             return Response({
                 'success': False,
                 'message': '관리자 권한이 필요합니다.',
-                'error_code': 'ADMIN_PERMISSION_REQUIRED'
+                'error_code': 'ADMIN_PERMISSION_REQUIRED',
+                'required_permission': 'admin'
             }, status=status.HTTP_403_FORBIDDEN)
         
         print(f"관리자 접근 허용: {request.user.email}")
@@ -59,7 +62,6 @@ def is_admin_user(view_func):
     return wrapper
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     """
     회원가입 API 뷰
@@ -70,23 +72,36 @@ class RegisterView(APIView):
     2. 비밀번호 확인 및 강도 검증
     3. 닉네임 중복 검사
     4. 사용자 계정 생성 및 UserProfile 자동 생성
-    5. 회원가입 성공 시 자동 로그인 처리 (JWT 토큰 생성)
+    5. 회원가입 성공 시 자동 로그인 처리 (세션 기반)
     """
     permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
     
     def post(self, request):
         """회원가입 처리"""
+        from django.contrib.auth import login
+        
         serializer = self.serializer_class(data=request.data)
         
         if serializer.is_valid():
             try:
                 with transaction.atomic():
-                    # 사용자 생성 및 자동 로그인 처리
+                    # 사용자 생성
                     result = serializer.save()
                     user = result['user']
-                    tokens = result['tokens']
                     profile = result['profile']
+                    remember_me = result.get('remember_me', False)
+                    
+                    # Django 세션 기반 자동 로그인
+                    login(request, user)
+                    
+                    # "로그인 상태 유지" 옵션 처리
+                    if remember_me:
+                        # 세션 만료 시간을 4주로 연장
+                        request.session.set_expiry(2419200)  # 4주 (초 단위)
+                    else:
+                        # 기본 세션 만료 시간 사용 (2주)
+                        request.session.set_expiry(1209600)  # 2주 (초 단위)
                     
                     # 로그인 시도 기록 (성공)
                     LoginAttemptService.record_attempt(
@@ -103,12 +118,10 @@ class RegisterView(APIView):
                             'username': user.username,
                         },
                         'profile': UserProfileSerializer(profile).data,
-                        'auth': {
-                            'access_token': tokens['access_token'],
-                            'refresh_token': tokens['refresh_token'],
-                            'token_type': 'Bearer',
-                            'access_expires_at': tokens['access_expires_at'].isoformat(),
-                            'refresh_expires_at': tokens['refresh_expires_at'].isoformat(),
+                        'session_info': {
+                            'remember_me': remember_me,
+                            'session_key': request.session.session_key,
+                            'expires_at': request.session.get_expiry_date().isoformat() if request.session.get_expiry_date() else None
                         }
                     }
                     
@@ -141,7 +154,6 @@ class RegisterView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     """
     로그인 API 뷰
@@ -149,8 +161,8 @@ class LoginView(APIView):
     
     요구사항:
     1. 이메일/비밀번호 검증 로직
-    2. JWT 토큰 생성 및 응답 처리
-    3. "로그인 상태 유지" 옵션 처리 (Refresh Token 만료 시간 연장)
+    2. Django 세션 기반 인증 사용
+    3. "로그인 상태 유지" 옵션 처리 (세션 만료 시간 연장)
     4. 로그인 실패 시 에러 메시지 처리
     5. 계정 잠금 기능 (보안)
     """
@@ -159,6 +171,8 @@ class LoginView(APIView):
     
     def post(self, request):
         """로그인 처리"""
+        from django.contrib.auth import login
+        
         email = request.data.get('email', '')
         
         # 계정 잠금 확인
@@ -181,10 +195,16 @@ class LoginView(APIView):
                 user = serializer.validated_data['user']
                 remember_me = serializer.validated_data.get('remember_me', False)
                 
-                # JWT 토큰 생성
-                tokens = JWTAuthService.generate_tokens_with_extended_refresh(
-                    user, extend_refresh=remember_me
-                )
+                # Django 세션 기반 로그인
+                login(request, user)
+                
+                # "로그인 상태 유지" 옵션 처리
+                if remember_me:
+                    # 세션 만료 시간을 4주로 연장
+                    request.session.set_expiry(2419200)  # 4주 (초 단위)
+                else:
+                    # 기본 세션 만료 시간 사용 (2주)
+                    request.session.set_expiry(1209600)  # 2주 (초 단위)
                 
                 # 로그인 시도 기록 (성공)
                 LoginAttemptService.record_attempt(
@@ -201,13 +221,10 @@ class LoginView(APIView):
                         'username': user.username,
                     },
                     'profile': UserProfileSerializer(user.profile).data,
-                    'auth': {
-                        'access_token': tokens['access_token'],
-                        'refresh_token': tokens['refresh_token'],
-                        'token_type': 'Bearer',
-                        'access_expires_at': tokens['access_expires_at'].isoformat(),
-                        'refresh_expires_at': tokens['refresh_expires_at'].isoformat(),
-                        'remember_me': remember_me
+                    'session_info': {
+                        'remember_me': remember_me,
+                        'session_key': request.session.session_key,
+                        'expires_at': request.session.get_expiry_date().isoformat() if request.session.get_expiry_date() else None
                     }
                 }
                 
@@ -247,55 +264,29 @@ class LoginView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LogoutView(APIView):
     """
     로그아웃 API 뷰
     POST /api/auth/logout/
     
     요구사항:
-    1. Refresh Token 블랙리스트 처리
-    2. 클라이언트 토큰 무효화 응답
+    1. Django 세션 기반 로그아웃 처리
+    2. 세션 무효화 및 정리
     3. 로그아웃 후 리다이렉트 처리
     4. 로그아웃 기록 및 보안 처리
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
     
     def post(self, request):
         """로그아웃 처리"""
+        from django.contrib.auth import logout
+        from django.conf import settings
+        
         try:
             user = request.user
-            refresh_token = request.data.get('refresh_token')
-            
-            # Refresh Token이 제공된 경우 블랙리스트 처리
-            if refresh_token:
-                try:
-                    from rest_framework_simplejwt.tokens import RefreshToken
-                    
-                    # Refresh Token 검증 및 블랙리스트 추가
-                    token = RefreshToken(refresh_token)
-                    token.blacklist()
-                    
-                    blacklist_message = "Refresh Token이 블랙리스트에 추가되었습니다."
-                    
-                except Exception as token_error:
-                    # 토큰이 이미 만료되었거나 유효하지 않은 경우
-                    blacklist_message = f"토큰 처리 중 오류: {str(token_error)}"
-            else:
-                blacklist_message = "Refresh Token이 제공되지 않았습니다."
-            
-            # 현재 사용자의 모든 Refresh Token 블랙리스트 처리 (선택사항)
-            logout_all_devices = request.data.get('logout_all_devices', False)
-            if logout_all_devices:
-                try:
-                    JWTAuthService.revoke_all_tokens_for_user(user)
-                    blacklist_message += " 모든 기기에서 로그아웃되었습니다."
-                except Exception as revoke_error:
-                    blacklist_message += f" 전체 로그아웃 처리 중 오류: {str(revoke_error)}"
             
             # 로그아웃 시도 기록
             try:
-                from django.utils import timezone
                 LoginAttemptService.record_attempt(
                     request, 
                     user.email, 
@@ -311,7 +302,6 @@ class LogoutView(APIView):
             redirect_url = request.data.get('redirect_url')
             if redirect_url:
                 # 허용된 도메인 검증 (보안)
-                from django.conf import settings
                 allowed_domains = getattr(settings, 'ALLOWED_LOGOUT_REDIRECT_DOMAINS', [
                     'localhost:3000', '127.0.0.1:3000', settings.FRONTEND_URL.replace('http://', '').replace('https://', '')
                 ])
@@ -323,8 +313,13 @@ class LogoutView(APIView):
                 if domain_with_port not in allowed_domains and parsed_url.hostname not in allowed_domains:
                     redirect_url = settings.FRONTEND_URL + '/login'  # 기본 리다이렉트
             else:
-                from django.conf import settings
                 redirect_url = settings.FRONTEND_URL + '/login'  # 기본 리다이렉트
+            
+            # 세션 정보 저장 (로그아웃 전)
+            session_key = request.session.session_key
+            
+            # Django 세션 기반 로그아웃
+            logout(request)
             
             # 성공 응답
             response_data = {
@@ -336,8 +331,8 @@ class LogoutView(APIView):
                     'username': user.username,
                 },
                 'logout_info': {
-                    'blacklist_status': blacklist_message,
-                    'logout_all_devices': logout_all_devices,
+                    'session_cleared': True,
+                    'previous_session_key': session_key,
                     'redirect_url': redirect_url,
                     'logout_timestamp': timezone.now().isoformat()
                 }
@@ -358,7 +353,6 @@ class LogoutView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class ProfileView(APIView):
     """
     프로필 관리 API 뷰
@@ -370,7 +364,7 @@ class ProfileView(APIView):
     3. 프로필 이미지 업로드 처리
     4. 닉네임 중복 검사 및 검증 로직
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
     
     def get(self, request):
         """현재 사용자 프로필 정보 조회"""
@@ -487,7 +481,6 @@ class ProfileView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class CurrentUserProfileView(APIView):
     """
     현재 사용자 프로필 API 뷰
@@ -498,7 +491,7 @@ class CurrentUserProfileView(APIView):
     2. 빠른 조회를 위한 간소화된 응답
     3. 프로필 완성도 정보 포함
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
     
     def get(self, request):
         """현재 사용자 프로필 정보 조회 (간소화된 버전)"""
@@ -562,7 +555,6 @@ class CurrentUserProfileView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class NicknameCheckView(APIView):
     """
     닉네임 중복 검사 API 뷰
@@ -648,7 +640,6 @@ class NicknameCheckView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class PasswordChangeView(APIView):
     """
     비밀번호 변경 API 뷰
@@ -660,7 +651,7 @@ class PasswordChangeView(APIView):
     3. 변경 후 모든 세션 무효화 (보안)
     4. 비밀번호 변경 이력 기록
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
     
     def put(self, request):
         """비밀번호 변경 처리"""
@@ -692,6 +683,9 @@ class PasswordChangeView(APIView):
                 
                 # 데이터베이스 트랜잭션으로 안전하게 변경
                 with transaction.atomic():
+                    # 현재 세션 키 저장 (재로그인용)
+                    current_session_key = request.session.session_key
+                    
                     # 비밀번호 변경
                     user.set_password(new_password)
                     user.save()
@@ -705,34 +699,35 @@ class PasswordChangeView(APIView):
                         attempt_type='password_change'
                     )
                     
-                    # 모든 Refresh Token 무효화 (보안 - 다른 기기에서 강제 로그아웃)
-                    try:
-                        JWTAuthService.revoke_all_tokens_for_user(user)
-                    except Exception as token_error:
-                        # 토큰 무효화 실패는 비밀번호 변경에 영향 없음
-                        print(f"토큰 무효화 실패: {token_error}")
-                
-                # 새 JWT 토큰 생성 (현재 세션 유지를 위해)
-                new_tokens = JWTAuthService.generate_tokens_with_extended_refresh(user, extend_refresh=False)
-                
+                    # Django의 기본 방식으로 모든 세션 무효화 (보안)
+                    from django.contrib.sessions.models import Session
+                    from django.contrib.auth import login
+                    
+                    # 모든 기존 세션 삭제 (다른 기기에서의 로그인 무효화)
+                    Session.objects.filter(
+                        session_data__contains=f'"_auth_user_id":"{user.id}"'
+                    ).delete()
+                    
+                    # 현재 사용자를 다시 로그인 처리 (새로운 세션 생성)
+                    login(request, user)
+                    
                 response_data = {
                     'success': True,
-                    'message': '비밀번호가 성공적으로 변경되었습니다.',
+                    'message': '비밀번호가 성공적으로 변경되었습니다. 보안을 위해 모든 기기에서 다시 로그인해주세요.',
                     'user': {
                         'id': user.id,
                         'email': user.email,
                         'username': user.username,
                     },
-                    'auth': {
-                        'access_token': new_tokens['access_token'],
-                        'refresh_token': new_tokens['refresh_token'],
-                        'token_type': 'Bearer',
-                        'access_expires_at': new_tokens['access_expires_at'].isoformat(),
-                        'refresh_expires_at': new_tokens['refresh_expires_at'].isoformat(),
+                    'session_info': {
+                        'session_renewed': True,
+                        'previous_session_key': current_session_key,
+                        'new_session_key': request.session.session_key,
+                        'expires_at': request.session.get_expiry_date().isoformat() if request.session.get_expiry_date() else None
                     },
                     'security_info': {
-                        'all_sessions_revoked': True,
-                        'new_tokens_issued': True,
+                        'password_changed': True,
+                        'all_sessions_invalidated': True,
                         'changed_at': timezone.now().isoformat()
                     }
                 }
@@ -763,7 +758,6 @@ class PasswordChangeView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestView(APIView):
     """
     비밀번호 재설정 요청 API 뷰
@@ -881,7 +875,6 @@ class PasswordResetRequestView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmView(APIView):
     """
     비밀번호 재설정 확인 API 뷰
@@ -957,14 +950,12 @@ class PasswordResetConfirmView(APIView):
                             attempt_type='password_reset_confirm'
                         )
                         
-                        # 모든 Refresh Token 무효화 (보안)
-                        try:
-                            JWTAuthService.revoke_all_tokens_for_user(user)
-                        except Exception as token_error:
-                            print(f"토큰 무효화 실패: {token_error}")
-                    
-                    # 새 JWT 토큰 생성 (자동 로그인)
-                    new_tokens = JWTAuthService.generate_tokens_with_extended_refresh(user, extend_refresh=False)
+                        # Django 세션 기반 자동 로그인
+                        from django.contrib.auth import login
+                        login(request, user)
+                        
+                        # 기본 세션 만료 시간 설정
+                        request.session.set_expiry(1209600)  # 2주 (초 단위)
                     
                     response_data = {
                         'success': True,
@@ -974,16 +965,13 @@ class PasswordResetConfirmView(APIView):
                             'email': user.email,
                             'username': user.username,
                         },
-                        'auth': {
-                            'access_token': new_tokens['access_token'],
-                            'refresh_token': new_tokens['refresh_token'],
-                            'token_type': 'Bearer',
-                            'access_expires_at': new_tokens['access_expires_at'].isoformat(),
-                            'refresh_expires_at': new_tokens['refresh_expires_at'].isoformat(),
+                        'session_info': {
+                            'auto_login_enabled': True,
+                            'session_key': request.session.session_key,
+                            'expires_at': request.session.get_expiry_date().isoformat() if request.session.get_expiry_date() else None
                         },
                         'security_info': {
-                            'all_sessions_revoked': True,
-                            'auto_login_enabled': True,
+                            'password_reset': True,
                             'reset_at': timezone.now().isoformat(),
                             'token_used': True
                         }
@@ -1028,9 +1016,7 @@ class PasswordResetConfirmView(APIView):
 
 from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
 from rest_framework.filters import SearchFilter, OrderingFilter
-from django_filters.rest_framework import DjangoFilterBackend
-from .decorators import IsAdminUser
-from .serializers import AdminUserListSerializer, AdminUserDetailSerializer
+# from django_filters.rest_framework import DjangoFilterBackend  # Commented out - not installed
 
 
 class AdminUserListView(ListAPIView):
@@ -1051,7 +1037,7 @@ class AdminUserListView(ListAPIView):
     permission_classes = [IsAdminUser]
     
     # 검색 기능
-    filter_backends = [SearchFilter, DjangoFilterBackend, OrderingFilter]
+    filter_backends = [SearchFilter, OrderingFilter]  # DjangoFilterBackend removed - not installed
     search_fields = ['username', 'email', 'first_name', 'last_name']
     
     # 필터링 기능
@@ -1375,15 +1361,7 @@ class AdminUserBulkActionView(APIView):
 
 # 관리자 기능 API
 
-from .decorators import IsAdminUser, IsSuperUser
-from .serializers import AdminUserListSerializer, AdminUserDetailSerializer
-from django.core.paginator import Paginator
-from django.db.models import Q, Count
-from django.utils import timezone
-from datetime import timedelta
 
-
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminUserListView(APIView):
     """
     관리자용 사용자 목록 API 뷰
@@ -1491,7 +1469,6 @@ class AdminUserListView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminUserDetailView(APIView):
     """
     관리자용 사용자 상세 API 뷰
@@ -1623,7 +1600,6 @@ class AdminUserDetailView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminUserBulkActionView(APIView):
     """
     관리자용 사용자 일괄 작업 API 뷰
@@ -1750,7 +1726,6 @@ class AdminUserBulkActionView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminStatisticsView(APIView):
     """
     관리자용 통계 API 뷰
@@ -1843,7 +1818,6 @@ class AdminStatisticsView(APIView):
 # 관리자 기능 API Views
 # ========================
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminUserListView(APIView):
     """
     관리자용 사용자 목록 API
@@ -1940,7 +1914,6 @@ class AdminUserListView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminUserDetailView(APIView):
     """
     관리자용 사용자 상세 API
@@ -2057,7 +2030,6 @@ class AdminUserDetailView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminUserBulkActionView(APIView):
     """
     관리자용 사용자 일괄 작업 API
@@ -2158,7 +2130,6 @@ class AdminUserBulkActionView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class AdminStatisticsView(APIView):
     """
     관리자용 통계 API
@@ -2240,4 +2211,46 @@ class AdminStatisticsView(APIView):
                 'success': False,
                 'message': '통계 정보 조회 중 오류가 발생했습니다.',
                 'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ========================
+# CSRF 토큰 제공 (CSRF Token Provider)
+# ========================
+
+class CSRFTokenView(APIView):
+    """
+    CSRF 토큰 제공 API 뷰
+    GET /api/auth/csrf-token/
+    
+    요구사항:
+    1. 프론트엔드에서 CSRF 토큰 획득
+    2. 세션 기반 인증에서 CSRF 보호 활성화
+    """
+    permission_classes = [AllowAny]
+    
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request):
+        """CSRF 토큰 제공"""
+        try:
+            csrf_token = get_token(request)
+            return Response({
+                'success': True,
+                'csrf_token': csrf_token,
+                'message': 'CSRF 토큰이 성공적으로 제공되었습니다.',
+                'token_info': {
+                    'expires_with_session': True,
+                    'session_key': request.session.session_key,
+                    'generated_at': timezone.now().isoformat()
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"CSRF 토큰 제공 오류: {str(e)}")
+            return Response({
+                'success': False,
+                'message': 'CSRF 토큰 제공 중 오류가 발생했습니다.',
+                'error': str(e),
+                'error_code': 'CSRF_TOKEN_GENERATION_FAILED',
+                'suggestion': '페이지를 새로고침하고 다시 시도해주세요.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

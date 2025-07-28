@@ -275,10 +275,6 @@ export interface AuthResponse {
   success: boolean;
   user: User;
   profile: UserProfile;
-  auth: {
-    access_token: string;
-    refresh_token: string;
-  };
 }
 
 export interface LoginData {

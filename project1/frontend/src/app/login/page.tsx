@@ -5,26 +5,27 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { KakaoLoginButton } from '@/components/auth/KakaoLoginButton';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { HelperLinks } from '@/components/auth/HelperLinks';
-import Image from 'next/image';
+import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
+import { useRequireGuest } from '@/hooks/useAuthGuard';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { canRender, isLoading } = useRequireGuest('/upload');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   
   useEffect(() => {
-    // 이미 로그인한 사용자는 업로드 페이지로 리다이렉트 (핵심 기능)
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      router.push('/upload');
-    }
-
     // 회원가입 성공 메시지 표시
     if (searchParams.get('registered') === 'true') {
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 5000); // 5초 후 자동 숨김
     }
-  }, [router, searchParams]);
+  }, [searchParams]);
+
+  // 인증 확인 중이거나 이미 로그인된 사용자면 로딩 화면 표시
+  if (isLoading || !canRender) {
+    return <AuthLoadingScreen message="로그인 상태를 확인하고 있습니다..." />;
+  }
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
