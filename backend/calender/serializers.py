@@ -1,14 +1,34 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import UserProfile, DailyGoal, Badge, UserBadge, WeeklyAnalysis
+from .models import CalendarUserProfile, DailyGoal, Badge, UserBadge, WeeklyAnalysis
+from accounts.models import UserProfile
 from api_integrated.models import MealLog
 from datetime import datetime, timedelta
 
 
-class UserProfileSerializer(serializers.ModelSerializer):
+class CalendarUserProfileSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    avatar_url = serializers.SerializerMethodField()
+    
     class Meta:
-        model = UserProfile
+        model = CalendarUserProfile
         fields = ['name', 'avatar_url', 'calorie_goal', 'protein_goal', 'carbs_goal', 'fat_goal']
+    
+    def get_name(self, obj):
+        # accounts.UserProfile에서 nickname 가져오기, 없으면 username 사용
+        try:
+            return obj.user.profile.nickname
+        except:
+            return obj.user.username
+    
+    def get_avatar_url(self, obj):
+        # accounts.UserProfile에서 profile_image 가져오기
+        try:
+            if obj.user.profile.profile_image:
+                return obj.user.profile.profile_image.url
+        except:
+            pass
+        return None
 
 
 class DailyGoalSerializer(serializers.ModelSerializer):
@@ -66,7 +86,14 @@ class MealLogSerializer(serializers.ModelSerializer):
     def get_photo_url(self, obj):
         if obj.imageUrl:
             return obj.imageUrl.url
-        return f'https://picsum.photos/seed/{obj.id}/400/300'
+        # 식사 타입별 기본 이미지 또는 음식 아이콘
+        default_images = {
+            'breakfast': 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=400&h=300&fit=crop',  # 아침식사
+            'lunch': 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&h=300&fit=crop',      # 점심식사  
+            'dinner': 'https://images.unsplash.com/photo-1551782450-17144efb9c50?w=400&h=300&fit=crop',     # 저녁식사
+            'snack': 'https://images.unsplash.com/photo-1559054663-e8b64c2e5d96?w=400&h=300&fit=crop'       # 간식
+        }
+        return default_images.get(obj.mealType, default_images['lunch'])
 
     def get_type(self, obj):
         type_mapping = {
@@ -100,7 +127,7 @@ class WeeklyAnalysisSerializer(serializers.ModelSerializer):
 
 class CalendarDataSerializer(serializers.Serializer):
     """캘린더 페이지 전체 데이터"""
-    user_profile = UserProfileSerializer()
+    user_profile = CalendarUserProfileSerializer()
     badges = BadgeSerializer(many=True)
     daily_logs = DailyLogSerializer(many=True)
     weekly_analysis = WeeklyAnalysisSerializer(required=False)

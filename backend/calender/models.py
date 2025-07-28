@@ -3,11 +3,9 @@ from django.contrib.auth.models import User
 from api_integrated.models import MealLog
 
 
-class UserProfile(models.Model):
-    """사용자 프로필 및 목표 설정"""
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    name = models.CharField(max_length=100, default='사용자')
-    avatar_url = models.URLField(blank=True, null=True)
+class CalendarUserProfile(models.Model):
+    """캘린더 전용 사용자 설정"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='calendar_profile')
     calorie_goal = models.IntegerField(default=2000)
     protein_goal = models.IntegerField(default=120)
     carbs_goal = models.IntegerField(default=250)
@@ -16,7 +14,7 @@ class UserProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.name}의 프로필"
+        return f"{self.user.username}의 캘린더 설정"
 
 
 class DailyGoal(models.Model):

@@ -7,25 +7,32 @@ from django.db.models import Sum, Avg, Q
 from datetime import datetime, timedelta, date
 import random
 
-from .models import UserProfile, DailyGoal, Badge, UserBadge, WeeklyAnalysis
+from .models import CalendarUserProfile, DailyGoal, Badge, UserBadge, WeeklyAnalysis
 from .serializers import (
-    UserProfileSerializer, DailyGoalSerializer, BadgeSerializer,
+    CalendarUserProfileSerializer, DailyGoalSerializer, BadgeSerializer,
     CalendarDataSerializer, MealLogSerializer, WeeklyAnalysisSerializer
 )
 from api_integrated.models import MealLog
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([])  # 임시로 인증 해제
 def get_calendar_data(request):
     """캘린더 페이지 전체 데이터 조회"""
-    user = request.user
+    # 테스트용 더미 사용자 생성 또는 가져오기
+    user, created = User.objects.get_or_create(
+        username='test_user',
+        defaults={
+            'email': 'test@example.com',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
+    )
     
     # 사용자 프로필 가져오기 또는 생성
-    profile, created = UserProfile.objects.get_or_create(
+    profile, created = CalendarUserProfile.objects.get_or_create(
         user=user,
         defaults={
-            'name': user.username,
             'calorie_goal': 2000,
             'protein_goal': 120,
             'carbs_goal': 250,
@@ -76,7 +83,7 @@ def get_calendar_data(request):
     weekly_analysis = get_or_create_weekly_analysis(user)
     
     response_data = {
-        'user_profile': UserProfileSerializer(profile).data,
+        'user_profile': CalendarUserProfileSerializer(profile).data,
         'badges': BadgeSerializer(badges, many=True).data,
         'daily_logs': daily_logs,
         'weekly_analysis': WeeklyAnalysisSerializer(weekly_analysis).data if weekly_analysis else None
@@ -86,13 +93,21 @@ def get_calendar_data(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([])  # 임시로 인증 해제
 def update_user_profile(request):
     """사용자 프로필 업데이트"""
-    user = request.user
-    profile, created = UserProfile.objects.get_or_create(user=user)
+    # 테스트용 더미 사용자 사용
+    user, created = User.objects.get_or_create(
+        username='test_user',
+        defaults={
+            'email': 'test@example.com',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
+    )
+    profile, created = CalendarUserProfile.objects.get_or_create(user=user)
     
-    serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+    serializer = CalendarUserProfileSerializer(profile, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data)
@@ -119,9 +134,19 @@ def get_meals_by_date(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([])
 def get_calendar_meals(request):
     """캘린더용 월별 식사 데이터 조회"""
+    # 테스트용 더미 사용자 가져오기
+    user, created = User.objects.get_or_create(
+        username='test_user',
+        defaults={
+            'email': 'test@example.com',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
+    )
+    
     year = request.GET.get('year', datetime.now().year)
     month = request.GET.get('month', datetime.now().month)
     
@@ -139,7 +164,7 @@ def get_calendar_meals(request):
         end_date = date(year, month + 1, 1) - timedelta(days=1)
     
     meals = MealLog.objects.filter(
-        user=request.user,
+        user=user,
         date__range=[start_date, end_date]
     ).values('id', 'date', 'imageUrl', 'calories', 'time')
     
@@ -268,7 +293,7 @@ def get_or_create_weekly_analysis(user):
     )
     
     # 사용자 프로필 가져오기
-    profile = UserProfile.objects.get_or_create(user=user)[0]
+    profile = CalendarUserProfile.objects.get_or_create(user=user)[0]
     
     # 달성률 계산
     calorie_rate = (totals['avg_calories'] / profile.calorie_goal * 100) if totals['avg_calories'] else 0
