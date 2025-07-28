@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView
+from .views import MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, ImageUploadView, MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView
 
 router = DefaultRouter()
 router.register(r'logs', MealLogViewSet)
@@ -9,6 +9,7 @@ router.register(r'ai/coaching-tip', AICoachTipViewSet, basename='aicoachtip') # 
 urlpatterns = [
     # 커스텀 analyze-image 엔드포인트를 router보다 먼저 등록
     path('logs/analyze-image/', AnalyzeImageView.as_view(), name='analyze-image'),
+    path('upload-image/', ImageUploadView.as_view(), name='upload-image'),
 
     # router는 그 다음에
     path('', include(router.urls)),

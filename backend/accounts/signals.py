@@ -10,15 +10,19 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
-
+from rest_framework.authtoken.models import Token
 
 from .models import UserProfile
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
-    """사용자 생성 시 UserProfile 자동 생성"""
+    """사용자 생성 시 UserProfile 및 Token 자동 생성"""
     if created:
-        # 닉네임을 username으로 기본 설정 (중복 시 숫자 추가)
+        # 1. 토큰 자동 생성
+        token = Token.objects.create(user=instance)
+        print(f"토큰 생성됨: {instance.username} -> {token.key}")
+        
+        # 2. 닉네임을 username으로 기본 설정 (중복 시 숫자 추가)
         base_nickname = instance.username
         nickname = base_nickname
         counter = 1

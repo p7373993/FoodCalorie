@@ -142,6 +142,24 @@ def process_mass_estimation(self, task_id):
         raise
 
 
+@shared_task
+def cleanup_temp_files_task(days=7):
+    """주기적으로 실행되는 임시 파일 정리 작업"""
+    from django.core.management import call_command
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info(f"자동 파일 정리 시작 (보관 기간: {days}일)")
+        call_command('cleanup_temp_files', days=days)
+        logger.info("자동 파일 정리 완료")
+        return f"파일 정리 완료 (보관 기간: {days}일)"
+    except Exception as e:
+        logger.error(f"자동 파일 정리 실패: {str(e)}")
+        raise
+
+
 @shared_task(bind=True)
 def process_image_upload(self, task_id):
     """

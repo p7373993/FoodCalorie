@@ -1,4 +1,4 @@
-import type { 
+import type {
   ApiResponse,
   PaginatedResponse,
   ChallengeRoom,
@@ -25,7 +25,7 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -44,7 +44,7 @@ class ApiClient {
     }
 
     const response = await fetch(url, config);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -52,27 +52,48 @@ class ApiClient {
     return response.json();
   }
 
-  // 식단 관련 API
+  // 식단 관련 API (MealLog)
   async getMeals() {
-    return this.request('/api/meals/');
+    return this.request('/api/logs/');
   }
 
   async createMeal(mealData: {
-    image_url: string;
+    date: string;
+    mealType: string;
+    foodName: string;
     calories: number;
-    analysis_data?: any;
-    ml_task_id?: string;
-    estimated_mass?: number;
-    confidence_score?: number;
+    carbs?: number;
+    protein?: number;
+    fat?: number;
+    nutriScore?: string;
+    imageUrl?: string;
+    time?: string;
   }) {
-    return this.request('/api/meals/', {
+    return this.request('/api/logs/', {
       method: 'POST',
       body: JSON.stringify(mealData),
     });
   }
 
+  async updateMeal(mealId: number, mealData: any) {
+    return this.request(`/api/logs/${mealId}/`, {
+      method: 'PUT',
+      body: JSON.stringify(mealData),
+    });
+  }
+
+  async deleteMeal(mealId: number) {
+    return this.request(`/api/logs/${mealId}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getMeal(mealId: number) {
+    return this.request(`/api/logs/${mealId}/`);
+  }
+
   async getCalendarMeals(year: number, month: number) {
-    return this.request(`/api/meals/calendar/?year=${year}&month=${month}`);
+    return this.request(`/api/logs/monthly?year=${year}&month=${month}`);
   }
 
   // 체중 관련 API
@@ -87,16 +108,20 @@ class ApiClient {
     });
   }
 
-  // 게임화 관련 API
+  // 게임화 관련 API (임시 비활성화 - 404 에러 방지)
   async getGamificationProfile() {
-    return this.request('/api/gamification/');
+    // 임시로 빈 데이터 반환
+    return Promise.resolve({
+      level: 1,
+      experience: 0,
+      badges: [],
+      streak: 0
+    });
   }
 
   async updateGamification(action: string) {
-    return this.request('/api/gamification/update/', {
-      method: 'POST',
-      body: JSON.stringify({ action }),
-    });
+    // 임시로 성공 응답 반환
+    return Promise.resolve({ success: true });
   }
 
   // 기존 챌린지 관련 API (레거시)
@@ -315,6 +340,30 @@ class ApiClient {
   getWebSocketURL(taskId: string): string {
     const wsBaseURL = this.baseURL.replace('http', 'ws');
     return `${wsBaseURL}/mlserver/ws/task/${taskId}/`;
+  }
+
+  // 이미지 파일 업로드 (실제 파일 저장용)
+  async uploadImageFile(file: File): Promise<{ image_url: string }> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    const headers: HeadersInit = {};
+    if (token) {
+      headers['Authorization'] = `Token ${token}`;
+    }
+
+    const response = await fetch(`${this.baseURL}/api/upload-image/`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Image upload failed: ${response.status}`);
+    }
+
+    return response.json();
   }
 }
 

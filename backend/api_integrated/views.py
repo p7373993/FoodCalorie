@@ -109,6 +109,7 @@ class MealLogViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        """MealLog 생성 시 현재 사용자를 자동으로 설정"""
         meal_log = serializer.save(user=self.request.user)
         # 챌린지 판정은 signals.py에서 자동으로 처리됩니다.
         # MealLog 생성 시 post_save 신호가 발생하여 자동으로 챌린지 판정이 실행됩니다.
@@ -117,6 +118,41 @@ class AICoachTipViewSet(viewsets.ModelViewSet):
     queryset = AICoachTip.objects.all()
     serializer_class = AICoachTipSerializer
     permission_classes = [IsAuthenticated] # 권한 추가
+
+class ImageUploadView(APIView):
+    """이미지 파일만 업로드하는 API"""
+    permission_classes = [AllowAny]  # 임시로 인증 없이 허용
+    
+    def post(self, request):
+        if 'image' not in request.FILES:
+            return Response({
+                "success": False, 
+                "message": "No image file provided"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            image_file = request.FILES['image']
+            
+            # 파일 저장
+            file_name = default_storage.save(
+                os.path.join('meal_images', image_file.name), 
+                ContentFile(image_file.read())
+            )
+            
+            # 절대 URL 생성
+            image_url = request.build_absolute_uri(default_storage.url(file_name))
+            
+            return Response({
+                "success": True,
+                "image_url": image_url,
+                "file_name": file_name
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": f"Image upload failed: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AnalyzeImageView(APIView):
     permission_classes = [IsAuthenticated]
