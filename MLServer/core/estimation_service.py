@@ -88,7 +88,7 @@ class MassEstimationService:
                 logging.info("4단계: LLM 질량 추정 실행")
                 debug_helper.log_step_start("LLM 질량 추정")
                 estimated_result = self.llm_estimator.estimate_mass_from_features(
-                    features, debug_helper=debug_helper
+                    features, debug_helper=debug_helper, image=image
                 )
                 debug_helper.log_step_end("LLM 질량 추정")
             else:

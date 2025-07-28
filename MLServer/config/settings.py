@@ -16,7 +16,10 @@ dotenv_path = Path(__file__).parent.parent / '.env'
 if dotenv_path.exists():
     load_dotenv(dotenv_path=dotenv_path, override=True)
     print(f"✅ .env 파일을 명시적으로 로드했습니다: {dotenv_path}")
-# else 블록 제거: .env 파일이 없을 때는 아무 메시지도 출력하지 않음
+else:
+    print(f"⚠️  경고: .env 파일이 존재하지 않습니다: {dotenv_path}")
+    print(f"⚠️  API 키가 설정되지 않으면 LLM 기능이 제한될 수 있습니다.")
+    print(f"⚠️  .env.example 파일을 참고하여 .env 파일을 생성하세요.")
 
 
 class Settings(BaseSettings):
@@ -74,6 +77,12 @@ class Settings(BaseSettings):
     DEFAULT_DEPTH_VARIATION: float = 1.0
     DEFAULT_CONFIDENCE: float = 0.3
     DEFAULT_MASS: float = 100.0
+    
+    # 밀도 계산 설정
+    DENSITY_CONFIDENCE_THRESHOLD: float = 0.5
+    DENSITY_VALIDATION_MIN: float = 0.1
+    DENSITY_VALIDATION_MAX: float = 3.0
+    DENSITY_FALLBACK_VALUE: float = 1.0
     
     # 모델 입력 크기
     MIDAS_INPUT_SIZE: int = 384

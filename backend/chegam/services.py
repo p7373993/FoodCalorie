@@ -70,6 +70,77 @@ class AICoachingService:
         return cls._call_gemini_api(prompt)
     
     @classmethod
+    def get_detailed_meal_analysis(cls, meal_data):
+        """상세한 식단 분석 및 코칭"""
+        food_name = meal_data.get('food_name', '분석된 음식')
+        calories = meal_data.get('calories', 0)
+        protein = meal_data.get('protein', 0)
+        carbs = meal_data.get('carbs', 0)
+        fat = meal_data.get('fat', 0)
+        mass = meal_data.get('mass', 0)
+        grade = meal_data.get('grade', 'C')
+        confidence = meal_data.get('confidence', 0.5)
+        needs_manual_input = meal_data.get('needs_manual_input', False)
+        
+        # 영양소 비율 계산
+        total_macro = protein + carbs + fat
+        protein_ratio = (protein / total_macro * 100) if total_macro > 0 else 0
+        carbs_ratio = (carbs / total_macro * 100) if total_macro > 0 else 0
+        fat_ratio = (fat / total_macro * 100) if total_macro > 0 else 0
+        
+        # 칼로리 밀도 계산
+        calorie_density = (calories / mass) if mass > 0 else 0
+        
+        prompt = f"""영양 전문가로서 다음 음식을 상세히 분석해주세요:
+
+**음식 정보:**
+- 음식명: {food_name}
+- 질량: {mass}g
+- 총 칼로리: {calories}kcal
+- 단백질: {protein}g ({protein_ratio:.1f}%)
+- 탄수화물: {carbs}g ({carbs_ratio:.1f}%)
+- 지방: {fat}g ({fat_ratio:.1f}%)
+- 영양 등급: {grade}
+- 분석 신뢰도: {confidence*100:.0f}%
+- 칼로리 밀도: {calorie_density:.1f}kcal/g
+{"- ⚠️ 수동 입력이 필요한 음식입니다" if needs_manual_input else ""}
+
+아래 형식에 맞춰 전문적이고 실용적인 분석을 한국어로 제공해주세요:
+
+## 🔍 영양 분석
+
+### 칼로리 평가
+(칼로리 수준이 적절한지, 다이어트/건강 관리 관점에서 평가)
+
+### 영양소 균형
+(단백질, 탄수화물, 지방 비율이 건강한지 분석)
+
+### 영양 등급 해석
+(등급 {grade}의 의미와 건강에 미치는 영향)
+
+## 💡 개인화된 조언
+
+### 긍정적인 점
+- (이 음식의 좋은 점들)
+
+### 주의사항
+- (개선이 필요한 부분들)
+
+### 섭취 타이밍 추천
+(언제 먹으면 좋은지, 운동과의 연관성)
+
+## 🍽️ 다음 식사 가이드
+
+### 균형을 위한 다음 식사 추천
+- (영양 균형을 맞추기 위한 구체적인 메뉴)
+- (부족한 영양소를 보충할 수 있는 음식)
+
+### 하루 총 칼로리 관리
+(남은 하루 칼로리 예산 관리 방법)"""
+        
+        return cls._call_gemini_api(prompt)
+    
+    @classmethod
     def generate_weekly_report(cls, user_data):
         """주간 리포트 생성"""
         avg_calories = user_data.get('avg_calories', 2150)
