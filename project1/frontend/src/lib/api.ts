@@ -552,6 +552,37 @@ class ApiClient {
     });
   }
 
+  // 캘린더 관련 API
+  async getCalendarData() {
+    return this.request('/api/calendar/data/');
+  }
+
+  async updateCalendarProfile(profileData: {
+    calorie_goal?: number;
+    protein_goal?: number;
+    carbs_goal?: number;
+    fat_goal?: number;
+  }) {
+    return this.request('/api/calendar/profile/', {
+      method: 'POST',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  async getMealsByDate(date: string) {
+    return this.request(`/api/calendar/meals/?date=${date}`);
+  }
+
+  async setDailyGoal(date: string, goalText: string) {
+    return this.request('/api/calendar/daily-goal/', {
+      method: 'POST',
+      body: JSON.stringify({
+        date,
+        goal_text: goalText,
+      }),
+    });
+  }
+
   // MLServer 연동 API
   async uploadImageToMLServer(file: File): Promise<ApiResponse<{ task_id: string }>> {
     const formData = new FormData();

@@ -2,37 +2,16 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import UserInfo from '@/components/auth/UserInfo';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  CartesianGrid,
-  ReferenceLine,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { createMockData } from "@/lib/diet-data";
+import UserInfo from "@/components/auth/UserInfo";
+import { apiClient } from "@/lib/api";
 import type {
-  UserProfile,
-  Badge,
-  DailyLog,
-  DietMeal,
-} from "@/types/diet-profile";
+  CalendarData,
+  CalendarUserProfile,
+  CalendarDailyLog,
+  CalendarMeal,
+} from "@/types/calendar";
 
-interface Meal {
-  id: string;
-  imageUrl: string;
-  calories: number;
-  timestamp: Date;
-}
-
-// AI 다이어트 프로필 컴포넌트들
+// 진행률 바 컴포넌트
 const ProgressBar: React.FC<{
   label: string;
   current: number;
@@ -59,326 +38,155 @@ const ProgressBar: React.FC<{
   );
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    const date = payload[0].payload.date || label;
-    return (
-      <div className="p-3 bg-gray-800 text-white rounded-lg shadow-lg border border-gray-700">
-        <p className="label font-bold text-sm mb-2">
-          {new Date(date).toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
-        {payload.map((pld: any) => (
-          <div
-            key={pld.dataKey}
-            style={{ color: pld.stroke || pld.fill }}
-            className="flex justify-between items-center text-xs py-0.5"
-          >
-            <span>{pld.name}:</span>
-            <span className="font-bold ml-4">{`${pld.value.toFixed(0)} ${
-              pld.unit || (pld.dataKey === "calories" ? "kcal" : "g")
-            }`}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
+// 목표 설정 모달 컴포넌트
+const GoalModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  profile: CalendarUserProfile;
+  onSave: (newProfile: Partial<CalendarUserProfile>) => void;
+}> = ({ isOpen, onClose, profile, onSave }) => {
+  const [goals, setGoals] = useState({
+    calorie_goal: profile.calorie_goal,
+    protein_goal: profile.protein_goal,
+    carbs_goal: profile.carbs_goal,
+    fat_goal: profile.fat_goal,
+  });
 
-const CalorieNutrientChart: React.FC<{
-  logs: DailyLog[];
-  calorieGoal: number;
-}> = ({ logs, calorieGoal }) => {
-  const chartData = useMemo(() => {
-    const recentLogs = logs.slice(-30);
-    return recentLogs.map((log) => {
-      const totals = log.meals.reduce(
-        (acc, meal) => {
-          acc.calories += meal.nutrients.calories;
-          acc.carbs += meal.nutrients.carbs;
-          acc.protein += meal.nutrients.protein;
-          acc.fat += meal.nutrients.fat;
-          return acc;
-        },
-        { calories: 0, carbs: 0, protein: 0, fat: 0 }
-      );
+  if (!isOpen) return null;
 
-      return {
-        name: new Date(log.date).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        }),
-        date: log.date,
-        ...totals,
-      };
-    });
-  }, [logs]);
-
-  return (
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={chartData}
-          margin={{ top: 5, right: 5, left: -25, bottom: 20 }}
-        >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            vertical={false}
-            stroke="#374151"
-          />
-          <XAxis
-            dataKey="name"
-            fontSize={12}
-            stroke="#9CA3AF"
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            yAxisId="left"
-            orientation="left"
-            stroke="#4F46E5"
-            fontSize={12}
-            tickLine={false}
-            axisLine={false}
-            unit="kcal"
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            stroke="#10B981"
-            fontSize={12}
-            unit="g"
-            tickLine={false}
-            axisLine={false}
-          />
-          <Tooltip
-            content={<CustomTooltip />}
-            cursor={{ fill: "rgba(79, 70, 229, 0.1)" }}
-          />
-          <Legend
-            verticalAlign="bottom"
-            height={36}
-            iconSize={10}
-            wrapperStyle={{ fontSize: "12px" }}
-          />
-          <ReferenceLine
-            yAxisId="left"
-            y={calorieGoal}
-            label={{
-              value: `목표`,
-              position: "insideTopLeft",
-              fill: "#6B7280",
-              fontSize: 10,
-            }}
-            stroke="#9CA3AF"
-            strokeDasharray="4 4"
-          />
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="protein"
-            name="단백질"
-            stroke="#10B981"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 6 }}
-            unit="g"
-          />
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="fat"
-            name="지방"
-            stroke="#EF4444"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 6 }}
-            unit="g"
-          />
-          <Line
-            yAxisId="left"
-            type="monotone"
-            dataKey="calories"
-            name="칼로리"
-            stroke="#4F46E5"
-            strokeWidth={2.5}
-            activeDot={{ r: 6 }}
-            unit="kcal"
-          />
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="carbs"
-            name="탄수화물"
-            stroke="#F59E0B"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 6 }}
-            unit="g"
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-};
-
-const NutrientRatioChart: React.FC<{ logs: DailyLog[] }> = ({ logs }) => {
-  const ratioData = useMemo(() => {
-    const totals = logs.slice(-30).reduce(
-      (acc, log) => {
-        log.meals.forEach((meal) => {
-          acc.carbs += meal.nutrients.carbs;
-          acc.protein += meal.nutrients.protein;
-          acc.fat += meal.nutrients.fat;
-        });
-        return acc;
-      },
-      { carbs: 0, protein: 0, fat: 0 }
-    );
-
-    const totalGrams = totals.carbs + totals.protein + totals.fat;
-    if (totalGrams === 0) return [];
-
-    return [
-      { name: "탄수화물", value: totals.carbs, color: "#F59E0B" },
-      { name: "단백질", value: totals.protein, color: "#10B981" },
-      { name: "지방", value: totals.fat, color: "#EF4444" },
-    ];
-  }, [logs]);
-
-  if (ratioData.length === 0) return null;
-
-  const RADIAN = Math.PI / 180;
-  const renderCustomizedLabel = ({
-    cx,
-    cy,
-    midAngle,
-    innerRadius,
-    outerRadius,
-    percent,
-  }: any) => {
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-    return (
-      <text
-        x={x}
-        y={y}
-        fill="white"
-        textAnchor={x > cx ? "start" : "end"}
-        dominantBaseline="central"
-        className="text-xs font-bold"
-      >
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
-    );
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(goals);
+    onClose();
   };
 
   return (
-    <div className="h-48 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={ratioData}
-            cx="50%"
-            cy="50%"
-            labelLine={false}
-            label={renderCustomizedLabel}
-            outerRadius={80}
-            fill="#8884d8"
-            dataKey="value"
-            stroke="none"
-          >
-            {ratioData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color} />
-            ))}
-          </Pie>
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            iconType="circle"
-            iconSize={8}
-            wrapperStyle={{ fontSize: "12px" }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+      <div className="bg-gray-800 p-6 rounded-2xl max-w-md w-full mx-4">
+        <h2 className="text-xl font-bold text-white mb-4">목표 설정</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              칼로리 목표 (kcal)
+            </label>
+            <input
+              type="number"
+              value={goals.calorie_goal}
+              onChange={(e) =>
+                setGoals({ ...goals, calorie_goal: parseInt(e.target.value) })
+              }
+              className="w-full p-2 bg-gray-700 text-white rounded-lg"
+              min="1000"
+              max="5000"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              단백질 목표 (g)
+            </label>
+            <input
+              type="number"
+              value={goals.protein_goal}
+              onChange={(e) =>
+                setGoals({ ...goals, protein_goal: parseInt(e.target.value) })
+              }
+              className="w-full p-2 bg-gray-700 text-white rounded-lg"
+              min="50"
+              max="300"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              탄수화물 목표 (g)
+            </label>
+            <input
+              type="number"
+              value={goals.carbs_goal}
+              onChange={(e) =>
+                setGoals({ ...goals, carbs_goal: parseInt(e.target.value) })
+              }
+              className="w-full p-2 bg-gray-700 text-white rounded-lg"
+              min="100"
+              max="500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              지방 목표 (g)
+            </label>
+            <input
+              type="number"
+              value={goals.fat_goal}
+              onChange={(e) =>
+                setGoals({ ...goals, fat_goal: parseInt(e.target.value) })
+              }
+              className="w-full p-2 bg-gray-700 text-white rounded-lg"
+              min="30"
+              max="150"
+            />
+          </div>
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2 px-4 bg-gray-600 text-white rounded-lg hover:bg-gray-500"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-500"
+            >
+              저장
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
 
 export default function CalendarPage() {
   const router = useRouter();
+
+  // 모든 state를 최상단에 선언
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [mealsByDate, setMealsByDate] = useState<{ [key: string]: Meal[] }>({});
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [calendarData, setCalendarData] = useState<CalendarData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showGoalModal, setShowGoalModal] = useState(false);
 
-  // AI 다이어트 프로필 데이터
-  const { userProfile, badges, dailyLogs } = createMockData();
+  // 모든 계산된 값들을 useMemo로 처리
+  const daysInMonth = useMemo(
+    () =>
+      new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      ).getDate(),
+    [currentDate]
+  );
 
-  useEffect(() => {
-    const loadMeals = async () => {
-      try {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth() + 1;
+  const firstDayOfMonth = useMemo(
+    () =>
+      new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay(),
+    [currentDate]
+  );
 
-        const response = await fetch(
-          `/api/meals/calendar/?year=${year}&month=${month}`
-        );
-        const meals = await response.json();
+  const calendarDays = useMemo(
+    () => Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    [daysInMonth]
+  );
+  const emptyDays = useMemo(
+    () => Array.from({ length: firstDayOfMonth }, (_, i) => i),
+    [firstDayOfMonth]
+  );
 
-        // 날짜별로 그룹화
-        const groupedMeals: { [key: string]: Meal[] } = {};
-        meals.forEach((meal: any) => {
-          const dateKey = meal.date;
-          if (!groupedMeals[dateKey]) {
-            groupedMeals[dateKey] = [];
-          }
-          groupedMeals[dateKey].push({
-            id: meal.id,
-            imageUrl: meal.image_url,
-            calories: meal.calories,
-            timestamp: new Date(meal.timestamp),
-          });
-        });
-
-        setMealsByDate(groupedMeals);
-      } catch (error) {
-        console.error("Error loading meals:", error);
-        // 에러 시 빈 데이터로 설정
-        setMealsByDate({});
-      }
-    };
-
-    loadMeals();
-  }, [currentDate]);
-
-  const handleBack = () => {
-    router.push("/dashboard");
-  };
-
-  const daysInMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth() + 1,
-    0
-  ).getDate();
-  const firstDayOfMonth = new Date(
-    currentDate.getFullYear(),
-    currentDate.getMonth(),
-    1
-  ).getDay();
-  const calendarDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const emptyDays = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-
-  const selectedMeals = selectedDate
-    ? mealsByDate[selectedDate.toISOString().split("T")[0]] || []
-    : [];
-
-  // AI 다이어트 프로필 데이터 처리
+  // 일별 로그 정보 맵 생성
   const dailyLogInfo = useMemo(() => {
+    if (!calendarData?.daily_logs) return new Map();
+
     const map = new Map<
       string,
       {
@@ -386,7 +194,8 @@ export default function CalendarPage() {
         totalCalories: number;
       }
     >();
-    dailyLogs.forEach((log) => {
+
+    calendarData.daily_logs.forEach((log) => {
       if (log.meals && log.meals.length > 0) {
         map.set(log.date, {
           mealTypes: new Set(log.meals.map((m) => m.type)),
@@ -398,608 +207,541 @@ export default function CalendarPage() {
       }
     });
     return map;
-  }, [dailyLogs]);
+  }, [calendarData?.daily_logs]);
 
   // 오늘의 영양소 정보
-  const todayLog = dailyLogs.find(
-    (log) => log.date === new Date().toISOString().split("T")[0]
-  );
-  const todayNutrients = todayLog
-    ? todayLog.meals.reduce(
-        (acc, meal) => {
-          acc.calories += meal.nutrients.calories;
-          acc.protein += meal.nutrients.protein;
-          acc.carbs += meal.nutrients.carbs;
-          acc.fat += meal.nutrients.fat;
-          return acc;
-        },
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      )
-    : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const todayNutrients = useMemo(() => {
+    if (!calendarData?.daily_logs) {
+      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+
+    const todayLog = calendarData.daily_logs.find(
+      (log) => log.date === new Date().toISOString().split("T")[0]
+    );
+
+    return todayLog
+      ? todayLog.meals.reduce(
+          (acc, meal) => {
+            acc.calories += meal.nutrients.calories;
+            acc.protein += meal.nutrients.protein;
+            acc.carbs += meal.nutrients.carbs;
+            acc.fat += meal.nutrients.fat;
+            return acc;
+          },
+          { calories: 0, protein: 0, carbs: 0, fat: 0 }
+        )
+      : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  }, [calendarData?.daily_logs]);
+
+  // 목표 업데이트 핸들러
+  const handleGoalUpdate = async (newGoals: Partial<CalendarUserProfile>) => {
+    try {
+      await apiClient.updateCalendarProfile(newGoals);
+      if (calendarData) {
+        setCalendarData({
+          ...calendarData,
+          user_profile: { ...calendarData.user_profile, ...newGoals },
+        });
+      }
+    } catch (err) {
+      console.error("Error updating goals:", err);
+      alert("목표 업데이트에 실패했습니다.");
+    }
+  };
+
+  // 캘린더 데이터 로드 useEffect
+  useEffect(() => {
+    const loadCalendarData = async () => {
+      try {
+        setLoading(true);
+        const data = await apiClient.getCalendarData();
+        setCalendarData(data);
+        setError(null);
+      } catch (err) {
+        console.error("Error loading calendar data:", err);
+        setError("캘린더 데이터를 불러오는데 실패했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCalendarData();
+  }, []);
+
+  // 로딩 상태 렌더링
+  if (loading) {
+    return (
+      <>
+        <UserInfo />
+        <div className="bg-gray-900 text-white min-h-screen p-4 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400 mx-auto mb-4"></div>
+            <p className="text-gray-400">캘린더 데이터를 불러오는 중...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // 에러 상태 렌더링
+  if (error || !calendarData) {
+    return (
+      <>
+        <UserInfo />
+        <div className="bg-gray-900 text-white min-h-screen p-4 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-4xl mb-4">⚠️</div>
+            <p className="text-red-400 mb-4">
+              {error || "데이터를 불러올 수 없습니다."}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  const { user_profile, badges, daily_logs, weekly_analysis } = calendarData;
 
   return (
     <>
       <UserInfo />
       <div className="bg-gray-900 text-white min-h-screen p-4">
         <div className="max-w-7xl mx-auto space-y-6">
-        <header className="flex justify-between items-center">
-          <h1 className="text-4xl font-black text-green-400">식단 캘린더</h1>
+          <header className="flex justify-between items-center">
+            <h1 className="text-4xl font-black text-green-400">식단 캘린더</h1>
+            <button
+              onClick={() => {
+                console.log("목표 설정 버튼 클릭됨");
+                setShowGoalModal(true);
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 cursor-pointer"
+              type="button"
+            >
+              목표 설정
+            </button>
+          </header>
 
-        </header>
-
-        {/* 오늘의 영양소 현황 */}
-        <div className="bg-gray-800 p-6 rounded-2xl">
-          <h2 className="text-xl font-bold mb-4 text-green-400">
-            2025. 7. 25. 식단
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <ProgressBar
-              label="칼로리"
-              current={todayNutrients.calories}
-              goal={userProfile.calorieGoal}
-              unit="kcal"
-              colorClass="bg-blue-500"
-            />
-            <ProgressBar
-              label="단백질"
-              current={todayNutrients.protein}
-              goal={userProfile.nutrientGoals.protein}
-              unit="g"
-              colorClass="bg-green-500"
-            />
-            <ProgressBar
-              label="탄수화물"
-              current={todayNutrients.carbs}
-              goal={userProfile.nutrientGoals.carbs}
-              unit="g"
-              colorClass="bg-yellow-500"
-            />
-            <ProgressBar
-              label="지방"
-              current={todayNutrients.fat}
-              goal={userProfile.nutrientGoals.fat}
-              unit="g"
-              colorClass="bg-red-500"
-            />
-          </div>
-          <p className="text-gray-400 mt-4 text-center">
-            이 날짜에는 기록된 식단이 없습니다.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 캘린더 */}
+          {/* 오늘의 영양소 현황 */}
           <div className="bg-gray-800 p-6 rounded-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-white">식사 캘린더</h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() =>
-                    setCurrentDate((prev) => {
-                      const newDate = new Date(prev);
-                      newDate.setMonth(prev.getMonth() - 1);
-                      return newDate;
-                    })
-                  }
-                  className="p-1 rounded-full hover:bg-gray-700 text-white"
-                >
-                  &lt;
-                </button>
-                <span className="w-32 text-center font-semibold text-white">
-                  {currentDate.toLocaleString("ko-KR", {
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </span>
-                <button
-                  onClick={() =>
-                    setCurrentDate((prev) => {
-                      const newDate = new Date(prev);
-                      newDate.setMonth(prev.getMonth() + 1);
-                      return newDate;
-                    })
-                  }
-                  className="p-1 rounded-full hover:bg-gray-700 text-white"
-                >
-                  &gt;
-                </button>
-              </div>
+            <h2 className="text-xl font-bold mb-4 text-green-400">
+              {new Date().toLocaleDateString("ko-KR", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}{" "}
+              식단
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <ProgressBar
+                label="칼로리"
+                current={todayNutrients.calories}
+                goal={user_profile.calorie_goal}
+                unit="kcal"
+                colorClass="bg-blue-500"
+              />
+              <ProgressBar
+                label="단백질"
+                current={todayNutrients.protein}
+                goal={user_profile.protein_goal}
+                unit="g"
+                colorClass="bg-green-500"
+              />
+              <ProgressBar
+                label="탄수화물"
+                current={todayNutrients.carbs}
+                goal={user_profile.carbs_goal}
+                unit="g"
+                colorClass="bg-yellow-500"
+              />
+              <ProgressBar
+                label="지방"
+                current={todayNutrients.fat}
+                goal={user_profile.fat_goal}
+                unit="g"
+                colorClass="bg-red-500"
+              />
             </div>
+            {todayNutrients.calories === 0 && (
+              <p className="text-gray-400 mt-4 text-center">
+                오늘은 아직 기록된 식단이 없습니다.
+              </p>
+            )}
+          </div>
 
-            {/* 식사 타입별 색깔 범례 */}
-            <div className="bg-gray-700 p-4 rounded-lg mb-4">
-              <h3 className="text-sm font-bold text-white mb-3 text-center">
-                식사 타입별 색상 가이드
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                  <div className="w-4 h-4 rounded-full bg-blue-400 flex-shrink-0"></div>
-                  <span className="text-sm text-white font-medium">아침</span>
-                  <span className="text-xs text-gray-300">Breakfast</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                  <div className="w-4 h-4 rounded-full bg-green-400 flex-shrink-0"></div>
-                  <span className="text-sm text-white font-medium">점심</span>
-                  <span className="text-xs text-gray-300">Lunch</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                  <div className="w-4 h-4 rounded-full bg-orange-400 flex-shrink-0"></div>
-                  <span className="text-sm text-white font-medium">저녁</span>
-                  <span className="text-xs text-gray-300">Dinner</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                  <div className="w-4 h-4 rounded-full bg-purple-400 flex-shrink-0"></div>
-                  <span className="text-sm text-white font-medium">간식</span>
-                  <span className="text-xs text-gray-300">Snack</span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 캘린더 */}
+            <div className="bg-gray-800 p-6 rounded-2xl">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-white">식사 캘린더</h2>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() =>
+                      setCurrentDate((prev) => {
+                        const newDate = new Date(prev);
+                        newDate.setMonth(prev.getMonth() - 1);
+                        return newDate;
+                      })
+                    }
+                    className="p-1 rounded-full hover:bg-gray-700 text-white"
+                  >
+                    &lt;
+                  </button>
+                  <span className="w-32 text-center font-semibold text-white">
+                    {currentDate.toLocaleString("ko-KR", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setCurrentDate((prev) => {
+                        const newDate = new Date(prev);
+                        newDate.setMonth(prev.getMonth() + 1);
+                        return newDate;
+                      })
+                    }
+                    className="p-1 rounded-full hover:bg-gray-700 text-white"
+                  >
+                    &gt;
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 text-center">
-                <p className="text-xs text-gray-400">
-                  💡 캘린더의 각 날짜에서 색깔 점으로 식사 타입을 확인할 수
-                  있습니다
-                </p>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-7 border-t border-l border-gray-600">
-              {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                <div
-                  key={day}
-                  className="text-center font-semibold text-xs p-2 border-r border-b border-gray-600 text-gray-300"
-                >
-                  {day}
+              {/* 식사 타입별 색깔 범례 */}
+              <div className="bg-gray-700 p-4 rounded-lg mb-4">
+                <h3 className="text-sm font-bold text-white mb-3 text-center">
+                  식사 타입별 색상 가이드
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
+                    <div className="w-4 h-4 rounded-full bg-blue-400 flex-shrink-0"></div>
+                    <span className="text-sm text-white font-medium">아침</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
+                    <div className="w-4 h-4 rounded-full bg-green-400 flex-shrink-0"></div>
+                    <span className="text-sm text-white font-medium">점심</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
+                    <div className="w-4 h-4 rounded-full bg-orange-400 flex-shrink-0"></div>
+                    <span className="text-sm text-white font-medium">저녁</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
+                    <div className="w-4 h-4 rounded-full bg-purple-400 flex-shrink-0"></div>
+                    <span className="text-sm text-white font-medium">간식</span>
+                  </div>
                 </div>
-              ))}
-              {emptyDays.map((i) => (
-                <div
-                  key={`empty-${i}`}
-                  className="border-r border-b border-gray-600"
-                ></div>
-              ))}
-              {calendarDays.map((day) => {
-                const date = new Date(
-                  currentDate.getFullYear(),
-                  currentDate.getMonth(),
-                  day
-                );
-                const dateKey = date.toISOString().split("T")[0];
-                const isToday =
-                  new Date().toISOString().split("T")[0] === dateKey;
-                const logInfo = dailyLogInfo.get(dateKey);
+              </div>
 
-                return (
+              <div className="grid grid-cols-7 border-t border-l border-gray-600 flex-1">
+                {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
                   <div
                     key={day}
-                    className="p-2 border-r border-b border-gray-600 min-h-[7rem] cursor-pointer hover:bg-gray-700 transition-colors flex flex-col justify-between"
-                    onClick={() => setSelectedDate(date)}
+                    className="text-center font-semibold text-xs p-2 border-r border-b border-gray-600 text-gray-300"
                   >
-                    <div>
-                      <span
-                        className={`text-sm ${
-                          isToday
-                            ? "bg-green-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold"
-                            : "text-white"
-                        }`}
-                      >
-                        {day}
-                      </span>
-                    </div>
+                    {day}
+                  </div>
+                ))}
+                {emptyDays.map((i) => (
+                  <div
+                    key={`empty-${i}`}
+                    className="border-r border-b border-gray-600"
+                  ></div>
+                ))}
+                {calendarDays.map((day) => {
+                  const date = new Date(
+                    currentDate.getFullYear(),
+                    currentDate.getMonth(),
+                    day
+                  );
+                  const dateKey = date.toISOString().split("T")[0];
+                  const isToday =
+                    new Date().toISOString().split("T")[0] === dateKey;
+                  const logInfo = dailyLogInfo.get(dateKey);
 
-                    {logInfo && (
-                      <div className="text-right space-y-1">
-                        <div className="flex justify-end space-x-1">
-                          {logInfo.mealTypes.has("Breakfast") && (
-                            <div
-                              className="w-2 h-2 rounded-full bg-blue-400"
-                              title="Breakfast"
-                            ></div>
-                          )}
-                          {logInfo.mealTypes.has("Lunch") && (
-                            <div
-                              className="w-2 h-2 rounded-full bg-green-400"
-                              title="Lunch"
-                            ></div>
-                          )}
-                          {logInfo.mealTypes.has("Dinner") && (
-                            <div
-                              className="w-2 h-2 rounded-full bg-orange-400"
-                              title="Dinner"
-                            ></div>
-                          )}
-                          {logInfo.mealTypes.has("Snack") && (
-                            <div
-                              className="w-2 h-2 rounded-full bg-purple-400"
-                              title="Snack"
-                            ></div>
-                          )}
-                        </div>
-                        <p className="text-xs font-bold text-green-400">
-                          {logInfo.totalCalories.toLocaleString()} kcal
-                        </p>
+                  return (
+                    <div
+                      key={day}
+                      className="p-2 border-r border-b border-gray-600 min-h-[7rem] cursor-pointer hover:bg-gray-700 transition-colors flex flex-col justify-between"
+                      onClick={() => setSelectedDate(date)}
+                    >
+                      <div>
+                        <span
+                          className={`text-sm ${
+                            isToday
+                              ? "bg-green-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold"
+                              : "text-white"
+                          }`}
+                        >
+                          {day}
+                        </span>
                       </div>
-                    )}
+
+                      {logInfo && (
+                        <div className="text-right space-y-1">
+                          <div className="flex justify-end space-x-1">
+                            {logInfo.mealTypes.has("Breakfast") && (
+                              <div
+                                className="w-2 h-2 rounded-full bg-blue-400"
+                                title="Breakfast"
+                              ></div>
+                            )}
+                            {logInfo.mealTypes.has("Lunch") && (
+                              <div
+                                className="w-2 h-2 rounded-full bg-green-400"
+                                title="Lunch"
+                              ></div>
+                            )}
+                            {logInfo.mealTypes.has("Dinner") && (
+                              <div
+                                className="w-2 h-2 rounded-full bg-orange-400"
+                                title="Dinner"
+                              ></div>
+                            )}
+                            {logInfo.mealTypes.has("Snack") && (
+                              <div
+                                className="w-2 h-2 rounded-full bg-purple-400"
+                                title="Snack"
+                              ></div>
+                            )}
+                          </div>
+                          <p className="text-xs font-bold text-green-400">
+                            {logInfo.totalCalories.toLocaleString()} kcal
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 선택된 날짜의 식사 기록 */}
+            <div className="bg-gray-800 rounded-2xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4">
+                {selectedDate
+                  ? `${selectedDate.toLocaleDateString("ko-KR", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })} 식사 기록`
+                  : "날짜를 선택하세요"}
+              </h2>
+
+              {(() => {
+                if (!selectedDate) {
+                  return (
+                    <div className="text-center text-gray-400 py-8">
+                      <div className="text-4xl mb-2">📅</div>
+                      <p>
+                        캘린더에서 날짜를 선택하면 해당 날짜의 식사 기록을 볼 수
+                        있습니다.
+                      </p>
+                    </div>
+                  );
+                }
+
+                const selectedDateKey = selectedDate
+                  .toISOString()
+                  .split("T")[0];
+                const selectedLog = daily_logs.find(
+                  (log) => log.date === selectedDateKey
+                );
+
+                if (!selectedLog || selectedLog.meals.length === 0) {
+                  return (
+                    <div className="text-center text-gray-400 py-8">
+                      <div className="text-4xl mb-2">🍽️</div>
+                      <p>이 날에는 식사 기록이 없습니다.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {/* 식사 기록 */}
+                    <div className="grid grid-cols-1 gap-3">
+                      {selectedLog.meals.map((meal) => (
+                        <div
+                          key={meal.id}
+                          className="bg-gray-700 rounded-lg overflow-hidden flex"
+                        >
+                          <img
+                            src={meal.photo_url}
+                            alt={meal.foodName}
+                            className="w-20 h-20 object-cover flex-shrink-0"
+                          />
+                          <div className="p-3 flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <span
+                                className={`text-xs px-2 py-1 rounded-full text-white ${
+                                  meal.type === "Breakfast"
+                                    ? "bg-blue-500"
+                                    : meal.type === "Lunch"
+                                    ? "bg-green-500"
+                                    : meal.type === "Dinner"
+                                    ? "bg-orange-500"
+                                    : "bg-purple-500"
+                                }`}
+                              >
+                                {meal.type === "Breakfast"
+                                  ? "아침"
+                                  : meal.type === "Lunch"
+                                  ? "점심"
+                                  : meal.type === "Dinner"
+                                  ? "저녁"
+                                  : "간식"}
+                              </span>
+                              <span
+                                className={`text-xs px-2 py-1 rounded-full text-white ${
+                                  meal.nutrients.nutriScore === "A"
+                                    ? "bg-green-600"
+                                    : meal.nutrients.nutriScore === "B"
+                                    ? "bg-yellow-600"
+                                    : meal.nutrients.nutriScore === "C"
+                                    ? "bg-orange-600"
+                                    : meal.nutrients.nutriScore === "D"
+                                    ? "bg-red-600"
+                                    : "bg-red-800"
+                                }`}
+                              >
+                                {meal.nutrients.nutriScore}
+                              </span>
+                            </div>
+                            <h3 className="font-bold text-white text-sm mb-1">
+                              {meal.foodName}
+                            </h3>
+                            <div className="text-xs text-gray-300 grid grid-cols-2 gap-1">
+                              <div>
+                                칼로리:{" "}
+                                <span className="font-bold text-blue-400">
+                                  {meal.nutrients.calories} kcal
+                                </span>
+                              </div>
+                              <div>
+                                단백질:{" "}
+                                <span className="font-bold text-green-400">
+                                  {meal.nutrients.protein}g
+                                </span>
+                              </div>
+                              <div>
+                                탄수화물:{" "}
+                                <span className="font-bold text-yellow-400">
+                                  {meal.nutrients.carbs}g
+                                </span>
+                              </div>
+                              <div>
+                                지방:{" "}
+                                <span className="font-bold text-red-400">
+                                  {meal.nutrients.fat}g
+                                </span>
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-400 italic">
+                              💬 {meal.ai_comment}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
-              })}
+              })()}
             </div>
           </div>
 
-          {/* 선택된 날짜의 식사 기록 */}
-          <div className="bg-gray-800 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4">
-              {selectedDate
-                ? `${selectedDate.toLocaleDateString("ko-KR", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })} 식사 기록`
-                : "날짜를 선택하세요"}
-            </h2>
-
-            {(() => {
-              if (!selectedDate) {
-                return (
-                  <div className="text-center text-gray-400 py-8">
-                    <div className="text-4xl mb-2">📅</div>
-                    <p>
-                      캘린더에서 날짜를 선택하면 해당 날짜의 식사 기록을 볼 수
-                      있습니다.
-                    </p>
-                  </div>
-                );
-              }
-
-              const selectedDateKey = selectedDate.toISOString().split("T")[0];
-              const selectedLog = dailyLogs.find(
-                (log) => log.date === selectedDateKey
-              );
-
-              if (!selectedLog || selectedLog.meals.length === 0) {
-                return (
-                  <div className="text-center text-gray-400 py-8">
-                    <div className="text-4xl mb-2">🍽️</div>
-                    <p>이 날에는 식사 기록이 없습니다.</p>
-                  </div>
-                );
-              }
-
-              // 선택된 날짜의 총 영양소 계산
-              const dayTotals = selectedLog.meals.reduce(
-                (acc, meal) => {
-                  acc.calories += meal.nutrients.calories;
-                  acc.protein += meal.nutrients.protein;
-                  acc.carbs += meal.nutrients.carbs;
-                  acc.fat += meal.nutrients.fat;
-                  return acc;
-                },
-                { calories: 0, protein: 0, carbs: 0, fat: 0 }
-              );
-
-              const calorieProgress =
-                (dayTotals.calories / userProfile.calorieGoal) * 100;
-              const proteinProgress =
-                (dayTotals.protein / userProfile.nutrientGoals.protein) * 100;
-              const carbsProgress =
-                (dayTotals.carbs / userProfile.nutrientGoals.carbs) * 100;
-              const fatProgress =
-                (dayTotals.fat / userProfile.nutrientGoals.fat) * 100;
-
-              return (
-                <div className="space-y-4">
-                  {/* 식사 기록 */}
-                  <div className="grid grid-cols-1 gap-3">
-                    {selectedLog.meals.map((meal) => (
-                      <div
-                        key={meal.id}
-                        className="bg-gray-700 rounded-lg overflow-hidden flex"
-                      >
-                        <img
-                          src={meal.photoUrl}
-                          alt={meal.name}
-                          className="w-20 h-20 object-cover flex-shrink-0"
-                        />
-                        <div className="p-3 flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full text-white ${
-                                meal.type === "Breakfast"
-                                  ? "bg-blue-500"
-                                  : meal.type === "Lunch"
-                                  ? "bg-green-500"
-                                  : meal.type === "Dinner"
-                                  ? "bg-orange-500"
-                                  : "bg-purple-500"
-                              }`}
-                            >
-                              {meal.type === "Breakfast"
-                                ? "아침"
-                                : meal.type === "Lunch"
-                                ? "점심"
-                                : meal.type === "Dinner"
-                                ? "저녁"
-                                : "간식"}
-                            </span>
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full text-white ${
-                                meal.nutrients.nutriScore === "A"
-                                  ? "bg-green-600"
-                                  : meal.nutrients.nutriScore === "B"
-                                  ? "bg-yellow-600"
-                                  : meal.nutrients.nutriScore === "C"
-                                  ? "bg-orange-600"
-                                  : meal.nutrients.nutriScore === "D"
-                                  ? "bg-red-600"
-                                  : "bg-red-800"
-                              }`}
-                            >
-                              {meal.nutrients.nutriScore}
-                            </span>
-                          </div>
-                          <h3 className="font-bold text-white text-sm mb-1">
-                            {meal.name}
-                          </h3>
-                          <div className="text-xs text-gray-300 grid grid-cols-2 gap-1">
-                            <div>
-                              칼로리:{" "}
-                              <span className="font-bold text-blue-400">
-                                {meal.nutrients.calories} kcal
-                              </span>
-                            </div>
-                            <div>
-                              단백질:{" "}
-                              <span className="font-bold text-green-400">
-                                {meal.nutrients.protein}g
-                              </span>
-                            </div>
-                            <div>
-                              탄수화물:{" "}
-                              <span className="font-bold text-yellow-400">
-                                {meal.nutrients.carbs}g
-                              </span>
-                            </div>
-                            <div>
-                              지방:{" "}
-                              <span className="font-bold text-red-400">
-                                {meal.nutrients.fat}g
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-1 text-xs text-gray-400 italic">
-                            💬 {meal.aiComment}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 일일 목표 달성률 */}
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-3">
-                      목표 달성률
-                    </h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-300">칼로리</span>
-                        <span className="text-xs text-blue-400 font-bold">
-                          {dayTotals.calories} / {userProfile.calorieGoal} kcal
-                          ({calorieProgress.toFixed(0)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-600 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-500 ${
-                            calorieProgress >= 80 && calorieProgress <= 120
-                              ? "bg-green-500"
-                              : calorieProgress < 80
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                          }`}
-                          style={{
-                            width: `${Math.min(calorieProgress, 100)}%`,
-                          }}
-                        ></div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-                        <div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">단백질</span>
-                            <span className="text-green-400 font-bold">
-                              {proteinProgress.toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
-                            <div
-                              className="bg-green-500 h-1 rounded-full"
-                              style={{
-                                width: `${Math.min(proteinProgress, 100)}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">탄수화물</span>
-                            <span className="text-yellow-400 font-bold">
-                              {carbsProgress.toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
-                            <div
-                              className="bg-yellow-500 h-1 rounded-full"
-                              style={{
-                                width: `${Math.min(carbsProgress, 100)}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-300">지방</span>
-                            <span className="text-red-400 font-bold">
-                              {fatProgress.toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-600 rounded-full h-1 mt-1">
-                            <div
-                              className="bg-red-500 h-1 rounded-full"
-                              style={{
-                                width: `${Math.min(fatProgress, 100)}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 일일 종합 평가 */}
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-bold text-white">
-                        일일 종합 평가
-                      </h3>
-                      <span
-                        className={`text-2xl font-bold ${(() => {
-                          const avgScore =
-                            selectedLog.meals.reduce((sum, meal) => {
-                              const scoreValue =
-                                meal.nutrients.nutriScore === "A"
-                                  ? 5
-                                  : meal.nutrients.nutriScore === "B"
-                                  ? 4
-                                  : meal.nutrients.nutriScore === "C"
-                                  ? 3
-                                  : meal.nutrients.nutriScore === "D"
-                                  ? 2
-                                  : 1;
-                              return sum + scoreValue;
-                            }, 0) / selectedLog.meals.length;
-
-                          if (avgScore >= 4.5) return "text-green-400";
-                          if (avgScore >= 3.5) return "text-blue-400";
-                          if (avgScore >= 2.5) return "text-yellow-400";
-                          return "text-orange-400";
-                        })()}`}
-                      >
-                        {(() => {
-                          const avgScore =
-                            selectedLog.meals.reduce((sum, meal) => {
-                              const scoreValue =
-                                meal.nutrients.nutriScore === "A"
-                                  ? 5
-                                  : meal.nutrients.nutriScore === "B"
-                                  ? 4
-                                  : meal.nutrients.nutriScore === "C"
-                                  ? 3
-                                  : meal.nutrients.nutriScore === "D"
-                                  ? 2
-                                  : 1;
-                              return sum + scoreValue;
-                            }, 0) / selectedLog.meals.length;
-
-                          if (avgScore >= 4.5) return "A";
-                          if (avgScore >= 3.5) return "B";
-                          if (avgScore >= 2.5) return "C";
-                          return "D";
-                        })()}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-300">
-                      {(() => {
-                        const avgScore =
-                          selectedLog.meals.reduce((sum, meal) => {
-                            const scoreValue =
-                              meal.nutrients.nutriScore === "A"
-                                ? 5
-                                : meal.nutrients.nutriScore === "B"
-                                ? 4
-                                : meal.nutrients.nutriScore === "C"
-                                ? 3
-                                : meal.nutrients.nutriScore === "D"
-                                ? 2
-                                : 1;
-                            return sum + scoreValue;
-                          }, 0) / selectedLog.meals.length;
-
-                        const calorieStatus =
-                          calorieProgress >= 80 && calorieProgress <= 120
-                            ? "good"
-                            : calorieProgress < 80
-                            ? "low"
-                            : "high";
-
-                        if (avgScore >= 4.5 && calorieStatus === "good") {
-                          return "완벽한 하루였습니다! 영양 균형과 칼로리 모두 훌륭해요.";
-                        } else if (
-                          avgScore >= 3.5 &&
-                          calorieStatus !== "high"
-                        ) {
-                          return "좋은 식단이에요! 조금만 더 신경쓰면 완벽할 것 같아요.";
-                        } else if (avgScore >= 2.5) {
-                          return "괜찮은 하루였어요. 더 건강한 선택을 늘려보세요.";
-                        } else {
-                          return "내일은 더 건강한 식단을 시도해보세요!";
-                        }
-                      })()}
-                    </p>
-                    <div className="mt-2 text-xs text-gray-400">
-                      총 {selectedLog.meals.length}끼 식사 • 평균 영양 등급:{" "}
-                      {(
-                        selectedLog.meals.reduce((sum, meal) => {
-                          const scoreValue =
-                            meal.nutrients.nutriScore === "A"
-                              ? 5
-                              : meal.nutrients.nutriScore === "B"
-                              ? 4
-                              : meal.nutrients.nutriScore === "C"
-                              ? 3
-                              : meal.nutrients.nutriScore === "D"
-                              ? 2
-                              : 1;
-                          return sum + scoreValue;
-                        }, 0) / selectedLog.meals.length
-                      ).toFixed(1)}
-                      /5.0
-                    </div>
-                  </div>
+          {/* 주간 분석 섹션 */}
+          {weekly_analysis && (
+            <div className="bg-gray-800 p-6 rounded-2xl">
+              <h2 className="text-xl font-bold mb-4 text-green-400">
+                이번 주 분석
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="text-center">
+                  <p className="text-sm text-gray-400">평균 칼로리</p>
+                  <p className="text-2xl font-bold text-blue-400">
+                    {weekly_analysis.avg_calories.toFixed(0)} kcal
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    달성률:{" "}
+                    {weekly_analysis.calorie_achievement_rate.toFixed(0)}%
+                  </p>
                 </div>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* 칼로리 및 영양소 트렌드 차트 */}
-        <div className="bg-gray-800 rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4">
-            칼로리 및 영양소 트렌드 (30일)
-          </h2>
-          <CalorieNutrientChart
-            logs={dailyLogs}
-            calorieGoal={userProfile.calorieGoal}
-          />
-        </div>
-
-        {/* 뱃지 컬렉션 */}
-        <div className="bg-gray-800 rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4">뱃지 컬렉션</h2>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-            {badges.map((badge) => (
-              <div
-                key={badge.id}
-                className="flex flex-col items-center text-center"
-                title={badge.description}
-              >
-                <div className="text-5xl mb-1">{badge.icon}</div>
-                <p className="text-xs font-medium text-gray-300">
-                  {badge.name}
+                <div className="text-center">
+                  <p className="text-sm text-gray-400">평균 단백질</p>
+                  <p className="text-2xl font-bold text-green-400">
+                    {weekly_analysis.avg_protein.toFixed(0)}g
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    달성률:{" "}
+                    {weekly_analysis.protein_achievement_rate.toFixed(0)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-400">평균 탄수화물</p>
+                  <p className="text-2xl font-bold text-yellow-400">
+                    {weekly_analysis.avg_carbs.toFixed(0)}g
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    달성률: {weekly_analysis.carbs_achievement_rate.toFixed(0)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-400">평균 지방</p>
+                  <p className="text-2xl font-bold text-red-400">
+                    {weekly_analysis.avg_fat.toFixed(0)}g
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    달성률: {weekly_analysis.fat_achievement_rate.toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <h3 className="text-sm font-bold text-white mb-2">AI 조언</h3>
+                <p className="text-gray-300 text-sm">
+                  {weekly_analysis.ai_advice}
                 </p>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+
+          {/* 배지 섹션 */}
+          {badges.length > 0 && (
+            <div className="bg-gray-800 p-6 rounded-2xl">
+              <h2 className="text-xl font-bold mb-4 text-green-400">
+                획득한 배지
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {badges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    className="text-center bg-gray-700 p-3 rounded-lg"
+                  >
+                    <div className="text-2xl mb-1">{badge.icon}</div>
+                    <p className="text-xs font-bold text-white">{badge.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {badge.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 목표 설정 모달 */}
+      <GoalModal
+        isOpen={showGoalModal}
+        onClose={() => setShowGoalModal(false)}
+        profile={user_profile}
+        onSave={handleGoalUpdate}
+      />
     </>
   );
 }
