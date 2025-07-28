@@ -26,7 +26,6 @@ export function KakaoLoginButton() {
         border: 'none',
       }}
     >
-      <img src="/kakao_simbol.png" alt="카카오 심볼" className="w-6 h-6 mr-2" />
       <span className="font-bold" style={{ fontFamily: 'inherit' }}>카카오 로그인</span>
     </button>
   );
