@@ -6,6 +6,9 @@ import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
 import AdvancedInsightModal from '@/components/ui/AdvancedInsightModal';
 import UserInfo from '@/components/auth/UserInfo';
+import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
+import { useRequireAuth } from '@/hooks/useAuthGuard';
+import { apiClient } from '@/lib/api';
 
 interface GamificationData {
   points: number;
@@ -34,12 +37,18 @@ interface MealEntry {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { canRender, isLoading } = useRequireAuth();
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
   const [gamificationData, setGamificationData] = useState<GamificationData>({ points: 0, badges: [] });
   const [recentMeals, setRecentMeals] = useState<MealEntry[]>([]);
+
+  // 인증 확인 중이면 로딩 화면 표시
+  if (isLoading || !canRender) {
+    return <AuthLoadingScreen message="대시보드를 불러오고 있습니다..." />;
+  }
 
   useEffect(() => {
     // 게임화 데이터 로드 (임시 비활성화)
@@ -58,14 +67,7 @@ export default function DashboardPage() {
     // 최근 식사 기록 로드
     const loadRecentMeals = async () => {
       try {
-        const token = localStorage.getItem('authToken');
-        const headers: HeadersInit = { 'Content-Type': 'application/json' };
-        if (token) {
-          headers['Authorization'] = `Token ${token}`;
-        }
-
-        const response = await fetch('http://localhost:8000/api/logs/', { headers });
-        const data = await response.json();
+        const data = await apiClient.getMeals();
         
         // 최근 5개 식사만 표시
         const meals = (data.results || data || []).slice(0, 5);

@@ -10,15 +10,15 @@ import UserInfo from '@/components/auth/UserInfo';
 // 현재 시간을 기반으로 식사 타입을 자동 판단하는 함수
 const getMealTypeByTime = (): 'breakfast' | 'lunch' | 'dinner' | 'snack' => {
   if (typeof window === 'undefined') return 'lunch'; // 서버에서는 기본값
-  
+
   const now = new Date();
   const hour = now.getHours();
-  
+
   if (hour >= 6 && hour < 11) return 'breakfast';  // 06:00~11:00 아침
   if (hour >= 11 && hour < 15) return 'lunch';     // 11:00~15:00 점심
   if (hour >= 15 && hour < 18) return 'snack';     // 15:00~18:00 간식
   if (hour >= 18 && hour < 23) return 'dinner';    // 18:00~23:00 저녁
-  
+
   // 23:00~06:00는 간식으로 처리
   return 'snack';
 };
@@ -27,12 +27,12 @@ const getMealTypeByTime = (): 'breakfast' | 'lunch' | 'dinner' | 'snack' => {
 const processBackendResult = (backendResult: any) => {
   try {
     console.log('백엔드 결과 처리:', backendResult);
-    
+
     // 백엔드에서 이미 변환된 결과가 있는지 확인
     if (backendResult.result && typeof backendResult.result === 'object') {
       // 백엔드에서 변환된 결과 사용
       const result = backendResult.result;
-      
+
       // 백엔드 결과 구조에 맞게 반환
       return {
         food_name: result.food_name || '분석된 음식',
@@ -116,7 +116,7 @@ const processBackendResult = (backendResult: any) => {
 function ResultPageContent() {
   const router = useRouter();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [aiCoaching, setAiCoaching] = useState(''); 
+  const [aiCoaching, setAiCoaching] = useState('');
   const [isCoachingLoading, setIsCoachingLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [showFoodDetails, setShowFoodDetails] = useState(false);
@@ -126,16 +126,16 @@ function ResultPageContent() {
     // 세션 스토리지에서 이미지 URL과 분석 결과 가져오기
     const storedImageUrl = sessionStorage.getItem('uploadedImage');
     const storedResult = sessionStorage.getItem('analysisResult');
-    
+
     if (storedImageUrl) {
       setImageUrl(storedImageUrl);
     }
-    
+
     if (storedResult) {
       try {
         const result = JSON.parse(storedResult);
         console.log('분석 결과 파싱:', result);
-        
+
         // 백엔드에서 변환된 결과 처리
         const processedResult = processBackendResult(result);
         console.log('처리된 결과:', processedResult);
@@ -176,9 +176,9 @@ function ResultPageContent() {
   }, []);
 
   const handleGetCoaching = async () => {
-    setIsCoachingLoading(true); 
+    setIsCoachingLoading(true);
     setAiCoaching('');
-    
+
     try {
       const response = await fetch('/api/ai/coaching/', {
         method: 'POST',
@@ -199,53 +199,50 @@ function ResultPageContent() {
           }
         })
       });
-      
+
       const result = await response.json();
       if (result.coaching) {
         setAiCoaching(result.coaching);
       } else {
         setAiCoaching("AI 코칭을 받는데 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
-    } catch (error) { 
-      console.error("AI Coaching Error:", error); 
-      setAiCoaching("오류가 발생했습니다. 네트워크 연결을 확인해주세요."); 
-    } finally { 
-      setIsCoachingLoading(false); 
+    } catch (error) {
+      console.error("AI Coaching Error:", error);
+      setAiCoaching("오류가 발생했습니다. 네트워크 연결을 확인해주세요.");
+    } finally {
+      setIsCoachingLoading(false);
     }
   };
 
   const handleNavigate = async () => {
     try {
       let finalImageUrl = imageUrl;
-      
+
       // MLServer에서 이미 저장된 이미지 URL 사용 (중복 업로드 방지)
       const mlTaskId = sessionStorage.getItem('mlTaskId');
       if (mlTaskId) {
         try {
-          // MLServer 작업에서 이미지 URL 가져오기
-          const taskResponse = await fetch(`/mlserver/api/tasks/${mlTaskId}/`);
-          if (taskResponse.ok) {
-            const taskData = await taskResponse.json();
-            if (taskData.success && taskData.data.image_file) {
-              finalImageUrl = taskData.data.image_file;
-              console.log('MLServer에서 이미지 URL 가져옴:', finalImageUrl);
-            }
+          // API 클라이언트를 통해 MLServer 작업에서 이미지 URL 가져오기
+          const taskData = await apiClient.getMLServerTaskStatus(mlTaskId);
+          if (taskData.success && taskData.data.image_file) {
+            finalImageUrl = taskData.data.image_file;
+            console.log('MLServer에서 이미지 URL 가져옴:', finalImageUrl);
           }
         } catch (error) {
           console.error('MLServer 이미지 URL 가져오기 실패:', error);
         }
       }
-      
+
       // blob URL인 경우에만 새로 업로드 (fallback)
       if (imageUrl && imageUrl.startsWith('blob:') && !finalImageUrl.startsWith('/media/')) {
         try {
           const response = await fetch(imageUrl);
           const blob = await response.blob();
           const file = new File([blob], 'meal-image.jpg', { type: 'image/jpeg' });
-          
+
           const uploadResult = await apiClient.uploadImageFile(file);
           finalImageUrl = uploadResult.image_url;
-          
+
           console.log('Fallback 이미지 업로드 완료:', finalImageUrl);
         } catch (uploadError) {
           console.error('이미지 업로드 실패:', uploadError);
@@ -254,17 +251,9 @@ function ResultPageContent() {
       }
 
       // 식단 데이터를 백엔드에 저장
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (token) {
-        headers['Authorization'] = `Token ${token}`;
-      }
-
-      console.log('🍽️ 식단 데이터 저장 시작...');
-      console.log('토큰:', token ? '있음' : '없음');
-      console.log('데이터:', {
+      const mealData = {
         date: new Date().toISOString().split('T')[0],
-        mealType: selectedMealType,
+        mealType: selectedMealType, // 사용자가 선택한 식사 시간
         foodName: analysisResult?.food_name || '분석된 음식',
         calories: analysisResult?.total_calories || 0,
         protein: analysisResult?.total_protein || 0,
@@ -273,43 +262,39 @@ function ResultPageContent() {
         nutriScore: analysisResult?.overall_grade || 'B',
         imageUrl: finalImageUrl || '',
         time: new Date().toTimeString().split(' ')[0]
-      });
+      };
 
-      const mealResponse = await fetch('http://localhost:8000/api/logs/', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          date: new Date().toISOString().split('T')[0],
-          mealType: selectedMealType, // 사용자가 선택한 식사 시간
-          foodName: analysisResult?.food_name || '분석된 음식',
-          calories: analysisResult?.total_calories || 0,
-          protein: analysisResult?.total_protein || 0,
-          carbs: analysisResult?.total_carbs || 0,
-          fat: analysisResult?.total_fat || 0,
-          nutriScore: analysisResult?.overall_grade || 'B',
-          imageUrl: finalImageUrl || '',
-          time: new Date().toTimeString().split(' ')[0]
-        })
-      });
+      console.log('🍽️ 식단 데이터 저장 시작...');
+      console.log('데이터:', mealData);
 
-      console.log('📊 API 응답 상태:', mealResponse.status);
-      
-      if (mealResponse.ok) {
-        const mealResult = await mealResponse.json();
+      try {
+        console.log('API 호출 전 데이터 검증:', {
+          date: mealData.date,
+          mealType: mealData.mealType,
+          foodName: mealData.foodName,
+          calories: mealData.calories,
+          dataType: typeof mealData.calories
+        });
+
+        const mealResult = await apiClient.createMeal(mealData);
         console.log('✅ 식단 저장 성공:', mealResult);
-      } else {
-        const errorText = await mealResponse.text();
-        console.error('❌ 식단 저장 실패:', mealResponse.status, errorText);
-        alert(`식단 저장에 실패했습니다: ${mealResponse.status} ${errorText}`);
+      } catch (error) {
+        console.error('❌ 식단 저장 실패:', error);
+        console.error('에러 상세:', {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : 'No stack'
+        });
+        alert(`식단 저장에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       }
-      
+
       // 게임화 포인트 업데이트 (임시 비활성화)
       // await fetch('/api/gamification/update/', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({ action: 'record_meal' })
       // });
-      
+
       router.push('/dashboard');
     } catch (error) {
       console.error('Error saving meal:', error);
@@ -330,7 +315,7 @@ function ResultPageContent() {
       <UserInfo />
       <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center p-4">
         <div className="w-full max-w-4xl flex flex-col space-y-6 animate-fade-in">
-          
+
           {/* 헤더 */}
           <header className="text-center py-6">
             <h1 className="text-4xl font-black mb-2" style={{ fontFamily: 'NanumGothic', color: 'var(--point-green)' }}>
@@ -340,15 +325,15 @@ function ResultPageContent() {
           </header>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
+
             {/* 왼쪽: 이미지 및 기본 정보 */}
             <div className="bg-[var(--card-bg)] rounded-2xl p-6 border border-gray-600 space-y-6">
-              <img 
-                src={imageUrl || "https://placehold.co/600x400/121212/eaeaea?text=분석된+음식+사진"} 
-                alt="분석된 음식 사진" 
+              <img
+                src={imageUrl || "https://placehold.co/600x400/121212/eaeaea?text=분석된+음식+사진"}
+                alt="분석된 음식 사진"
                 className="rounded-xl w-full h-auto object-cover max-h-80"
               />
-              
+
               {/* 음식 기본 정보 */}
               <div className="text-center space-y-3">
                 <h2 className="text-2xl font-bold" style={{ color: 'var(--point-green)', fontFamily: 'NanumGothic' }}>
@@ -361,11 +346,10 @@ function ResultPageContent() {
                       {Math.round((analysisResult?.total_mass || 0) * 10) / 10}g
                     </span>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                    analysisResult?.overall_grade === 'A' ? 'bg-green-500' :
-                    analysisResult?.overall_grade === 'B' ? 'bg-yellow-500' :
-                    analysisResult?.overall_grade === 'C' ? 'bg-orange-500' : 'bg-red-500'
-                  }`}>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${analysisResult?.overall_grade === 'A' ? 'bg-green-500' :
+                      analysisResult?.overall_grade === 'B' ? 'bg-yellow-500' :
+                        analysisResult?.overall_grade === 'C' ? 'bg-orange-500' : 'bg-red-500'
+                    }`}>
                     등급 {analysisResult?.overall_grade || 'B'}
                   </span>
                   <div className="flex items-center gap-1">
@@ -392,11 +376,10 @@ function ResultPageContent() {
                     <button
                       key={meal.key}
                       onClick={() => setSelectedMealType(meal.key as any)}
-                      className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                        selectedMealType === meal.key
+                      className={`p-4 rounded-xl border-2 transition-all duration-200 ${selectedMealType === meal.key
                           ? 'border-[var(--point-green)] bg-[var(--point-green)]/10 text-[var(--point-green)]'
                           : 'border-gray-600 bg-gray-800/30 text-gray-300 hover:border-gray-500 hover:bg-gray-800/50'
-                      }`}
+                        }`}
                     >
                       <div className="text-2xl mb-2">{meal.icon}</div>
                       <div className="font-medium mb-1">{meal.label}</div>
@@ -409,7 +392,7 @@ function ResultPageContent() {
 
             {/* 오른쪽: 영양 정보 및 상세 */}
             <div className="space-y-6">
-              
+
               {/* 칼로리 정보 */}
               <div className="bg-[var(--card-bg)] rounded-2xl p-6 border border-gray-600">
                 <h3 className="text-lg font-bold mb-4 text-center" style={{ color: 'var(--point-green)', fontFamily: 'NanumGothic' }}>
@@ -422,8 +405,8 @@ function ResultPageContent() {
                   <p className="text-xl text-gray-400">kcal</p>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
-                  <div 
-                    className="bg-[var(--point-green)] h-3 rounded-full transition-all duration-500" 
+                  <div
+                    className="bg-[var(--point-green)] h-3 rounded-full transition-all duration-500"
                     style={{ width: `${Math.min((analysisResult?.total_calories || 0) / 2000 * 100, 100)}%` }}
                   ></div>
                 </div>
@@ -471,8 +454,8 @@ function ResultPageContent() {
               {analysisResult?.total_calories || 0} <span className="text-4xl">kcal</span>
             </p>
             <div className="w-full bg-gray-700 rounded-full h-2.5">
-              <div className="bg-[var(--point-green)] h-2.5 rounded-full" style={{ 
-                width: `${Math.min((analysisResult?.total_calories || 0) / 2000 * 100, 100)}%` 
+              <div className="bg-[var(--point-green)] h-2.5 rounded-full" style={{
+                width: `${Math.min((analysisResult?.total_calories || 0) / 2000 * 100, 100)}%`
               }}></div>
             </div>
             <p className="text-xs text-gray-400 mt-1 text-right">
@@ -516,7 +499,7 @@ function ResultPageContent() {
                   ▼
                 </span>
               </button>
-              
+
               {showFoodDetails && (
                 <div className="mt-4 space-y-3 animate-fade-in">
                   {analysisResult.food_details.map((food: any, index: number) => (
@@ -536,13 +519,12 @@ function ResultPageContent() {
                               수동입력필요
                             </span>
                           ) : (
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              food.grade === 'A' ? 'bg-green-500' :
-                              food.grade === 'B' ? 'bg-yellow-500' :
-                              food.grade === 'C' ? 'bg-orange-500' :
-                              food.grade === 'D' ? 'bg-red-500' :
-                              food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
-                            }`}>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${food.grade === 'A' ? 'bg-green-500' :
+                                food.grade === 'B' ? 'bg-yellow-500' :
+                                  food.grade === 'C' ? 'bg-orange-500' :
+                                    food.grade === 'D' ? 'bg-red-500' :
+                                      food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
+                              }`}>
                               {food.grade === 'UNKNOWN' ? '미확인' : food.grade}
                             </span>
                           )}
@@ -551,7 +533,7 @@ function ResultPageContent() {
                           </span>
                         </div>
                       </div>
-                      
+
                       {food.needs_manual_input ? (
                         <div className="text-center py-6 bg-yellow-900/20 rounded-lg border border-yellow-600">
                           <div className="text-3xl mb-2">⚠️</div>
@@ -588,7 +570,7 @@ function ResultPageContent() {
                           </div>
                         </div>
                       )}
-                      
+
                       {!food.found_in_db && !food.needs_manual_input && (
                         <div className="mt-3 p-2 bg-yellow-900/20 rounded-lg border-l-4 border-yellow-500">
                           <p className="text-xs text-yellow-400">
@@ -613,19 +595,19 @@ function ResultPageContent() {
                     영양정보 입력 필요
                   </h3>
                   <p className="text-sm text-gray-300 leading-relaxed">
-                    일부 음식이 데이터베이스에 없어 정확한 영양정보를 제공할 수 없습니다. 
+                    일부 음식이 데이터베이스에 없어 정확한 영양정보를 제공할 수 없습니다.
                     더 정확한 분석을 위해 영양정보를 직접 입력해주세요.
                   </p>
                 </div>
               </div>
             </div>
           )}
-          
+
           {/* AI 식단 코칭 */}
           <div className="bg-[var(--card-bg)] rounded-2xl p-6 border border-gray-600">
-            <button 
-              onClick={handleGetCoaching} 
-              disabled={isCoachingLoading} 
+            <button
+              onClick={handleGetCoaching}
+              disabled={isCoachingLoading}
               className="w-full bg-gradient-to-r from-[var(--point-green)] to-green-400 text-black font-bold py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{ fontFamily: 'NanumGothic' }}
             >
@@ -642,7 +624,7 @@ function ResultPageContent() {
                 </div>
               )}
             </button>
-            
+
             {aiCoaching && (
               <div className="mt-6 p-6 bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-xl border border-gray-700/50 animate-fade-in">
                 <div className="flex items-center space-x-3 mb-4">
@@ -660,8 +642,8 @@ function ResultPageContent() {
 
           {/* 액션 버튼 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button 
-              onClick={handleNavigate} 
+            <button
+              onClick={handleNavigate}
               className="bg-[var(--point-green)] text-black font-bold py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
               style={{ fontFamily: 'NanumGothic' }}
             >
@@ -670,8 +652,8 @@ function ResultPageContent() {
                 <span>대시보드로 이동</span>
               </div>
             </button>
-            <button 
-              onClick={handleReset} 
+            <button
+              onClick={handleReset}
               className="bg-gray-700 text-white font-bold py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] hover:bg-gray-600"
               style={{ fontFamily: 'NanumGothic' }}
             >

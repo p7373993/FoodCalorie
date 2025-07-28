@@ -5,6 +5,9 @@ import './globals.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ChallengeProvider } from '@/contexts/ChallengeContext';
+import { AuthProvider } from '@/contexts/AuthContext';
+import ErrorHandler from '@/components/ui/ErrorHandler';
+import SessionWarning from '@/components/ui/SessionWarning';
 
 
 const inter = Inter({ subsets: ['latin'] });
@@ -51,11 +54,15 @@ export default function RootLayout({
     <html lang="ko">
       <body className={inter.className}>
         <QueryClientProvider client={queryClient}>
-          <ChallengeProvider>
-            <div className="min-h-screen bg-[var(--main-bg)]">
-              {children}
-            </div>
-          </ChallengeProvider>
+          <AuthProvider>
+            <ChallengeProvider>
+              <div className="min-h-screen bg-[var(--main-bg)]">
+                {children}
+                <ErrorHandler />
+                <SessionWarning />
+              </div>
+            </ChallengeProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </body>
     </html>

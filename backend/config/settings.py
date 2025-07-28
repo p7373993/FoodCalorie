@@ -41,12 +41,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    # 'rest_framework_simplejwt',  # JWT 인증 (일시 비활성화)
-    # 'rest_framework_simplejwt.token_blacklist',  # JWT 토큰 블랙리스트 (일시 비활성화)
-    # 'django_filters',  # Django 필터링 (일시 비활성화)
     'corsheaders',
     'channels',  # WebSocket 지원을 위해 활성화
-    'rest_framework.authtoken',
     'accounts',  # 사용자 인증 시스템
     'api_integrated.apps.ApiIntegratedConfig',  # 메인 API 앱
     'mlserver',  # MLServer 연동
@@ -60,8 +56,10 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # 임시로 CSRF 비활성화
+    'accounts.middleware.SessionExpiryMiddleware',  # 세션 만료 처리
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.AuthenticationErrorMiddleware',  # 인증 에러 처리
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -114,6 +112,20 @@ if DB_HOST != 'localhost':
     }
 
 
+# 세션 설정
+SESSION_COOKIE_AGE = 1209600  # 2주 (초 단위)
+SESSION_COOKIE_SECURE = False  # 개발환경에서는 False, 프로덕션에서는 True
+SESSION_COOKIE_HTTPONLY = True  # XSS 공격 방지
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF 공격 완화
+SESSION_SAVE_EVERY_REQUEST = True  # 매 요청마다 세션 갱신
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 브라우저 종료 시 세션 유지
+
+# 프로덕션 환경에서는 보안 쿠키 사용
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -158,9 +170,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework 설정
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',  # 토큰 인증
-        'rest_framework.authentication.SessionAuthentication',  # 관리자 패널용
-        'rest_framework.authentication.BasicAuthentication',  # 기본 인증
+        'rest_framework.authentication.SessionAuthentication',  # 세션 기반 인증만 사용
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -177,38 +187,7 @@ REST_FRAMEWORK = {
     ],
 }
 
-# JWT 설정
-from datetime import timedelta
 
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),  # Access Token 1시간
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # Refresh Token 30일
-    'ROTATE_REFRESH_TOKENS': True,  # Refresh Token 자동 갱신
-    'BLACKLIST_AFTER_ROTATION': True,  # 이전 Refresh Token 블랙리스트
-    'UPDATE_LAST_LOGIN': True,  # 로그인 시간 업데이트
-    
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-    
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-    
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-    
-    'JTI_CLAIM': 'jti',
-    
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
-}
 
 # Frontend URL (비밀번호 재설정 등에 사용)
 FRONTEND_URL = 'http://localhost:3000'
@@ -228,6 +207,22 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF 설정
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+]
+
+# CSRF 쿠키 설정
+CSRF_COOKIE_HTTPONLY = False  # JavaScript에서 접근 가능하도록 설정
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False  # 쿠키 기반 CSRF 토큰 사용
+CSRF_COOKIE_NAME = 'csrftoken'  # 표준 CSRF 쿠키 이름
 
 # Channels 설정
 ASGI_APPLICATION = 'config.asgi.application'

@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, ImageUploadView, MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView
+from .views import MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, ImageUploadView, MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView, TestMealLogView
 
 router = DefaultRouter()
 router.register(r'logs', MealLogViewSet)
@@ -22,6 +22,7 @@ urlpatterns = [
     path('users/<str:username>/badges', UserBadgesView.as_view(), name='user-badges'),
     path('users/profile/stats', UserProfileStatsView.as_view(), name='user-profile-stats'),
     path('users/statistics', UserStatisticsView.as_view(), name='user-statistics'),
+    path('test/meal-log/', TestMealLogView.as_view(), name='test-meal-log'),
     # Custom API views will be added here
     # path('challenge-main/', include('api.challenges.urls')),  # 임시 주석 처리
 ]
