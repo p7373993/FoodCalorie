@@ -23,7 +23,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="dailychallengerecord",
             name="is_cheat_day",
-            field=models.BooleanField(default=False, help_text="치팅 사용 여부"),
+            field=models.BooleanField(
+                default=False, help_text="치팅 사용 여부"
+            ),
         ),
         migrations.AlterField(
             model_name="dailychallengerecord",
@@ -33,7 +35,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="dailychallengerecord",
             name="meal_count",
-            field=models.IntegerField(default=0, help_text="해당 날짜 식사 횟수"),
+            field=models.IntegerField(
+                default=0, help_text="해당 날짜 식사 횟수"
+            ),
         ),
         migrations.AlterField(
             model_name="dailychallengerecord",
@@ -43,7 +47,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="dailychallengerecord",
             name="total_calories",
-            field=models.FloatField(default=0, help_text="해당 날짜 총 칼로리"),
+            field=models.FloatField(
+                default=0, help_text="해당 날짜 총 칼로리"
+            ),
         ),
         migrations.AlterField(
             model_name="userchallenge",
@@ -75,12 +81,15 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="dailychallengerecord",
             index=models.Index(
-                fields=["user_challenge", "date"], name="daily_chall_user_ch_355fb1_idx"
+                fields=["user_challenge", "date"],
+                name="daily_chall_user_ch_355fb1_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="dailychallengerecord",
-            index=models.Index(fields=["date"], name="daily_chall_date_877b6a_idx"),
+            index=models.Index(
+                fields=["date"], name="daily_chall_date_877b6a_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="dailychallengerecord",
@@ -97,25 +106,29 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="userchallenge",
             index=models.Index(
-                fields=["user", "status"], name="user_challe_user_id_af83b8_idx"
+                fields=["user", "status"],
+                name="user_challe_user_id_af83b8_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="userchallenge",
             index=models.Index(
-                fields=["room", "status"], name="user_challe_room_id_7408dc_idx"
+                fields=["room", "status"],
+                name="user_challe_room_id_7408dc_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="userchallenge",
             index=models.Index(
-                fields=["current_streak_days"], name="user_challe_current_d85b07_idx"
+                fields=["current_streak_days"],
+                name="user_challe_current_d85b07_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="userchallenge",
             index=models.Index(
-                fields=["challenge_start_date"], name="user_challe_challen_f4a482_idx"
+                fields=["challenge_start_date"],
+                name="user_challe_challen_f4a482_idx",
             ),
         ),
         migrations.AddIndex(

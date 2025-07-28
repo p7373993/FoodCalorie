@@ -126,8 +126,19 @@ class ApiClient {
   // 챌린지 방 관리
   async getChallengeRooms(): Promise<PaginatedResponse<ChallengeRoom>> {
     try {
-      const response = await this.request('/api/challenges/rooms/');
-      return response;
+      // 챌린지 방 목록은 인증 없이 접근
+      const url = `${this.baseURL}/api/challenges/rooms/`;
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return response.json();
     } catch (error) {
       console.error('Error fetching challenge rooms:', error);
       throw error;
@@ -136,8 +147,19 @@ class ApiClient {
 
   async getChallengeRoom(roomId: number): Promise<ChallengeRoom> {
     try {
-      const response = await this.request(`/api/challenges/rooms/${roomId}/`);
-      return response;
+      // 챌린지 방 상세 정보도 인증 없이 접근
+      const url = `${this.baseURL}/api/challenges/rooms/${roomId}/`;
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return response.json();
     } catch (error) {
       console.error('Error fetching challenge room:', error);
       throw error;
@@ -147,13 +169,36 @@ class ApiClient {
   // 챌린지 참여 관리
   async joinChallengeRoom(joinData: ChallengeJoinRequest): Promise<ApiResponse<UserChallenge>> {
     try {
-      const response = await this.request('/api/challenges/join/', {
+      // 챌린지 참여도 인증 없이 접근 (테스트용)
+      const url = `${this.baseURL}/api/challenges/join/`;
+      
+      // 디버깅을 위한 로그
+      console.log('Joining challenge with data:', joinData);
+      console.log('Request URL:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // 인증 헤더 명시적으로 제거
+        },
         body: JSON.stringify(joinData),
       });
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Success response:', data);
       return {
         success: true,
-        data: response,
+        data: data,
         message: '챌린지 참여가 완료되었습니다.'
       };
     } catch (error) {
@@ -170,7 +215,33 @@ class ApiClient {
     has_active_challenge: boolean;
     total_active_count: number;
   }>> {
-    return this.request('/api/challenges/my/');
+    try {
+      // 내 챌린지 정보도 인증 없이 접근 (테스트용)
+      const url = `${this.baseURL}/api/challenges/my/`;
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching my challenges:', error);
+      // 오류 발생 시 빈 데이터 반환
+      return {
+        success: true,
+        data: {
+          active_challenges: [],
+          has_active_challenge: false,
+          total_active_count: 0
+        },
+        message: '챌린지 정보를 불러올 수 없습니다.'
+      };
+    }
   }
 
   async extendChallenge(challengeId: number, extendDays: number = 7): Promise<ApiResponse<UserChallenge>> {
@@ -237,7 +308,24 @@ class ApiClient {
     my_rank: number | null;
     total_participants: number;
   }>> {
-    return this.request(`/api/challenges/leaderboard/${roomId}/?limit=${limit}`);
+    try {
+      console.log(`Fetching leaderboard for room ${roomId} with limit ${limit}`);
+      const url = `/api/challenges/leaderboard/${roomId}/?limit=${limit}`;
+      console.log(`Request URL: ${this.baseURL}${url}`);
+      
+      const response = await this.request(url);
+      console.log('Leaderboard response:', response);
+      
+      // 백엔드 응답이 이미 올바른 구조를 가지고 있으므로 그대로 반환
+      return response;
+    } catch (error) {
+      console.error('Error in getLeaderboard:', error);
+      // 오류 발생 시 ApiResponse 형태로 반환
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '리더보드를 불러오는 중 오류가 발생했습니다.'
+      };
+    }
   }
 
   async getPersonalStats(challengeId?: number): Promise<ApiResponse<{

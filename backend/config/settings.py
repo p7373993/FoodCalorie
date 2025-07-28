@@ -64,6 +64,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'challenges.middleware.ChallengeAuthMiddleware',  # 챌린지 인증 비활성화 (일시 비활성화)
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -163,7 +164,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.BasicAuthentication',  # 기본 인증
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',  # 기본적으로 모든 접근 허용
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,

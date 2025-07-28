@@ -44,7 +44,9 @@ class Migration(migrations.Migration):
                 (
                     "condition_value",
                     models.IntegerField(
-                        validators=[django.core.validators.MinValueValidator(1)]
+                        validators=[
+                            django.core.validators.MinValueValidator(1)
+                        ]
                     ),
                 ),
                 ("is_active", models.BooleanField(default=True)),
@@ -94,7 +96,9 @@ class Migration(migrations.Migration):
                     "dummy_users_count",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
             ],
@@ -154,48 +158,66 @@ class Migration(migrations.Migration):
                 (
                     "user_weekly_cheat_limit",
                     models.IntegerField(
-                        choices=[(0, "0회"), (1, "1회"), (2, "2회"), (3, "3회")], default=1
+                        choices=[
+                            (0, "0회"),
+                            (1, "1회"),
+                            (2, "2회"),
+                            (3, "3회"),
+                        ],
+                        default=1,
                     ),
                 ),
                 (
                     "current_streak_days",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
                 (
                     "max_streak_days",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
                 (
                     "remaining_duration_days",
                     models.IntegerField(
-                        validators=[django.core.validators.MinValueValidator(0)]
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ]
                     ),
                 ),
                 (
                     "current_weekly_cheat_count",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
                 (
                     "total_success_days",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
                 (
                     "total_failure_days",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
                 (
@@ -211,7 +233,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("challenge_start_date", models.DateField(auto_now_add=True)),
-                ("last_activity_date", models.DateField(blank=True, null=True)),
+                (
+                    "last_activity_date",
+                    models.DateField(blank=True, null=True),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 (
@@ -253,13 +278,17 @@ class Migration(migrations.Migration):
                 (
                     "total_calories",
                     models.FloatField(
-                        validators=[django.core.validators.MinValueValidator(0)]
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ]
                     ),
                 ),
                 (
                     "target_calories",
                     models.FloatField(
-                        validators=[django.core.validators.MinValueValidator(0)]
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ]
                     ),
                 ),
                 ("is_success", models.BooleanField()),
@@ -268,7 +297,9 @@ class Migration(migrations.Migration):
                     "meal_count",
                     models.IntegerField(
                         default=0,
-                        validators=[django.core.validators.MinValueValidator(0)],
+                        validators=[
+                            django.core.validators.MinValueValidator(0)
+                        ],
                     ),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),

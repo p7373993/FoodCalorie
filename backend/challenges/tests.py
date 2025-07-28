@@ -1,19 +1,17 @@
-from django.test import TestCase, TransactionTestCase
-from django.contrib.auth.models import User
-from django.utils import timezone
-from django.db import IntegrityError
 from datetime import date, time, timedelta
 from decimal import Decimal
 
-from .models import (
-    ChallengeRoom, UserChallenge, DailyChallengeRecord, 
-    CheatDayRequest, ChallengeBadge, UserChallengeBadge
-)
-from .services import (
-    ChallengeJudgmentService, CheatDayService, 
-    ChallengeStatisticsService, WeeklyResetService
-)
+from django.contrib.auth.models import User
+from django.db import IntegrityError
+from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
+
 from api_integrated.models import MealLog
+
+from .models import (ChallengeBadge, ChallengeRoom, CheatDayRequest,
+                     DailyChallengeRecord, UserChallenge, UserChallengeBadge)
+from .services import (ChallengeJudgmentService, ChallengeStatisticsService,
+                       CheatDayService, WeeklyResetService)
 
 
 class ChallengeRoomModelTest(TestCase):
@@ -801,9 +799,10 @@ class WeeklyResetServiceTest(TestCase):
             self.assertEqual(challenge.current_weekly_cheat_count, 0)
 fr
 om rest_framework.test import APITestCase, APIClient
-from rest_framework import status
-from django.urls import reverse
 import json
+
+from django.urls import reverse
+from rest_framework import status
 
 
 class ChallengeAPITestCase(APITestCase):

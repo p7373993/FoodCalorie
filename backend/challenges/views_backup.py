@@ -129,19 +129,13 @@ class JoinChallengeView(APIView):
                                 f"챌린지에 참여 중입니다. 하나의 챌린지만 참여할 수 있습니다."
                             ),
                             "details": {
-                                "current_room": (
-                                    existing_active_challenge.room.name
-                                ),
-                                "current_room_id": (
-                                    existing_active_challenge.room.id
-                                ),
+                                "current_room": (existing_active_challenge.room.name),
+                                "current_room_id": (existing_active_challenge.room.id),
                                 "joined_at": (
-                                    existing_active_challenge
-                                    .challenge_start_date
+                                    existing_active_challenge.challenge_start_date
                                 ),
                                 "remaining_days": (
-                                    existing_active_challenge
-                                    .remaining_duration_days
+                                    existing_active_challenge.remaining_duration_days
                                 ),
                             },
                         },
@@ -149,13 +143,9 @@ class JoinChallengeView(APIView):
                     )
 
                 # 새 챌린지 참여 생성 (시리얼라이저 사용)
-                user_challenge = serializer.save(
-                    user=demo_user, status="active"
-                )
+                user_challenge = serializer.save(user=demo_user, status="active")
 
-                logger.info(
-                    f"User {demo_user.id} joined challenge room {room.name}"
-                )
+                logger.info(f"User {demo_user.id} joined challenge room {room.name}")
 
                 # 응답 데이터
                 response_data = UserChallengeSerializer(user_challenge).data
@@ -238,8 +228,7 @@ class MyChallengeView(APIView):
                     {
                         "is_expired": (challenge.remaining_duration_days <= 0),
                         "days_since_start": (
-                            timezone.now().date()
-                            - challenge.challenge_start_date
+                            timezone.now().date() - challenge.challenge_start_date
                         ).days,
                         "cheat_remaining": challenge.user_weekly_cheat_limit
                         - challenge.current_weekly_cheat_count,
@@ -431,9 +420,7 @@ class RequestCheatDayView(APIView):
             try:
                 from datetime import datetime
 
-                target_date = datetime.strptime(
-                    target_date_str, "%Y-%m-%d"
-                ).date()
+                target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
             except ValueError:
                 return Response(
                     {
@@ -470,9 +457,7 @@ class RequestCheatDayView(APIView):
 
             # 치팅 요청 처리
             cheat_service = CheatDayService()
-            result = cheat_service.request_cheat_day(
-                user_challenge, target_date
-            )
+            result = cheat_service.request_cheat_day(user_challenge, target_date)
 
             if result["success"]:
                 return Response(
@@ -483,9 +468,7 @@ class RequestCheatDayView(APIView):
                             "date": target_date,
                             "challenge_id": user_challenge.id,
                             "room_name": user_challenge.room.name,
-                            "remaining_cheats": result.get(
-                                "remaining_cheats", 0
-                            ),
+                            "remaining_cheats": result.get("remaining_cheats", 0),
                         },
                     }
                 )
@@ -546,17 +529,13 @@ class CheatStatusView(APIView):
 
             # 치팅 현황 조회
             cheat_service = CheatDayService()
-            cheat_status = cheat_service.get_weekly_cheat_status(
-                user_challenge
-            )
+            cheat_status = cheat_service.get_weekly_cheat_status(user_challenge)
 
             # 이번 주 사용한 치팅 날짜들 조회
             from datetime import date, timedelta  # noqa: F401
 
             today = timezone.now().date()
-            week_start = today - timedelta(
-                days=today.weekday()
-            )  # 이번 주 월요일
+            week_start = today - timedelta(days=today.weekday())  # 이번 주 월요일
 
             cheat_requests = CheatDayRequest.objects.filter(
                 user_challenge=user_challenge,
@@ -612,9 +591,7 @@ class LeaderboardView(APIView):
             # 리더보드 조회 (캐시 서비스 사용)
             from .cache import CachedLeaderboardService
 
-            leaderboard = CachedLeaderboardService.get_leaderboard(
-                room_id, limit
-            )
+            leaderboard = CachedLeaderboardService.get_leaderboard(room_id, limit)
 
             # 내 순위 찾기 (인증 없이 접근하므로 임시로 None)
             my_rank = None
@@ -697,9 +674,7 @@ class PersonalStatsView(APIView):
 
             from .serializers import UserChallengeBadgeSerializer
 
-            badges_data = UserChallengeBadgeSerializer(
-                user_badges, many=True
-            ).data
+            badges_data = UserChallengeBadgeSerializer(user_badges, many=True).data
 
             return Response(
                 {
@@ -789,9 +764,7 @@ class ChallengeReportView(APIView):
 
             from .serializers import UserChallengeBadgeSerializer
 
-            badges_data = UserChallengeBadgeSerializer(
-                user_badges, many=True
-            ).data
+            badges_data = UserChallengeBadgeSerializer(user_badges, many=True).data
 
             # 완료 여부 및 결과 메시지
             is_completed = user_challenge.status == "completed"
@@ -807,9 +780,7 @@ class ChallengeReportView(APIView):
                         "challenge_info": {
                             "id": user_challenge.id,
                             "room_name": user_challenge.room.name,
-                            "target_calorie": (
-                                user_challenge.room.target_calorie
-                            ),
+                            "target_calorie": (user_challenge.room.target_calorie),
                             "start_date": user_challenge.challenge_start_date,
                             "duration_days": (
                                 user_challenge.user_challenge_duration_days
@@ -837,16 +808,16 @@ class ChallengeReportView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def _generate_result_message(
-        self, user_challenge, statistics, is_completed
-    ):
+    def _generate_result_message(self, user_challenge, statistics, is_completed):
         """결과 메시지 생성"""
         if is_completed:
             success_rate = statistics["success_rate"]
             if success_rate >= 80:
                 return f"🎉 훌륭합니다! {success_rate}%의 높은 성공률로 챌린지를 완료했습니다!"
             elif success_rate >= 60:
-                return f"👏 잘했습니다! {success_rate}%의 성공률로 챌린지를 완료했습니다!"
+                return (
+                    f"👏 잘했습니다! {success_rate}%의 성공률로 챌린지를 완료했습니다!"
+                )
             else:
                 return (
                     f"💪 아쉽지만 {success_rate}%로 챌린지를 마쳤습니다. "
@@ -882,9 +853,7 @@ class DailyChallengeJudgmentView(APIView):
                 from datetime import datetime
 
                 try:
-                    target_date = datetime.strptime(
-                        target_date_str, "%Y-%m-%d"
-                    ).date()
+                    target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
                 except ValueError:
                     return Response(
                         {

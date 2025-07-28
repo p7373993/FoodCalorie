@@ -32,6 +32,8 @@ const ChallengeRoomList: React.FC<ChallengeRoomListProps> = ({
   const loadChallengeRooms = async () => {
     try {
       setLoading(true);
+      console.log('Fetching challenge rooms from:', `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/challenges/rooms/`);
+      
       const response = await apiClient.getChallengeRooms();
       
       console.log('API Response:', response); // 디버깅용
@@ -40,11 +42,17 @@ const ChallengeRoomList: React.FC<ChallengeRoomListProps> = ({
         // Django REST Framework 페이지네이션 응답 처리
         setRooms(response.results);
         setError(null);
+        console.log('Successfully loaded', response.results.length, 'challenge rooms');
       } else {
+        console.error('Invalid response format:', response);
         setError('챌린지 방 목록을 불러올 수 없습니다.');
       }
     } catch (err) {
       console.error('Error loading challenge rooms:', err);
+      console.error('Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined
+      });
       setError('챌린지 방 목록을 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);

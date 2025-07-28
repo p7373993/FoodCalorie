@@ -42,50 +42,40 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
   const loadLeaderboard = async () => {
     try {
+      console.log(`Loading leaderboard for room ${roomId}`);
       setLoading(true);
       setError(null);
 
       const response = await apiClient.getLeaderboard(roomId);
+      console.log('Leaderboard API response:', response);
       
-      if (response.success && response.data) {
-        // API 응답 구조에 따라 처리
-        if (Array.isArray(response.data)) {
-          // 배열 형태의 응답 처리
-          const sortedData = response.data.sort((a, b) => {
-            // 6.1: 연속 성공 일수 기준 내림차순
-            if (a.current_streak !== b.current_streak) {
-              return b.current_streak - a.current_streak;
-            }
-            // 6.2: 총 성공 횟수 기준 내림차순
-            if (a.total_success !== b.total_success) {
-              return b.total_success - a.total_success;
-            }
-            // 6.3: 시작 날짜 기준 오름차순
-            return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
-          });
+      // 응답 구조 확인 및 처리
+      if (response && response.data && response.data.leaderboard) {
+        // 백엔드 API 응답 구조에 맞게 처리
+        const leaderboardData = response.data.leaderboard || [];
+        console.log('Raw leaderboard data:', leaderboardData);
+        
+        // 프론트엔드에서 필요한 필드명으로 매핑
+        const mappedData = leaderboardData.map((entry: any) => ({
+          ...entry,
+          current_streak: entry.current_streak,
+          total_success: entry.total_success_days,
+          start_date: entry.challenge_start_date,
+          is_me: currentUserId ? entry.user_id === currentUserId : false
+        }));
 
-          // 순위 부여
-          const rankedData = sortedData.map((entry, index) => ({
-            ...entry,
-            rank: index + 1,
-            is_me: currentUserId ? entry.user_id === currentUserId : false
-          }));
-
-          setLeaderboard(rankedData);
-          setTotalParticipants(rankedData.length);
-          setTotalPages(Math.ceil(rankedData.length / itemsPerPage));
-
-          // 내 순위 찾기
-          const myEntry = rankedData.find(entry => entry.is_me);
-          setMyRank(myEntry?.rank || null);
-        } else {
-          // 객체 형태의 응답 처리 (페이지네이션 포함)
-          setLeaderboard(response.data.leaderboard || []);
-          setMyRank(response.data.my_rank || null);
-          setTotalParticipants(response.data.total_participants || 0);
-        }
-      } else {
+        console.log('Mapped leaderboard data:', mappedData);
+        setLeaderboard(mappedData);
+        setMyRank(response.data.my_rank || null);
+        setTotalParticipants(response.data.total_participants || 0);
+        setTotalPages(Math.ceil(mappedData.length / itemsPerPage));
+        console.log('Leaderboard state updated successfully');
+      } else if (response && response.success === false) {
+        console.error('API response not successful:', response);
         setError(response.message || '리더보드를 불러올 수 없습니다.');
+      } else {
+        console.error('Unexpected response structure:', response);
+        setError('리더보드 데이터 형식이 올바르지 않습니다.');
       }
     } catch (err) {
       console.error('Error loading leaderboard:', err);
