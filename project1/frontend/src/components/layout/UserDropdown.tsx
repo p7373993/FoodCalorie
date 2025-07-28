@@ -29,7 +29,7 @@ export function UserDropdown() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    // 리다이렉트는 AuthContext에서 처리됨
   };
 
   if (!user) {

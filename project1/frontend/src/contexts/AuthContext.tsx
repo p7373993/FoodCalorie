@@ -159,10 +159,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
+    const handleManualLogout = () => {
+      console.log('Manual logout requested');
+      logout(); // 수동 로그아웃 처리
+    };
+
     // 이벤트 리스너 등록
     if (typeof window !== 'undefined') {
       window.addEventListener('auth:session-expired', handleSessionExpired as EventListener);
       window.addEventListener('auth:csrf-error', handleCSRFError as EventListener);
+      window.addEventListener('auth:manual-logout', handleManualLogout as EventListener);
     }
 
     // 클린업
@@ -170,6 +176,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('auth:session-expired', handleSessionExpired as EventListener);
         window.removeEventListener('auth:csrf-error', handleCSRFError as EventListener);
+        window.removeEventListener('auth:manual-logout', handleManualLogout as EventListener);
       }
     };
   }, [authCheckAttempted]);
@@ -279,6 +286,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       setAuthCheckAttempted(false); // 로그아웃 시 인증 확인 플래그 리셋
       dispatch({ type: 'CLEAR_AUTH' });
+      
+      // 로그아웃 후 로그인 페이지로 리다이렉트
+      if (typeof window !== 'undefined') {
+        // 세션 스토리지 정리
+        sessionStorage.removeItem('auth_temp_data');
+        sessionStorage.removeItem('redirect_after_login');
+        
+        // 로그인 페이지로 리다이렉트
+        window.location.href = '/login';
+      }
     }
   };
 
