@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, ImageUploadView, MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView, TestMealLogView
+from .dashboard_views import get_dashboard_data, weight_records
 
 router = DefaultRouter()
 router.register(r'logs', MealLogViewSet)
@@ -23,6 +24,11 @@ urlpatterns = [
     path('users/profile/stats', UserProfileStatsView.as_view(), name='user-profile-stats'),
     path('users/statistics', UserStatisticsView.as_view(), name='user-statistics'),
     path('test/meal-log/', TestMealLogView.as_view(), name='test-meal-log'),
+    
+    # 대시보드 API
+    path('dashboard/data/', get_dashboard_data, name='dashboard-data'),
+    path('weight/', weight_records, name='weight-records'),
+    
     # Custom API views will be added here
     # path('challenge-main/', include('api.challenges.urls')),  # 임시 주석 처리
 ]

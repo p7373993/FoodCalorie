@@ -345,6 +345,11 @@ class ApiClient {
     });
   }
 
+  // 대시보드 관련 API
+  async getDashboardData() {
+    return this.request('/api/dashboard/data/');
+  }
+
   // 게임화 관련 API (임시 비활성화 - 404 에러 방지)
   async getGamificationProfile() {
     // 임시로 빈 데이터 반환
