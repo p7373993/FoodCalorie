@@ -85,7 +85,11 @@ class MealLogSerializer(serializers.ModelSerializer):
 
     def get_photo_url(self, obj):
         if obj.imageUrl:
-            return obj.imageUrl.url
+            # imageUrl이 문자열인 경우와 파일 객체인 경우 모두 처리
+            if hasattr(obj.imageUrl, 'url'):
+                return obj.imageUrl.url
+            else:
+                return str(obj.imageUrl)
         # 식사 타입별 기본 이미지 또는 음식 아이콘
         default_images = {
             'breakfast': 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=400&h=300&fit=crop',  # 아침식사

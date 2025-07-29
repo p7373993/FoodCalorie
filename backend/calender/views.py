@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.contrib.auth.models import User
 from django.db.models import Sum, Avg, Q
@@ -16,18 +16,28 @@ from api_integrated.models import MealLog
 
 
 @api_view(['GET'])
-@permission_classes([])  # 임시로 인증 해제
+@permission_classes([AllowAny])  # 임시로 인증 해제, 나중에 IsAuthenticated로 변경
 def get_calendar_data(request):
     """캘린더 페이지 전체 데이터 조회"""
-    # 테스트용 더미 사용자 생성 또는 가져오기
-    user, created = User.objects.get_or_create(
-        username='test_user',
-        defaults={
-            'email': 'test@example.com',
-            'first_name': 'Test',
-            'last_name': 'User'
-        }
-    )
+    # 실제 사용자 또는 테스트 사용자 사용
+    if request.user.is_authenticated:
+        user = request.user
+    else:
+        # 인증되지 않은 경우 테스트 사용자 사용
+        user, created = User.objects.get_or_create(
+            username='test_user',
+            defaults={
+                'email': 'test@example.com',
+                'first_name': 'Test',
+                'last_name': 'User'
+            }
+        )
+    
+    # user가 null인 MealLog들을 현재 사용자에게 할당 (데이터 복구)
+    null_user_meals = MealLog.objects.filter(user__isnull=True)
+    if null_user_meals.exists():
+        print(f"🔧 user가 null인 MealLog {null_user_meals.count()}개를 {user.username}에게 할당")
+        null_user_meals.update(user=user)
     
     # 사용자 프로필 가져오기 또는 생성
     profile, created = CalendarUserProfile.objects.get_or_create(
@@ -56,6 +66,8 @@ def get_calendar_data(request):
         date__range=[start_date, end_date]
     ).order_by('date', 'time')
     
+    print(f"🔍 사용자 {user.username}의 식사 기록 조회: {meal_logs.count()}개")
+    
     # 날짜별로 그룹화하여 DailyLog 형식으로 변환
     daily_logs = []
     current_date = start_date
@@ -77,6 +89,9 @@ def get_calendar_data(request):
         }
         
         daily_logs.append(daily_log)
+        if date_meals.exists():
+            print(f"📅 {current_date}: {date_meals.count()}개 식사 기록 추가")
+        
         current_date += timedelta(days=1)
     
     # 주간 분석 데이터
@@ -93,18 +108,21 @@ def get_calendar_data(request):
 
 
 @api_view(['POST'])
-@permission_classes([])  # 임시로 인증 해제
+@permission_classes([AllowAny])  # 임시로 인증 해제
 def update_user_profile(request):
     """사용자 프로필 업데이트"""
-    # 테스트용 더미 사용자 사용
-    user, created = User.objects.get_or_create(
-        username='test_user',
-        defaults={
-            'email': 'test@example.com',
-            'first_name': 'Test',
-            'last_name': 'User'
-        }
-    )
+    # 실제 사용자 또는 테스트 사용자 사용
+    if request.user.is_authenticated:
+        user = request.user
+    else:
+        user, created = User.objects.get_or_create(
+            username='test_user',
+            defaults={
+                'email': 'test@example.com',
+                'first_name': 'Test',
+                'last_name': 'User'
+            }
+        )
     profile, created = CalendarUserProfile.objects.get_or_create(user=user)
     
     serializer = CalendarUserProfileSerializer(profile, data=request.data, partial=True)
@@ -134,18 +152,21 @@ def get_meals_by_date(request):
 
 
 @api_view(['GET'])
-@permission_classes([])
+@permission_classes([AllowAny])
 def get_calendar_meals(request):
     """캘린더용 월별 식사 데이터 조회"""
-    # 테스트용 더미 사용자 가져오기
-    user, created = User.objects.get_or_create(
-        username='test_user',
-        defaults={
-            'email': 'test@example.com',
-            'first_name': 'Test',
-            'last_name': 'User'
-        }
-    )
+    # 실제 사용자 또는 테스트 사용자 사용
+    if request.user.is_authenticated:
+        user = request.user
+    else:
+        user, created = User.objects.get_or_create(
+            username='test_user',
+            defaults={
+                'email': 'test@example.com',
+                'first_name': 'Test',
+                'last_name': 'User'
+            }
+        )
     
     year = request.GET.get('year', datetime.now().year)
     month = request.GET.get('month', datetime.now().month)
@@ -166,19 +187,30 @@ def get_calendar_meals(request):
     meals = MealLog.objects.filter(
         user=user,
         date__range=[start_date, end_date]
-    ).values('id', 'date', 'imageUrl', 'calories', 'time')
+    ).order_by('date', 'time')
     
     # 프론트엔드 형식에 맞게 변환
     formatted_meals = []
     for meal in meals:
+        # imageUrl 처리 개선
+        image_url = None
+        if meal.imageUrl:
+            if hasattr(meal.imageUrl, 'url'):
+                image_url = meal.imageUrl.url
+            else:
+                image_url = str(meal.imageUrl)
+        else:
+            image_url = f'https://picsum.photos/seed/{meal.id}/400/300'
+        
         formatted_meals.append({
-            'id': meal['id'],
-            'date': meal['date'].strftime('%Y-%m-%d'),
-            'image_url': meal['imageUrl'].url if meal['imageUrl'] else f'https://picsum.photos/seed/{meal["id"]}/400/300',
-            'calories': meal['calories'],
-            'timestamp': datetime.combine(meal['date'], meal['time'] or datetime.min.time()).isoformat()
+            'id': meal.id,
+            'date': meal.date.strftime('%Y-%m-%d'),
+            'image_url': image_url,
+            'calories': meal.calories,
+            'timestamp': datetime.combine(meal.date, meal.time or datetime.min.time()).isoformat()
         })
     
+    print(f"📊 캘린더용 월별 데이터: {len(formatted_meals)}개 식사 기록 반환")
     return Response(formatted_meals)
 
 
