@@ -17,7 +17,13 @@ class UserSerializer(serializers.ModelSerializer):
 class MealLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = MealLog
-        fields = '__all__'
+        fields = ['id', 'date', 'mealType', 'foodName', 'calories', 'carbs', 'protein', 'fat', 'nutriScore', 'imageUrl', 'time']
+        read_only_fields = ['id', 'user']  # user는 자동으로 설정되므로 읽기 전용
+    
+    def validate(self, data):
+        print(f"=== MealLogSerializer 검증 ===")
+        print(f"입력 데이터: {data}")
+        return data
 
 class AICoachTipSerializer(serializers.ModelSerializer):
     class Meta:

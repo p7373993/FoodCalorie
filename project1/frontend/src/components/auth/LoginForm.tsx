@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuthActions } from '@/contexts/AuthContext';
 
 interface LoginFormData {
   email: string;
@@ -13,9 +14,9 @@ interface LoginFormData {
 
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const { login } = useAuthActions();
 
   const {
     register,
@@ -24,40 +25,19 @@ export function LoginForm() {
   } = useForm<LoginFormData>();
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
     setError('');
 
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('로그인 응답:', result);
-        
-        // 로그인 성공 시 사용자 정보와 토큰을 localStorage에 저장
-        if (result.success && result.auth) {
-          localStorage.setItem('access_token', result.auth.access_token);
-          localStorage.setItem('refresh_token', result.auth.refresh_token);
-          localStorage.setItem('user', JSON.stringify(result.user));
-          localStorage.setItem('profile', JSON.stringify(result.profile));
-        }
+      const result = await login(data.email, data.password);
+      
+      if (result.success) {
         // 로그인 성공 시 이미지 업로드 화면으로 이동 (핵심 기능)
         router.push('/upload');
       } else {
-        const errorData = await response.json();
-        setError(errorData.message || '로그인에 실패했습니다.');
+        setError(result.message || '로그인에 실패했습니다.');
       }
     } catch (error) {
       setError('네트워크 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -130,10 +110,9 @@ export function LoginForm() {
       {/* 로그인 버튼 */}
       <button
         type="submit"
-        disabled={isLoading}
         className="w-full rounded-xl py-3 px-4 text-base font-bold bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isLoading ? '로그인 중...' : '로그인'}
+        로그인
       </button>
       
       {/* 회원가입 버튼 */}

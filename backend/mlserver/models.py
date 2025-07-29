@@ -25,8 +25,8 @@ class MassEstimationTask(models.Model):
     message = models.TextField(blank=True)
     error = models.TextField(blank=True)
     
-    # 파일 정보
-    image_file = models.ImageField(upload_to='uploads/', null=True, blank=True)
+    # 파일 정보 - meal_images로 통일
+    image_file = models.ImageField(upload_to='meal_images/', null=True, blank=True)
     original_filename = models.CharField(max_length=255, blank=True)
     
     # 결과 정보
@@ -60,3 +60,27 @@ class MassEstimationTask(models.Model):
     @property
     def is_processing(self):
         return self.status == 'processing'
+    
+    @property
+    def is_old_completed_task(self):
+        """7일 이상 된 완료 작업인지 확인"""
+        if self.status not in ['completed', 'failed']:
+            return False
+        
+        from django.utils import timezone
+        from datetime import timedelta
+        return self.created_at < timezone.now() - timedelta(days=7)
+    
+    def can_be_cleaned_up(self):
+        """정리 가능한 작업인지 확인 (MealLog에서 사용되지 않는 경우)"""
+        if not self.is_old_completed_task:
+            return False
+        
+        if not self.image_file:
+            return True
+        
+        # MealLog에서 이 이미지를 사용하는지 확인
+        from api_integrated.models import MealLog
+        return not MealLog.objects.filter(
+            imageUrl=self.image_file.url
+        ).exists()

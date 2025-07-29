@@ -2,18 +2,10 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { UserChallenge, ChallengeRoom } from '@/types';
-import { challengeApi, setChallengeApiToken } from '@/lib/challengeApi';
+import { challengeApi } from '@/lib/challengeApi';
 
 // 상태 타입 정의
 interface ChallengeState {
-  // 인증 관련
-  isAuthenticated: boolean;
-  authToken: string | null;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-  } | null;
 
   // 챌린지 관련
   activeChallenge: UserChallenge | null;
@@ -44,8 +36,6 @@ interface ChallengeState {
 type ChallengeAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_AUTH'; payload: { token: string; user: any } }
-  | { type: 'LOGOUT' }
   | { type: 'SET_ACTIVE_CHALLENGE'; payload: { challenge: UserChallenge; room: ChallengeRoom } }
   | { type: 'CLEAR_ACTIVE_CHALLENGE' }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<ChallengeState['settings']> }
@@ -54,9 +44,6 @@ type ChallengeAction =
 
 // 초기 상태
 const initialState: ChallengeState = {
-  isAuthenticated: false,
-  authToken: null,
-  user: null,
   activeChallenge: null,
   activeChallengeRoom: null,
   isLoading: false,
@@ -83,26 +70,6 @@ const challengeReducer = (state: ChallengeState, action: ChallengeAction): Chall
     
     case 'SET_ERROR':
       return { ...state, error: action.payload, isLoading: false };
-    
-    case 'SET_AUTH':
-      return {
-        ...state,
-        isAuthenticated: true,
-        authToken: action.payload.token,
-        user: action.payload.user,
-        error: null,
-      };
-    
-    case 'LOGOUT':
-      return {
-        ...state,
-        isAuthenticated: false,
-        authToken: null,
-        user: null,
-        activeChallenge: null,
-        activeChallengeRoom: null,
-        cache: initialState.cache,
-      };
     
     case 'SET_ACTIVE_CHALLENGE':
       return {
@@ -146,10 +113,6 @@ const challengeReducer = (state: ChallengeState, action: ChallengeAction): Chall
 interface ChallengeContextType {
   state: ChallengeState;
   
-  // 인증 액션
-  login: (token: string, user: any) => void;
-  logout: () => void;
-  
   // 챌린지 액션
   setActiveChallenge: (challenge: UserChallenge, room: ChallengeRoom) => void;
   clearActiveChallenge: () => void;
@@ -177,23 +140,9 @@ interface ChallengeProviderProps {
 export const ChallengeProvider: React.FC<ChallengeProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(challengeReducer, initialState);
 
-  // 로컬 스토리지에서 상태 복원
+  // 설정 복원
   useEffect(() => {
-    const savedToken = localStorage.getItem('challengeAuthToken');
-    const savedUser = localStorage.getItem('challengeUser');
     const savedSettings = localStorage.getItem('challengeSettings');
-
-    if (savedToken && savedUser) {
-      try {
-        const user = JSON.parse(savedUser);
-        dispatch({ type: 'SET_AUTH', payload: { token: savedToken, user } });
-        setChallengeApiToken(savedToken);
-      } catch (error) {
-        console.error('Failed to restore auth state:', error);
-        localStorage.removeItem('challengeAuthToken');
-        localStorage.removeItem('challengeUser');
-      }
-    }
 
     if (savedSettings) {
       try {
@@ -206,19 +155,6 @@ export const ChallengeProvider: React.FC<ChallengeProviderProps> = ({ children }
     }
   }, []);
 
-  // 인증 상태 변경 시 로컬 스토리지 업데이트
-  useEffect(() => {
-    if (state.isAuthenticated && state.authToken && state.user) {
-      localStorage.setItem('challengeAuthToken', state.authToken);
-      localStorage.setItem('challengeUser', JSON.stringify(state.user));
-      setChallengeApiToken(state.authToken);
-    } else {
-      localStorage.removeItem('challengeAuthToken');
-      localStorage.removeItem('challengeUser');
-      setChallengeApiToken(null);
-    }
-  }, [state.isAuthenticated, state.authToken, state.user]);
-
   // 설정 변경 시 로컬 스토리지 업데이트
   useEffect(() => {
     localStorage.setItem('challengeSettings', JSON.stringify(state.settings));
@@ -226,7 +162,7 @@ export const ChallengeProvider: React.FC<ChallengeProviderProps> = ({ children }
 
   // 자동 새로고침 설정
   useEffect(() => {
-    if (!state.settings.autoRefresh || !state.isAuthenticated || !state.activeChallenge) {
+    if (!state.settings.autoRefresh || !state.activeChallenge) {
       return;
     }
 
@@ -235,16 +171,9 @@ export const ChallengeProvider: React.FC<ChallengeProviderProps> = ({ children }
     }, state.settings.refreshInterval);
 
     return () => clearInterval(interval);
-  }, [state.settings.autoRefresh, state.settings.refreshInterval, state.isAuthenticated, state.activeChallenge]);
+  }, [state.settings.autoRefresh, state.settings.refreshInterval, state.activeChallenge]);
 
   // 액션 함수들
-  const login = (token: string, user: any) => {
-    dispatch({ type: 'SET_AUTH', payload: { token, user } });
-  };
-
-  const logout = () => {
-    dispatch({ type: 'LOGOUT' });
-  };
 
   const setActiveChallenge = (challenge: UserChallenge, room: ChallengeRoom) => {
     dispatch({ type: 'SET_ACTIVE_CHALLENGE', payload: { challenge, room } });
@@ -255,7 +184,7 @@ export const ChallengeProvider: React.FC<ChallengeProviderProps> = ({ children }
   };
 
   const refreshChallengeData = async () => {
-    if (!state.isAuthenticated || !state.activeChallenge) {
+    if (!state.activeChallenge) {
       return;
     }
 
@@ -313,8 +242,6 @@ export const ChallengeProvider: React.FC<ChallengeProviderProps> = ({ children }
 
   const contextValue: ChallengeContextType = {
     state,
-    login,
-    logout,
     setActiveChallenge,
     clearActiveChallenge,
     refreshChallengeData,
@@ -341,16 +268,6 @@ export const useChallenge = () => {
 };
 
 // 편의 훅들
-export const useChallengeAuth = () => {
-  const { state, login, logout } = useChallenge();
-  return {
-    isAuthenticated: state.isAuthenticated,
-    user: state.user,
-    authToken: state.authToken,
-    login,
-    logout,
-  };
-};
 
 export const useChallengeSettings = () => {
   const { state, updateSettings } = useChallenge();

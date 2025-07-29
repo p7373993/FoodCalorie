@@ -34,15 +34,40 @@ export interface ChallengeApiResponse<T> {
 
 class ChallengeApiClient {
   private baseURL: string;
-  private authToken: string | null = null;
+  private csrfToken: string | null = null;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
   }
 
-  // 인증 토큰 설정
-  setAuthToken(token: string | null) {
-    this.authToken = token;
+  // CSRF 토큰 가져오기
+  private async getCSRFToken(): Promise<string> {
+    if (this.csrfToken) {
+      return this.csrfToken;
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/api/auth/csrf-token/`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get CSRF token: ${response.status}`);
+      }
+
+      const data = await response.json();
+      this.csrfToken = data.csrf_token;
+      return this.csrfToken;
+    } catch (error) {
+      console.error('Error getting CSRF token:', error);
+      throw error;
+    }
+  }
+
+  // CSRF 토큰 초기화
+  private clearCSRFToken(): void {
+    this.csrfToken = null;
   }
 
   // 기본 요청 메서드
@@ -57,16 +82,26 @@ class ChallengeApiClient {
         ...options.headers,
       };
 
-      // 인증 토큰 처리 - localStorage에서 직접 가져오기
-      const token = this.authToken || (typeof window !== 'undefined' ? localStorage.getItem('authToken') : null);
-      if (token) {
-        headers.Authorization = `Token ${token}`;
+      // POST, PUT, DELETE 요청에 CSRF 토큰 추가
+      if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method?.toUpperCase() || 'GET')) {
+        try {
+          const csrfToken = await this.getCSRFToken();
+          headers['X-CSRFToken'] = csrfToken;
+        } catch (error) {
+          console.error('Failed to get CSRF token for request:', error);
+        }
       }
 
       const response = await fetch(url, {
         ...options,
+        credentials: 'include', // 쿠키 기반 인증을 위해 credentials 포함
         headers,
       });
+
+      // 401 또는 403 응답 시 CSRF 토큰 초기화
+      if (response.status === 401 || response.status === 403) {
+        this.clearCSRFToken();
+      }
 
       const responseData = await response.json();
 
@@ -337,11 +372,4 @@ export const challengeApi = new ChallengeApiClient(API_BASE_URL);
 // 기본 export
 export default challengeApi;
 
-// 편의 함수들
-export const setChallengeApiToken = (token: string | null) => {
-  challengeApi.setAuthToken(token);
-};
-
-export const resetChallengeApi = () => {
-  challengeApi.setAuthToken(null);
-}; 
+// 편의 함수들 (세션 기반 인증으로 변경되어 토큰 관련 함수 제거) 

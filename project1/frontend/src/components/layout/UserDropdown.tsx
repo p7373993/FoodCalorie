@@ -4,29 +4,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { User, ChevronDown, BarChart3, LogOut } from 'lucide-react';
-
-interface UserData {
-  username: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-}
+import { useAuthState, useAuthActions } from '@/contexts/AuthContext';
 
 export function UserDropdown() {
   const router = useRouter();
-  const [user, setUser] = useState<UserData | null>(null);
+  const { user } = useAuthState();
+  const { logout } = useAuthActions();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // 클라이언트 사이드에서만 실행
-    if (typeof window !== 'undefined') {
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        setUser(JSON.parse(userData));
-      }
-    }
-  }, []);
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -42,11 +27,8 @@ export function UserDropdown() {
     };
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('profile');
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 
@@ -54,9 +36,9 @@ export function UserDropdown() {
     return null;
   }
 
-  const displayName = user.first_name && user.last_name 
+  const displayName = user?.first_name && user?.last_name 
     ? `${user.last_name}${user.first_name}` 
-    : user.username;
+    : user?.username || 'User';
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -100,7 +82,7 @@ export function UserDropdown() {
                 >
                   {displayName} 님
                 </Link>
-                <p className="text-gray-400 text-sm">{user.email}</p>
+                <p className="text-gray-400 text-sm">{user?.email || ''}</p>
               </div>
             </div>
           </div>

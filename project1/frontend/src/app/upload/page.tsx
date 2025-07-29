@@ -3,17 +3,18 @@
 import React, { ChangeEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import UserInfo from '@/components/auth/UserInfo';
+import { useAuthState } from '@/contexts/AuthContext';
 
 export default function UploadPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuthState();
   
   // 로그인 상태 확인
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
+    if (!isLoading && !isAuthenticated) {
       router.replace('/login');
     }
-  }, [router]);
+  }, [router, isAuthenticated, isLoading]);
   
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files?.[0]) {

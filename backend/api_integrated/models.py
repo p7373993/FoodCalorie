@@ -15,10 +15,10 @@ class MealLog(models.Model):
     carbs = models.FloatField(null=True, blank=True)
     protein = models.FloatField(null=True, blank=True)
     fat = models.FloatField(null=True, blank=True)
-    nutriScore = models.CharField(max_length=1, choices=[
-        ('A', 'A'), ('B', 'B'), ('C', 'C'), ('D', 'D'), ('E', 'E')
+    nutriScore = models.CharField(max_length=10, choices=[
+        ('A', 'A'), ('B', 'B'), ('C', 'C'), ('D', 'D'), ('E', 'E'), ('UNKNOWN', 'UNKNOWN')
     ], null=True, blank=True)
-    imageUrl = models.ImageField(upload_to='meal_images/', null=True, blank=True)
+    imageUrl = models.URLField(max_length=500, null=True, blank=True)  # URL 문자열로 변경
     time = models.TimeField(null=True, blank=True)
 
     def __str__(self):

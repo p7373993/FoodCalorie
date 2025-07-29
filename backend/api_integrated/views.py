@@ -96,6 +96,19 @@ class MealLogViewSet(viewsets.ModelViewSet):
     serializer_class = MealLogSerializer
     permission_classes = [IsAuthenticated] # 권한 추가
     lookup_field = 'id'
+    
+    def create(self, request, *args, **kwargs):
+        print(f"=== MealLogViewSet.create 호출 ===")
+        print(f"요청 사용자: {request.user}")
+        print(f"인증 상태: {request.user.is_authenticated}")
+        print(f"요청 데이터: {request.data}")
+        print(f"Content-Type: {request.content_type}")
+        
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            print(f"❌ ViewSet create 실패: {e}")
+            raise
 
     def get_queryset(self):
         queryset = MealLog.objects.filter(user=self.request.user)
@@ -109,14 +122,104 @@ class MealLogViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        meal_log = serializer.save(user=self.request.user)
-        # 챌린지 판정은 signals.py에서 자동으로 처리됩니다.
-        # MealLog 생성 시 post_save 신호가 발생하여 자동으로 챌린지 판정이 실행됩니다.
+        """MealLog 생성 시 현재 사용자를 자동으로 설정"""
+        print(f"=== MealLog 생성 시도 ===")
+        print(f"요청 사용자: {self.request.user}")
+        print(f"인증 상태: {self.request.user.is_authenticated}")
+        print(f"요청 데이터: {self.request.data}")
+        
+        try:
+            meal_log = serializer.save(user=self.request.user)
+            print(f"✅ MealLog 생성 성공: {meal_log}")
+            # 챌린지 판정은 signals.py에서 자동으로 처리됩니다.
+            # MealLog 생성 시 post_save 신호가 발생하여 자동으로 챌린지 판정이 실행됩니다.
+        except Exception as e:
+            print(f"❌ MealLog 생성 실패: {e}")
+            print(f"시리얼라이저 에러: {serializer.errors if hasattr(serializer, 'errors') else 'N/A'}")
+            raise
 
 class AICoachTipViewSet(viewsets.ModelViewSet):
     queryset = AICoachTip.objects.all()
     serializer_class = AICoachTipSerializer
     permission_classes = [IsAuthenticated] # 권한 추가
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TestMealLogView(APIView):
+    """MealLog 생성 테스트용 API"""
+    permission_classes = [AllowAny]  # 임시로 AllowAny 사용
+    
+    def post(self, request):
+        print(f"테스트 MealLog 요청 데이터: {request.data}")
+        print(f"요청 사용자: {request.user}")
+        
+        try:
+            serializer = MealLogSerializer(data=request.data)
+            if serializer.is_valid():
+                # 테스트용으로 임시 사용자 사용
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                test_user = User.objects.filter(email='test@meal.com').first()
+                if not test_user:
+                    test_user = request.user if request.user.is_authenticated else None
+                
+                meal_log = serializer.save(user=test_user)
+                return Response({
+                    'success': True,
+                    'data': MealLogSerializer(meal_log).data,
+                    'message': 'MealLog 생성 성공'
+                }, status=status.HTTP_201_CREATED)
+            else:
+                print(f"시리얼라이저 에러: {serializer.errors}")
+                return Response({
+                    'success': False,
+                    'errors': serializer.errors,
+                    'message': '데이터 검증 실패'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"MealLog 생성 예외: {e}")
+            return Response({
+                'success': False,
+                'error': str(e),
+                'message': '서버 오류'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ImageUploadView(APIView):
+    """이미지 파일만 업로드하는 API"""
+    permission_classes = [AllowAny]  # 임시로 인증 없이 허용
+    
+    def post(self, request):
+        if 'image' not in request.FILES:
+            return Response({
+                "success": False, 
+                "message": "No image file provided"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            image_file = request.FILES['image']
+            
+            # 파일 저장
+            file_name = default_storage.save(
+                os.path.join('meal_images', image_file.name), 
+                ContentFile(image_file.read())
+            )
+            
+            # 절대 URL 생성
+            image_url = request.build_absolute_uri(default_storage.url(file_name))
+            
+            return Response({
+                "success": True,
+                "image_url": image_url,
+                "file_name": file_name
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": f"Image upload failed: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AnalyzeImageView(APIView):
     permission_classes = [IsAuthenticated]

@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from .models import UserProfile, PasswordResetToken, LoginAttempt
-from .services import JWTAuthService
+
 
 User = get_user_model()
 
@@ -131,16 +131,11 @@ class RegisterSerializer(serializers.Serializer):
         user.profile.nickname = nickname
         user.profile.save()
         
-        # JWT 토큰 생성 (자동 로그인 처리)
-        tokens = JWTAuthService.generate_tokens_with_extended_refresh(
-            user, extend_refresh=remember_me
-        )
-        
-        # 사용자 정보와 토큰을 함께 반환
+        # 사용자 정보와 프로필을 반환 (세션 로그인은 뷰에서 처리)
         return {
             'user': user,
-            'tokens': tokens,
-            'profile': user.profile
+            'profile': user.profile,
+            'remember_me': remember_me
         }
 
 

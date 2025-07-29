@@ -1,44 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-interface UserData {
-  username: string;
-  email: string;
-}
-
-interface ProfileData {
-  nickname: string;
-}
+import { useAuthState, useAuthActions } from '@/contexts/AuthContext';
 
 export default function UserInfo() {
   const router = useRouter();
-  const [user, setUser] = useState<UserData | null>(null);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const { user, profile } = useAuthState();
+  const { logout } = useAuthActions();
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    // localStorage에서 사용자 정보 가져오기
-    const userData = localStorage.getItem('user');
-    const profileData = localStorage.getItem('profile');
-    
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    if (profileData) {
-      setProfile(JSON.parse(profileData));
-    }
-  }, []);
-
-  const handleLogout = () => {
-    // localStorage 정리
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('profile');
-    
-    // 로그인 페이지로 이동
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 
@@ -58,12 +31,12 @@ export default function UserInfo() {
         >
           {/* 아바타 */}
           <div className="w-8 h-8 bg-green-400 rounded-full flex items-center justify-center text-black font-bold text-sm">
-            {(profile?.nickname || user.username).charAt(0).toUpperCase()}
+            {(profile?.nickname || user?.username || 'U').charAt(0).toUpperCase()}
           </div>
           
           {/* 사용자명 */}
           <span className="text-white text-sm font-medium">
-            {profile?.nickname || user.username}
+            {profile?.nickname || user?.username || 'User'}
           </span>
           
           {/* 드롭다운 아이콘 */}
@@ -81,8 +54,8 @@ export default function UserInfo() {
         {isOpen && (
           <div className="absolute top-full right-0 mt-2 w-48 bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-xl shadow-lg overflow-hidden">
             <div className="p-3 border-b border-gray-700">
-              <p className="text-white font-medium text-sm">{profile?.nickname || user.username}</p>
-              <p className="text-gray-400 text-xs">{user.email}</p>
+              <p className="text-white font-medium text-sm">{profile?.nickname || user?.username || 'User'}</p>
+              <p className="text-gray-400 text-xs">{user?.email || ''}</p>
             </div>
             
             <div className="py-1">
