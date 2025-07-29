@@ -4,8 +4,9 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny # IsAuthenticated, AllowAny 임포트
 from .models import MealLog, AICoachTip # Only import models that still exist in api.models
 from .serializers import MealLogSerializer, AICoachTipSerializer, UserSerializer # Only import serializers that still exist
+from challenges.serializers import ChallengeRoomSerializer
 from datetime import datetime, timedelta
-from django.db.models import Q, Avg, Sum # Avg, Sum 임포트
+from django.db.models import Q, Avg, Sum, Count # Avg, Sum, Count 임포트
 from django.contrib.auth.models import User
 from calendar import monthrange
 from collections import defaultdict
@@ -701,9 +702,9 @@ class DailyReportView(APIView):
 class RecommendedChallengesView(APIView):
     permission_classes = [IsAuthenticated] # 권한 추가
     def get(self, request, *args, **kwargs):
-        from .challenges.models import Challenge
-        challenges = Challenge.objects.filter(is_active=True).order_by('-start_date')[:5] # 최신 5개
-        serializer = ChallengeSerializer(challenges, many=True)
+        from challenges.models import ChallengeRoom
+        challenges = ChallengeRoom.objects.filter(is_active=True).order_by('-created_at')[:5] # 최신 5개
+        serializer = ChallengeRoomSerializer(challenges, many=True)
         return Response({
             "success": True,
             "data": serializer.data,
@@ -715,9 +716,9 @@ class MyChallengesView(APIView):
     def get(self, request, *args, **kwargs):
         print(f"[DEBUG] MyChallengesView - request.user: {request.user}")
         print(f"[DEBUG] MyChallengesView - request.auth: {request.auth}")
-        from .challenges.models import Challenge
-        challenges = Challenge.objects.filter(participants__user=request.user) if request.user.is_authenticated else Challenge.objects.none()
-        serializer = ChallengeSerializer(challenges, many=True)
+        from challenges.models import ChallengeRoom
+        challenges = ChallengeRoom.objects.filter(participants__user=request.user) if request.user.is_authenticated else ChallengeRoom.objects.none()
+        serializer = ChallengeRoomSerializer(challenges, many=True)
         return Response({
             "success": True,
             "data": serializer.data,
@@ -814,7 +815,7 @@ class UserStatisticsView(APIView):
         food_categories = MealLog.objects.filter(
             user=user,
             date__gte=month_ago
-        ).values('foodName').annotate(count=models.Count('id')).order_by('-count')[:10]
+        ).values('foodName').annotate(count=Count('id')).order_by('-count')[:10]
 
         pie_data = []
         for food in food_categories:

@@ -1,4 +1,3 @@
-from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import (
@@ -113,6 +112,14 @@ class UserChallengeCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """챌린지 참여 검증"""
+        request = self.context.get('request')
+        
+        # 인증된 사용자 확인
+        if not request or not request.user or not request.user.is_authenticated:
+            raise serializers.ValidationError(
+                "인증된 사용자만 챌린지에 참여할 수 있습니다."
+            )
+
         # room_id를 room 객체로 변환
         try:
             room = ChallengeRoom.objects.get(
@@ -121,6 +128,17 @@ class UserChallengeCreateSerializer(serializers.ModelSerializer):
             data["room"] = room
         except ChallengeRoom.DoesNotExist:
             raise serializers.ValidationError("존재하지 않는 챌린지 방입니다.")
+
+        # 사용자의 기존 활성 챌린지 확인
+        existing_active_challenge = UserChallenge.objects.filter(
+            user=request.user, status="active"
+        ).first()
+        
+        if existing_active_challenge:
+            raise serializers.ValidationError(
+                f'이미 "{existing_active_challenge.room.name}" 챌린지에 참여 중입니다. '
+                f'하나의 챌린지만 참여할 수 있습니다.'
+            )
 
         # 키, 몸무게 검증
         if data["user_height"] < 100 or data["user_height"] > 250:
@@ -151,11 +169,17 @@ class UserChallengeCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """챌린지 참여 생성"""
+        request = self.context.get('request')
+        
         # room_id 제거 (이미 room으로 변환됨)
         validated_data.pop("room_id", None)
         validated_data["remaining_duration_days"] = validated_data[
             "user_challenge_duration_days"
         ]
+        
+        # 인증된 사용자를 자동으로 설정
+        validated_data["user"] = request.user
+        
         return super().create(validated_data)
 
 

@@ -244,12 +244,7 @@ export default function MyChallengesPage() {
                       🏆 순위 보기
                     </button>
                     
-                    <button
-                      onClick={() => router.push('/challenges/stats')}
-                      className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-500 transition-colors"
-                    >
-                      📊 상세 통계
-                    </button>
+
                     
                     <button
                       onClick={() => handleCheatRequest(challenge)}

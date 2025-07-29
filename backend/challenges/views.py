@@ -3,10 +3,20 @@ import logging
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.authentication import SessionAuthentication
+
+from accounts.permissions import IsAuthenticatedWithProperError, IsAdminUserWithProperError
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # CSRF 검증을 하지 않음
 
 from .models import (
     ChallengeRoom,
@@ -28,7 +38,6 @@ logger = logging.getLogger("challenges")
 class ChallengeRoomListView(APIView):
     """챌린지 방 목록 API (인증 없이 접근 가능)"""
 
-    authentication_classes = []  # 인증 클래스 비활성화
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -48,7 +57,11 @@ class ChallengeRoomListView(APIView):
         except Exception as e:
             logger.error(f"Error fetching challenge rooms: {str(e)}")
             return Response(
-                {"error": "Failed to fetch challenge rooms"},
+                {
+                    "success": False,
+                    "error_code": "SERVER_ERROR",
+                    "message": "Failed to fetch challenge rooms"
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -57,7 +70,6 @@ class ChallengeRoomViewSet(viewsets.ReadOnlyModelViewSet):
     """챌린지 방 ViewSet (읽기 전용)"""
 
     serializer_class = ChallengeRoomSerializer
-    authentication_classes = []  # 인증 클래스 비활성화
     permission_classes = [AllowAny]  # 명시적으로 모든 접근 허용
 
     def get_queryset(self):
@@ -67,9 +79,25 @@ class ChallengeRoomViewSet(viewsets.ReadOnlyModelViewSet):
 class JoinChallengeView(APIView):
     """챌린지 참여 API"""
 
-    permission_classes = [AllowAny]  # 명시적으로 모든 접근 허용
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [AllowAny]  # 임시로 모든 접근 허용
 
     def post(self, request):
+        # 세션 기반 인증 확인
+        if not request.user.is_authenticated:
+            return Response({
+                'success': False,
+                'message': '인증이 필요합니다. 다시 로그인해주세요.',
+                'error_code': 'AUTHENTICATION_REQUIRED',
+                'redirect_url': '/login',
+                'session_info': {
+                    'authenticated': False,
+                    'session_expired': True,
+                    'should_redirect': True,
+                    'failed_at': timezone.now().isoformat()
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
         serializer = UserChallengeCreateSerializer(
             data=request.data, context={"request": request}
         )
@@ -77,7 +105,7 @@ class JoinChallengeView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "VALIDATION_ERROR",
+                    "error_code": "VALIDATION_ERROR",
                     "message": "입력 데이터가 올바르지 않습니다.",
                     "details": serializer.errors,
                 },
@@ -89,72 +117,12 @@ class JoinChallengeView(APIView):
                 # 챌린지 방은 시리얼라이저에서 이미 검증됨
                 room = serializer.validated_data["room"]
 
-                # 데모용 사용자 생성 (실제 서비스에서는 인증된 사용자 사용)
-                import random
-
-                from django.contrib.auth.models import User
-
-                # 기존 test_user가 있으면 사용, 없으면 더미 사용자 중 하나 선택
-                demo_user = None
-                try:
-                    demo_user = User.objects.get(username="test_user")
-                except User.DoesNotExist:
-                    # 더미 사용자 중 랜덤 선택 (활성 챌린지가 없는 사용자)
-                    available_users = User.objects.filter(
-                        username__startswith="dummy_user_"
-                    ).exclude(user_challenges__status="active")[
-                        :10
-                    ]  # 처음 10명 중에서
-
-                    if available_users:
-                        demo_user = random.choice(available_users)
-                    else:
-                        # 사용 가능한 더미 사용자가 없으면 새로 생성
-                        demo_user = User.objects.create_user(
-                            username="test_user", email="test@example.com"
-                        )
-
-                # 중복 참여 방지: 활성 챌린지가 있는지 확인 (모든 방)
-                existing_active_challenge = UserChallenge.objects.filter(
-                    user=demo_user, status="active"
-                ).first()
-
-                if existing_active_challenge:
-                    return Response(
-                        {
-                            "success": False,
-                            "error": "ALREADY_IN_CHALLENGE",
-                            "message": (
-                                f'이미 "{existing_active_challenge.room.name}" '
-                                f"챌린지에 참여 중입니다. 하나의 챌린지만 참여할 수 있습니다."
-                            ),
-                            "details": {
-                                "current_room": (
-                                    existing_active_challenge.room.name
-                                ),
-                                "current_room_id": (
-                                    existing_active_challenge.room.id
-                                ),
-                                "joined_at": (
-                                    existing_active_challenge
-                                    .challenge_start_date
-                                ),
-                                "remaining_days": (
-                                    existing_active_challenge
-                                    .remaining_duration_days
-                                ),
-                            },
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
                 # 새 챌린지 참여 생성 (시리얼라이저 사용)
-                user_challenge = serializer.save(
-                    user=demo_user, status="active"
-                )
+                # 사용자 및 중복 참여 검증은 시리얼라이저에서 처리됨
+                user_challenge = serializer.save(status="active")
 
                 logger.info(
-                    f"User {demo_user.id} joined challenge room {room.name}"
+                    f"User {request.user.id} joined challenge room {room.name}"
                 )
 
                 # 응답 데이터
@@ -174,7 +142,7 @@ class JoinChallengeView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "챌린지 참여 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -184,33 +152,29 @@ class JoinChallengeView(APIView):
 class MyChallengeView(APIView):
     """내 챌린지 현황 API"""
 
-    permission_classes = [AllowAny]  # 명시적으로 모든 접근 허용
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [AllowAny]  # 임시로 모든 접근 허용
 
     def get(self, request):
+        # 세션 기반 인증 확인
+        if not request.user.is_authenticated:
+            return Response({
+                'success': False,
+                'message': '인증이 필요합니다. 다시 로그인해주세요.',
+                'error_code': 'AUTHENTICATION_REQUIRED',
+                'redirect_url': '/login',
+                'session_info': {
+                    'authenticated': False,
+                    'session_expired': True,
+                    'should_redirect': True,
+                    'failed_at': timezone.now().isoformat()
+                }
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
         try:
-            # 데모용 사용자 조회 (실제 서비스에서는 request.user 사용)
-            from django.contrib.auth.models import User
-
-            # test_user가 있으면 사용, 없으면 활성 챌린지가 있는 더미 사용자 중 하나 선택
-            demo_user = None
-            try:
-                demo_user = User.objects.get(username="test_user")
-            except User.DoesNotExist:
-                # 활성 챌린지가 있는 더미 사용자 중 하나 선택
-                demo_user = User.objects.filter(
-                    username__startswith="dummy_user_",
-                    user_challenges__status="active",
-                ).first()
-
-                if not demo_user:
-                    # 활성 챌린지가 있는 사용자가 없으면 test_user 생성
-                    demo_user = User.objects.create_user(
-                        username="test_user", email="test@example.com"
-                    )
-
-            # 데모 사용자의 활성 챌린지 조회
+            # 현재 인증된 사용자의 활성 챌린지 조회
             active_challenges = (
-                UserChallenge.objects.filter(user=demo_user, status="active")
+                UserChallenge.objects.filter(user=request.user, status="active")
                 .select_related("room")
                 .order_by("-created_at")
             )
@@ -223,7 +187,6 @@ class MyChallengeView(APIView):
                         "data": {
                             "active_challenges": [],
                             "has_active_challenge": False,
-                            "demo_user": demo_user.username,
                         },
                     }
                 )
@@ -256,7 +219,6 @@ class MyChallengeView(APIView):
                         "active_challenges": challenges_data,
                         "has_active_challenge": True,
                         "total_active_count": len(challenges_data),
-                        "demo_user": demo_user.username,
                     },
                 }
             )
@@ -266,7 +228,7 @@ class MyChallengeView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "챌린지 현황 조회 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -276,7 +238,7 @@ class MyChallengeView(APIView):
 class ExtendChallengeView(APIView):
     """챌린지 기간 연장 API"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
 
     def put(self, request):
         try:
@@ -287,7 +249,7 @@ class ExtendChallengeView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "error": "MISSING_CHALLENGE_ID",
+                        "error_code": "MISSING_CHALLENGE_ID",
                         "message": "연장할 챌린지 ID가 필요합니다.",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -310,7 +272,7 @@ class ExtendChallengeView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "error": "INVALID_EXTEND_DAYS",
+                        "error_code": "INVALID_EXTEND_DAYS",
                         "message": "연장 일수는 1~365일 사이여야 합니다.",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -342,7 +304,7 @@ class ExtendChallengeView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "챌린지 연장 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -352,7 +314,7 @@ class ExtendChallengeView(APIView):
 class LeaveChallengeView(APIView):
     """챌린지 포기/탈퇴 API"""
 
-    permission_classes = [AllowAny]  # 명시적으로 모든 접근 허용
+    permission_classes = [IsAuthenticatedWithProperError]
 
     def post(self, request):
         try:
@@ -362,17 +324,15 @@ class LeaveChallengeView(APIView):
                 return Response(
                     {
                         "success": False,
+                        "error_code": "MISSING_CHALLENGE_ID",
                         "message": "포기할 챌린지 ID가 필요합니다.",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # 데모용 사용자 조회 (실제 서비스에서는 request.user 사용)
-            from django.contrib.auth.models import User  # noqa: F401
-
-            # 챌린지 ID로 해당 챌린지의 사용자 찾기
+            # 현재 사용자의 활성 챌린지 찾기
             user_challenge = UserChallenge.objects.select_related("user").get(
-                id=challenge_id, status="active"
+                id=challenge_id, user=request.user, status="active"
             )
 
             # 챌린지 포기 처리
@@ -395,13 +355,18 @@ class LeaveChallengeView(APIView):
             return Response(
                 {
                     "success": False,
+                    "error_code": "CHALLENGE_NOT_FOUND",
                     "message": "해당 챌린지를 찾을 수 없습니다.",
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
             return Response(
-                {"success": False, "message": f"오류: {str(e)}"},
+                {
+                    "success": False,
+                    "error_code": "SERVER_ERROR",
+                    "message": f"오류: {str(e)}"
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -409,7 +374,7 @@ class LeaveChallengeView(APIView):
 class RequestCheatDayView(APIView):
     """치팅 요청 API"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
 
     def post(self, request):
         try:
@@ -421,7 +386,7 @@ class RequestCheatDayView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "error": "MISSING_DATE",
+                        "error_code": "MISSING_DATE",
                         "message": "치팅을 적용할 날짜가 필요합니다.",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -438,7 +403,7 @@ class RequestCheatDayView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "error": "INVALID_DATE_FORMAT",
+                        "error_code": "INVALID_DATE_FORMAT",
                         "message": "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식을 사용하세요.",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -462,7 +427,7 @@ class RequestCheatDayView(APIView):
                     return Response(
                         {
                             "success": False,
-                            "error": "NO_ACTIVE_CHALLENGE",
+                            "error_code": "NO_ACTIVE_CHALLENGE",
                             "message": "참여 중인 활성 챌린지가 없습니다.",
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -493,7 +458,7 @@ class RequestCheatDayView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "error": result["error"],
+                        "error_code": result["error"],
                         "message": result["message"],
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -504,7 +469,7 @@ class RequestCheatDayView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "치팅 요청 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -514,7 +479,7 @@ class RequestCheatDayView(APIView):
 class CheatStatusView(APIView):
     """치팅 현황 API"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
 
     def get(self, request):
         try:
@@ -538,7 +503,7 @@ class CheatStatusView(APIView):
                     return Response(
                         {
                             "success": False,
-                            "error": "NO_ACTIVE_CHALLENGE",
+                            "error_code": "NO_ACTIVE_CHALLENGE",
                             "message": "참여 중인 활성 챌린지가 없습니다.",
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -587,7 +552,7 @@ class CheatStatusView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "치팅 현황 조회 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -597,7 +562,6 @@ class CheatStatusView(APIView):
 class LeaderboardView(APIView):
     """리더보드 API"""
 
-    authentication_classes = []  # 인증 클래스 비활성화
     permission_classes = [AllowAny]  # 인증 없이 접근 가능
 
     def get(self, request, room_id):
@@ -642,7 +606,7 @@ class LeaderboardView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "리더보드 조회 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -652,7 +616,7 @@ class LeaderboardView(APIView):
 class PersonalStatsView(APIView):
     """개인 통계 API"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
 
     def get(self, request):
         try:
@@ -676,7 +640,7 @@ class PersonalStatsView(APIView):
                     return Response(
                         {
                             "success": False,
-                            "error": "NO_ACTIVE_CHALLENGE",
+                            "error_code": "NO_ACTIVE_CHALLENGE",
                             "message": "참여 중인 활성 챌린지가 없습니다.",
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -720,7 +684,7 @@ class PersonalStatsView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "개인 통계 조회 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -730,7 +694,7 @@ class PersonalStatsView(APIView):
 class ChallengeReportView(APIView):
     """챌린지 리포트 API"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedWithProperError]
 
     def get(self, request):
         try:
@@ -753,7 +717,7 @@ class ChallengeReportView(APIView):
                     return Response(
                         {
                             "success": False,
-                            "error": "NO_CHALLENGE_FOUND",
+                            "error_code": "NO_CHALLENGE_FOUND",
                             "message": "참여한 챌린지가 없습니다.",
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -831,7 +795,7 @@ class ChallengeReportView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "챌린지 리포트 생성 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -889,7 +853,7 @@ class DailyChallengeJudgmentView(APIView):
                     return Response(
                         {
                             "success": False,
-                            "error": "INVALID_DATE_FORMAT",
+                            "error_code": "INVALID_DATE_FORMAT",
                             "message": "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식을 사용하세요.",
                         },
                         status=status.HTTP_400_BAD_REQUEST,
@@ -919,7 +883,7 @@ class DailyChallengeJudgmentView(APIView):
                 return Response(
                     {
                         "success": False,
-                        "error": "NO_ACTIVE_CHALLENGE",
+                        "error_code": "NO_ACTIVE_CHALLENGE",
                         "message": "판정할 활성 챌린지가 없습니다.",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -965,7 +929,7 @@ class DailyChallengeJudgmentView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "일일 챌린지 판정 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1002,7 +966,7 @@ class WeeklyResetView(APIView):
             return Response(
                 {
                     "success": False,
-                    "error": "SERVER_ERROR",
+                    "error_code": "SERVER_ERROR",
                     "message": "주간 초기화 중 오류가 발생했습니다.",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -6,12 +6,12 @@ import { KakaoLoginButton } from '@/components/auth/KakaoLoginButton';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { HelperLinks } from '@/components/auth/HelperLinks';
 import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
-import { useRequireGuest } from '@/hooks/useAuthGuard';
+import { useAuthState } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { canRender, isLoading } = useRequireGuest('/upload');
+  const { isAuthenticated, isLoading } = useAuthState();
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   
   useEffect(() => {
@@ -22,9 +22,15 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  // 인증 확인 중이거나 이미 로그인된 사용자면 로딩 화면 표시
-  if (isLoading || !canRender) {
+  // 로딩 중이면 로딩 화면 표시
+  if (isLoading) {
     return <AuthLoadingScreen message="로그인 상태를 확인하고 있습니다..." />;
+  }
+
+  // 이미 로그인된 사용자는 업로드 페이지로 리다이렉트
+  if (isAuthenticated) {
+    router.push('/upload');
+    return <AuthLoadingScreen message="이미 로그인되어 있습니다. 리다이렉트 중..." />;
   }
 
   return (

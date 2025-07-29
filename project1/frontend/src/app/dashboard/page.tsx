@@ -70,7 +70,7 @@ export default function DashboardPage() {
         const data = await apiClient.getMeals();
         
         // 최근 5개 식사만 표시
-        const meals = (data.results || data || []).slice(0, 5);
+        const meals = ((data as any).results || data || []).slice(0, 5);
         setRecentMeals(meals);
       } catch (error) {
         console.error('Error loading recent meals:', error);

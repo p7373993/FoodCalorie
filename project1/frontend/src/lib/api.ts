@@ -72,7 +72,7 @@ class ApiClient {
 
       const data = await response.json();
       this.csrfToken = data.csrf_token || '';
-      return this.csrfToken;
+      return this.csrfToken || '';
     } catch (error) {
       console.error('Error getting CSRF token:', error);
       throw error;
@@ -87,11 +87,11 @@ class ApiClient {
   // 인증 관련 API
   async login(email: string, password: string): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request('/api/auth/login/', {
+      const response = await this.request<ApiResponse<any>>('/api/auth/login/', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      return response;
+      return response as ApiResponse<any>;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -100,11 +100,23 @@ class ApiClient {
 
   async logout(): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request('/api/auth/logout/', {
+      // 로그아웃은 CSRF 토큰 없이 직접 요청
+      const url = `${this.baseURL}/api/auth/logout/`;
+      const response = await fetch(url, {
         method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+
+      if (!response.ok) {
+        throw new Error(`Logout failed: ${response.status}`);
+      }
+
+      const data = await response.json() as ApiResponse<any>;
       this.clearCSRFToken(); // 로그아웃 후 CSRF 토큰 초기화
-      return response;
+      return data as ApiResponse<any>;
     } catch (error) {
       console.error('Logout error:', error);
       this.clearCSRFToken(); // 오류가 발생해도 CSRF 토큰 초기화
@@ -119,11 +131,11 @@ class ApiClient {
     password_confirm: string;
   }): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request('/api/auth/register/', {
+      const response = await this.request<ApiResponse<any>>('/api/auth/register/', {
         method: 'POST',
         body: JSON.stringify(userData),
       });
-      return response;
+      return response as ApiResponse<any>;
     } catch (error) {
       console.error('Register error:', error);
       throw error;
@@ -132,12 +144,12 @@ class ApiClient {
 
   async checkAuthStatus(): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request('/api/auth/profile/');
+      const response = await this.request<any>('/api/auth/profile/');
       return {
         success: true,
         data: response,
         message: 'Authentication status retrieved successfully'
-      };
+      } as ApiResponse<any>;
     } catch (error) {
       console.error('Auth status check error:', error);
       return {
@@ -440,9 +452,9 @@ class ApiClient {
       
       const response = await fetch(url, {
         method: 'POST',
+        credentials: 'include',  // 세션 쿠키 포함
         headers: {
           'Content-Type': 'application/json',
-          // 인증 헤더 명시적으로 제거
         },
         body: JSON.stringify(joinData),
       });
@@ -478,9 +490,11 @@ class ApiClient {
     total_active_count: number;
   }>> {
     try {
-      // 내 챌린지 정보도 인증 없이 접근 (테스트용)
+      // 내 챌린지 정보 조회 (세션 기반 인증)
       const url = `${this.baseURL}/api/challenges/my/`;
       const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',  // 세션 쿠키 포함
         headers: {
           'Content-Type': 'application/json',
         },
@@ -575,18 +589,36 @@ class ApiClient {
       const url = `/api/challenges/leaderboard/${roomId}/?limit=${limit}`;
       console.log(`Request URL: ${this.baseURL}${url}`);
       
-      const response = await this.request(url);
+      const response = await this.request<ApiResponse<{
+        room_id: number;
+        room_name: string;
+        leaderboard: LeaderboardEntry[];
+        my_rank: number | null;
+        total_participants: number;
+      }>>(url);
       console.log('Leaderboard response:', response);
       
       // 백엔드 응답이 이미 올바른 구조를 가지고 있으므로 그대로 반환
-      return response;
+      return response as ApiResponse<{
+        room_id: number;
+        room_name: string;
+        leaderboard: LeaderboardEntry[];
+        my_rank: number | null;
+        total_participants: number;
+      }>;
     } catch (error) {
       console.error('Error in getLeaderboard:', error);
       // 오류 발생 시 ApiResponse 형태로 반환
       return {
         success: false,
         message: error instanceof Error ? error.message : '리더보드를 불러오는 중 오류가 발생했습니다.'
-      };
+      } as ApiResponse<{
+        room_id: number;
+        room_name: string;
+        leaderboard: LeaderboardEntry[];
+        my_rank: number | null;
+        total_participants: number;
+      }>;
     }
   }
 

@@ -188,11 +188,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await apiClient.checkAuthStatus();
       
       if (response.success && response.data) {
+        const authData = response.data as { user: User; profile: UserProfile };
         dispatch({ 
           type: 'SET_AUTH', 
           payload: { 
-            user: response.data.user || response.data, 
-            profile: response.data.profile || null 
+            user: authData.user, 
+            profile: authData.profile || null 
           } 
         });
       } else {
@@ -201,8 +202,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Auth status check failed:', error);
       
-      // 인증 상태 확인 실패 시 특별한 처리는 하지 않음
-      // (세션 만료 등은 이미 이벤트 리스너에서 처리됨)
+      // 인증 상태 확인 실패 시 인증되지 않은 상태로 설정
       dispatch({ type: 'CLEAR_AUTH' });
       
       // 403 에러는 정상적인 인증 실패이므로 에러 메시지 표시하지 않음
@@ -214,6 +214,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           payload: '인증 상태 확인 중 오류가 발생했습니다.' 
         });
       }
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
@@ -227,11 +229,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (response.success) {
         setAuthCheckAttempted(false); // 로그인 성공 시 인증 확인 플래그 리셋
+        const authData = response.data as { user: User; profile: UserProfile };
         dispatch({ 
           type: 'SET_AUTH', 
           payload: { 
-            user: response.user || response.data?.user, 
-            profile: response.profile || response.data?.profile 
+            user: authData.user, 
+            profile: authData.profile || null 
           } 
         });
         return { success: true, message: '로그인에 성공했습니다.' };

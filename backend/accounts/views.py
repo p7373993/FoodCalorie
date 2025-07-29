@@ -5,9 +5,10 @@ from rest_framework.views import APIView
 
 from django.contrib.auth import authenticate, get_user_model
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.middleware.csrf import get_token
 from django.db import transaction
+from django.http import JsonResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
@@ -23,10 +24,24 @@ from .models import LoginAttempt, UserProfile
 from .decorators import IsAdminUser
 from .permissions import IsAuthenticatedWithProperError, IsAdminUserWithProperError
 import logging
+from rest_framework.authentication import SessionAuthentication
 
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
+
+
+class CSRFTokenView(APIView):
+    """CSRF 토큰 제공 API"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """CSRF 토큰 반환"""
+        csrf_token = get_token(request)
+        return Response({
+            'csrf_token': csrf_token,
+            'success': True
+        })
 
 
 def is_admin_user(view_func):
@@ -264,84 +279,61 @@ class LoginView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # CSRF 검증을 하지 않음
+
 class LogoutView(APIView):
     """
     로그아웃 API 뷰
     POST /api/auth/logout/
-    
-    요구사항:
-    1. Django 세션 기반 로그아웃 처리
-    2. 세션 무효화 및 정리
-    3. 로그아웃 후 리다이렉트 처리
-    4. 로그아웃 기록 및 보안 처리
     """
-    permission_classes = [IsAuthenticatedWithProperError]
-    
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = []
+
     def post(self, request):
-        """로그아웃 처리"""
         from django.contrib.auth import logout
         from django.conf import settings
-        
+        from django.utils import timezone
         try:
             user = request.user
-            
-            # 로그아웃 시도 기록
-            try:
-                LoginAttemptService.record_attempt(
-                    request, 
-                    user.email, 
-                    user, 
-                    success=True,
-                    attempt_type='logout'
-                )
-            except Exception as log_error:
-                # 로그 기록 실패는 로그아웃 성공에 영향을 주지 않음
-                pass
-            
-            # 리다이렉트 URL 처리
+            is_authenticated = user.is_authenticated
+            if is_authenticated:
+                logout(request)
+                message = '로그아웃이 완료되었습니다.'
+            else:
+                message = '이미 로그아웃된 상태입니다.'
             redirect_url = request.data.get('redirect_url')
             if redirect_url:
-                # 허용된 도메인 검증 (보안)
                 allowed_domains = getattr(settings, 'ALLOWED_LOGOUT_REDIRECT_DOMAINS', [
                     'localhost:3000', '127.0.0.1:3000', settings.FRONTEND_URL.replace('http://', '').replace('https://', '')
                 ])
-                
                 from urllib.parse import urlparse
                 parsed_url = urlparse(redirect_url)
                 domain_with_port = f"{parsed_url.hostname}:{parsed_url.port}" if parsed_url.port else parsed_url.hostname
-                
                 if domain_with_port not in allowed_domains and parsed_url.hostname not in allowed_domains:
-                    redirect_url = settings.FRONTEND_URL + '/login'  # 기본 리다이렉트
+                    redirect_url = settings.FRONTEND_URL + '/login'
             else:
-                redirect_url = settings.FRONTEND_URL + '/login'  # 기본 리다이렉트
-            
-            # 세션 정보 저장 (로그아웃 전)
-            session_key = request.session.session_key
-            
-            # Django 세션 기반 로그아웃
-            logout(request)
-            
-            # 성공 응답
+                redirect_url = settings.FRONTEND_URL + '/login'
+            session_key = request.session.session_key if hasattr(request, 'session') else None
             response_data = {
                 'success': True,
-                'message': '로그아웃이 완료되었습니다.',
+                'message': message,
                 'user': {
-                    'id': user.id,
-                    'email': user.email,
-                    'username': user.username,
+                    'id': user.id if is_authenticated else None,
+                    'email': user.email if is_authenticated else None,
+                    'username': user.username if is_authenticated else None,
                 },
                 'logout_info': {
                     'session_cleared': True,
                     'previous_session_key': session_key,
                     'redirect_url': redirect_url,
-                    'logout_timestamp': timezone.now().isoformat()
+                    'logout_timestamp': timezone.now().isoformat(),
+                    'was_authenticated': is_authenticated
                 }
             }
-            
             return Response(response_data, status=status.HTTP_200_OK)
-            
         except Exception as e:
-            # 로그아웃 실패 시에도 기본적인 정보는 제공
             return Response({
                 'success': False,
                 'message': '로그아웃 처리 중 오류가 발생했습니다.',
@@ -1811,405 +1803,6 @@ class AdminStatisticsView(APIView):
             return Response({
                 'success': False,
                 'message': '통계 조회 중 오류가 발생했습니다.',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-# ========================
-# 관리자 기능 API Views
-# ========================
-
-class AdminUserListView(APIView):
-    """
-    관리자용 사용자 목록 API
-    GET /api/auth/admin/users/
-    
-    기능:
-    - 사용자 목록 조회 (페이지네이션)
-    - 검색 및 필터링
-    - 통계 정보 제공
-    """
-    permission_classes = [IsAuthenticated, IsAdminUser]
-    
-    def get(self, request):
-        """사용자 목록 조회"""
-        try:
-            # 쿼리 파라미터 처리
-            page = int(request.GET.get('page', 1))
-            page_size = min(int(request.GET.get('page_size', 20)), 100)  # 최대 100개
-            search = request.GET.get('search', '').strip()
-            is_active = request.GET.get('is_active')
-            is_staff = request.GET.get('is_staff')
-            
-            # 기본 쿼리셋
-            queryset = User.objects.select_related('profile').order_by('-date_joined')
-            
-            # 검색 필터
-            if search:
-                from django.db.models import Q
-                queryset = queryset.filter(
-                    Q(email__icontains=search) |
-                    Q(first_name__icontains=search) |
-                    Q(last_name__icontains=search) |
-                    Q(profile__nickname__icontains=search)
-                )
-            
-            # 활성 상태 필터
-            if is_active is not None:
-                queryset = queryset.filter(is_active=is_active.lower() == 'true')
-            
-            # 스태프 상태 필터
-            if is_staff is not None:
-                queryset = queryset.filter(is_staff=is_staff.lower() == 'true')
-            
-            # 전체 통계
-            total_users = User.objects.count()
-            active_users = User.objects.filter(is_active=True).count()
-            staff_users = User.objects.filter(is_staff=True).count()
-            
-            # 페이지네이션
-            from django.core.paginator import Paginator
-            paginator = Paginator(queryset, page_size)
-            
-            if page > paginator.num_pages:
-                page = paginator.num_pages
-            
-            page_obj = paginator.get_page(page)
-            
-            # 시리얼라이저 적용
-            from .serializers import AdminUserListSerializer
-            serializer = AdminUserListSerializer(page_obj.object_list, many=True)
-            
-            response_data = {
-                'success': True,
-                'users': serializer.data,
-                'pagination': {
-                    'current_page': page,
-                    'total_pages': paginator.num_pages,
-                    'total_count': paginator.count,
-                    'page_size': page_size,
-                    'has_next': page_obj.has_next(),
-                    'has_previous': page_obj.has_previous(),
-                },
-                'statistics': {
-                    'total_users': total_users,
-                    'active_users': active_users,
-                    'inactive_users': total_users - active_users,
-                    'staff_users': staff_users,
-                },
-                'filters': {
-                    'search': search,
-                    'is_active': is_active,
-                    'is_staff': is_staff,
-                }
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"관리자 사용자 목록 조회 오류: {str(e)}")
-            return Response({
-                'success': False,
-                'message': '사용자 목록 조회 중 오류가 발생했습니다.',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class AdminUserDetailView(APIView):
-    """
-    관리자용 사용자 상세 API
-    GET /api/auth/admin/users/{user_id}/
-    PUT /api/auth/admin/users/{user_id}/
-    
-    기능:
-    - 사용자 상세 정보 조회
-    - 사용자 정보 수정 (활성화/비활성화, 스태프 권한 등)
-    """
-    permission_classes = [IsAuthenticated, IsAdminUser]
-    
-    def get_user_or_404(self, user_id):
-        """사용자 조회 또는 404 에러"""
-        try:
-            return User.objects.select_related('profile').get(id=user_id)
-        except User.DoesNotExist:
-            return None
-    
-    def get(self, request, user_id):
-        """사용자 상세 정보 조회"""
-        try:
-            user = self.get_user_or_404(user_id)
-            if not user:
-                return Response({
-                    'success': False,
-                    'message': '사용자를 찾을 수 없습니다.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            from .serializers import AdminUserDetailSerializer
-            serializer = AdminUserDetailSerializer(user)
-            
-            return Response({
-                'success': True,
-                'user': serializer.data
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"관리자 사용자 상세 조회 오류: {str(e)}")
-            return Response({
-                'success': False,
-                'message': '사용자 정보 조회 중 오류가 발생했습니다.',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def put(self, request, user_id):
-        """사용자 정보 수정"""
-        try:
-            user = self.get_user_or_404(user_id)
-            if not user:
-                return Response({
-                    'success': False,
-                    'message': '사용자를 찾을 수 없습니다.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # 자기 자신 수정 방지
-            if user.id == request.user.id:
-                return Response({
-                    'success': False,
-                    'message': '자기 자신의 계정은 수정할 수 없습니다.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # 슈퍼유저 권한이 필요한 작업 확인
-            if 'is_staff' in request.data or 'is_superuser' in request.data:
-                if not request.user.is_superuser:
-                    return Response({
-                        'success': False,
-                        'message': '스태프 권한 변경은 슈퍼유저만 가능합니다.'
-                    }, status=status.HTTP_403_FORBIDDEN)
-            
-            # 수정 가능한 필드들
-            allowed_fields = ['first_name', 'last_name', 'is_active']
-            if request.user.is_superuser:
-                allowed_fields.extend(['is_staff', 'is_superuser'])
-            
-            # 데이터 업데이트
-            updated_fields = []
-            with transaction.atomic():
-                for field in allowed_fields:
-                    if field in request.data:
-                        old_value = getattr(user, field)
-                        new_value = request.data[field]
-                        
-                        if old_value != new_value:
-                            setattr(user, field, new_value)
-                            updated_fields.append(field)
-                
-                if updated_fields:
-                    user.save()
-                    
-                    # 로그 기록
-                    logger.info(f"관리자 {request.user.email}가 사용자 {user.email} 정보 수정: {updated_fields}")
-            
-            from .serializers import AdminUserDetailSerializer
-            serializer = AdminUserDetailSerializer(user)
-            
-            return Response({
-                'success': True,
-                'message': '사용자 정보가 성공적으로 업데이트되었습니다.',
-                'user': serializer.data,
-                'changes': {
-                    'updated_fields': updated_fields,
-                    'modified_by': request.user.email,
-                    'modified_at': timezone.now().isoformat()
-                }
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"관리자 사용자 수정 오류: {str(e)}")
-            return Response({
-                'success': False,
-                'message': '사용자 정보 수정 중 오류가 발생했습니다.',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class AdminUserBulkActionView(APIView):
-    """
-    관리자용 사용자 일괄 작업 API
-    POST /api/auth/admin/users/bulk-action/
-    
-    기능:
-    - 여러 사용자 일괄 활성화/비활성화
-    - 여러 사용자 일괄 스태프 권한 부여/제거
-    """
-    permission_classes = [IsAuthenticated, IsAdminUser]
-    
-    def post(self, request):
-        """일괄 작업 처리"""
-        try:
-            action = request.data.get('action')
-            user_ids = request.data.get('user_ids', [])
-            
-            if not action or not user_ids:
-                return Response({
-                    'success': False,
-                    'message': 'action과 user_ids는 필수입니다.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # 지원하는 액션 확인
-            allowed_actions = ['activate', 'deactivate', 'make_staff', 'remove_staff']
-            if action not in allowed_actions:
-                return Response({
-                    'success': False,
-                    'message': f'지원하지 않는 액션입니다. 사용 가능: {allowed_actions}'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # 스태프 권한 변경은 슈퍼유저만 가능
-            if action in ['make_staff', 'remove_staff'] and not request.user.is_superuser:
-                return Response({
-                    'success': False,
-                    'message': '스태프 권한 변경은 슈퍼유저만 가능합니다.'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # 사용자 조회 (자기 자신 제외)
-            users = User.objects.filter(
-                id__in=user_ids
-            ).exclude(id=request.user.id)
-            
-            success_count = 0
-            failed_count = 0
-            results = []
-            
-            with transaction.atomic():
-                for user in users:
-                    try:
-                        if action == 'activate':
-                            user.is_active = True
-                        elif action == 'deactivate':
-                            user.is_active = False
-                        elif action == 'make_staff':
-                            user.is_staff = True
-                        elif action == 'remove_staff':
-                            user.is_staff = False
-                        
-                        user.save()
-                        success_count += 1
-                        results.append({
-                            'user_id': user.id,
-                            'email': user.email,
-                            'status': 'success'
-                        })
-                        
-                    except Exception as e:
-                        failed_count += 1
-                        results.append({
-                            'user_id': user.id,
-                            'email': user.email,
-                            'status': 'failed',
-                            'error': str(e)
-                        })
-            
-            # 로그 기록
-            logger.info(f"관리자 {request.user.email}가 일괄 작업 수행: {action}, 성공: {success_count}, 실패: {failed_count}")
-            
-            return Response({
-                'success': True,
-                'message': f'일괄 작업이 완료되었습니다.',
-                'results': {
-                    'action': action,
-                    'total_count': len(user_ids),
-                    'success_count': success_count,
-                    'failed_count': failed_count,
-                    'details': results
-                }
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"관리자 일괄 작업 오류: {str(e)}")
-            return Response({
-                'success': False,
-                'message': '일괄 작업 중 오류가 발생했습니다.',
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class AdminStatisticsView(APIView):
-    """
-    관리자용 통계 API
-    GET /api/auth/admin/statistics/
-    
-    기능:
-    - 사용자 통계 정보 제공
-    - 가입 현황, 활동 상태 등
-    """
-    permission_classes = [IsAuthenticated, IsAdminUser]
-    
-    def get(self, request):
-        """통계 정보 조회"""
-        try:
-            from django.utils import timezone
-            from datetime import timedelta
-            
-            now = timezone.now()
-            today = now.date()
-            week_ago = today - timedelta(days=7)
-            month_ago = today - timedelta(days=30)
-            
-            # 기본 사용자 통계
-            total_users = User.objects.count()
-            active_users = User.objects.filter(is_active=True).count()
-            inactive_users = total_users - active_users
-            staff_users = User.objects.filter(is_staff=True).count()
-            superuser_count = User.objects.filter(is_superuser=True).count()
-            
-            # 가입 통계
-            today_registrations = User.objects.filter(date_joined__date=today).count()
-            week_registrations = User.objects.filter(date_joined__date__gte=week_ago).count()
-            month_registrations = User.objects.filter(date_joined__date__gte=month_ago).count()
-            
-            # 로그인 통계
-            recent_logins = User.objects.filter(
-                last_login__gte=now - timedelta(days=7)
-            ).count()
-            
-            # 프로필 완성 통계
-            complete_profiles = UserProfile.objects.filter(
-                height__isnull=False,
-                weight__isnull=False,
-                age__isnull=False,
-                gender__isnull=False
-            ).count()
-            
-            statistics = {
-                'users': {
-                    'total_users': total_users,
-                    'active_users': active_users,
-                    'inactive_users': inactive_users,
-                    'staff_users': staff_users,
-                    'superuser_count': superuser_count,
-                },
-                'registrations': {
-                    'today_registrations': today_registrations,
-                    'week_registrations': week_registrations,
-                    'month_registrations': month_registrations,
-                },
-                'activity': {
-                    'recent_logins': recent_logins,
-                    'complete_profiles': complete_profiles,
-                    'profile_completion_rate': round(
-                        (complete_profiles / total_users * 100) if total_users > 0 else 0, 2
-                    ),
-                },
-                'generated_at': now.isoformat()
-            }
-            
-            return Response({
-                'success': True,
-                'statistics': statistics
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"관리자 통계 조회 오류: {str(e)}")
-            return Response({
-                'success': False,
-                'message': '통계 정보 조회 중 오류가 발생했습니다.',
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -297,89 +297,95 @@ from django.utils.decorators import method_decorator
 
 from rest_framework.permissions import IsAuthenticated
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def upload_image(request):
+class UploadImageView(APIView):
     """이미지 파일 업로드 API"""
-    try:
-        # 파일 검증
-        if 'image' not in request.FILES:
-            return Response({
-                'success': False,
-                'error': '이미지 파일이 필요합니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        image_file = request.FILES['image']
-        
-        # 파일 타입 검증
-        if not image_file.content_type or not image_file.content_type.startswith('image/'):
-            # content_type이 없는 경우 파일 확장자로 검증
-            if image_file.name:
-                file_extension = image_file.name.lower().split('.')[-1]
-                allowed_extensions = ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp']
-                if file_extension not in allowed_extensions:
-                    return Response({
-                        'success': False,
-                        'error': f'지원하지 않는 파일 형식입니다. 지원 형식: {", ".join(allowed_extensions)}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            else:
+    authentication_classes = []  # 인증 완전 비활성화
+    permission_classes = [AllowAny]
+    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request):
+        try:
+            # 파일 검증
+            if 'image' not in request.FILES:
                 return Response({
                     'success': False,
-                    'error': '이미지 파일만 업로드 가능합니다.'
+                    'error': '이미지 파일이 필요합니다.'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 파일 크기 검증 (10MB 제한)
-        if image_file.size > 10 * 1024 * 1024:
+            image_file = request.FILES['image']
+            
+            # 파일 타입 검증
+            if not image_file.content_type or not image_file.content_type.startswith('image/'):
+                # content_type이 없는 경우 파일 확장자로 검증
+                if image_file.name:
+                    file_extension = image_file.name.lower().split('.')[-1]
+                    allowed_extensions = ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp']
+                    if file_extension not in allowed_extensions:
+                        return Response({
+                            'success': False,
+                            'error': f'지원하지 않는 파일 형식입니다. 지원 형식: {", ".join(allowed_extensions)}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return Response({
+                        'success': False,
+                        'error': '이미지 파일만 업로드 가능합니다.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 파일 크기 검증 (10MB 제한)
+            if image_file.size > 10 * 1024 * 1024:
+                return Response({
+                    'success': False,
+                    'error': '파일 크기는 10MB 이하여야 합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 작업 생성
+            import uuid
+            task = MassEstimationTask.objects.create(
+                task_id=str(uuid.uuid4()),
+                image_file=image_file,
+                original_filename=image_file.name,
+                status='pending',
+                message='이미지 업로드 완료. 분석을 시작합니다...'
+            )
+            
+            # Celery 작업 시작
+            process_image_upload.delay(task.task_id)
+            
+            # 웹소켓을 통해 상태 업데이트 전송
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'task_{task.task_id}',
+                {
+                    'type': 'task_update',
+                    'task_id': task.task_id,
+                    'data': {
+                        'status': task.status,
+                        'progress': task.progress,
+                        'message': task.message
+                    }
+                }
+            )
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'task_id': task.task_id,
+                    'status': task.status,
+                    'message': '이미지 업로드가 완료되었습니다.',
+                    'filename': image_file.name,
+                    'file_size': image_file.size,
+                    'celery_task_started': True
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
             return Response({
                 'success': False,
-                'error': '파일 크기는 10MB 이하여야 합니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 작업 생성
-        import uuid
-        task = MassEstimationTask.objects.create(
-            task_id=str(uuid.uuid4()),
-            image_file=image_file,
-            original_filename=image_file.name,
-            status='pending',
-            message='이미지 업로드 완료. 분석을 시작합니다...'
-        )
-        
-        # Celery 작업 시작
-        process_image_upload.delay(task.task_id)
-        
-        # 웹소켓을 통해 상태 업데이트 전송
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f'task_{task.task_id}',
-            {
-                'type': 'task_update',
-                'task_id': task.task_id,
-                'data': {
-                    'status': task.status,
-                    'progress': task.progress,
-                    'message': task.message
-                }
-            }
-        )
-        
-        return Response({
-            'success': True,
-            'data': {
-                'task_id': task.task_id,
-                'status': task.status,
-                'message': '이미지 업로드가 완료되었습니다.',
-                'filename': image_file.name,
-                'file_size': image_file.size,
-                'celery_task_started': True
-            }
-        }, status=status.HTTP_201_CREATED)
-        
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': f'업로드 중 오류가 발생했습니다: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                'error': f'업로드 중 오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -26,7 +26,8 @@
             "**/__pycache__": true,
             "**/.next": true
         },
-        "typescript.autoClosingTags": false
+        "typescript.autoClosingTags": false,
+        "html.autoClosingTags": false
     },
     "extensions": {
         "recommendations": [

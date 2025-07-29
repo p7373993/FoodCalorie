@@ -1,0 +1,160 @@
+{
+  "timestamp": "2025-07-29 03:32:18.011725+00:00",
+  "summary": {
+    "total_checks": 33,
+    "total_issues": 0,
+    "high_severity": 0,
+    "medium_severity": 0,
+    "low_severity": 0
+  },
+  "requirements_compliance": {
+    "1.1_session_auth": true,
+    "1.2_auth_errors": true,
+    "6.1_no_bypass": true,
+    "6.3_data_isolation": true
+  },
+  "detailed_results": {
+    "authentication_enforcement": {
+      "total_endpoints": 8,
+      "passed": 8,
+      "failed": 0,
+      "details": [
+        {
+          "endpoint": "challenges:join-challenge",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:my-challenge",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:leave-challenge",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:extend-challenge",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:request-cheat",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:cheat-status",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:personal-stats",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:challenge-report",
+          "status": "PASS"
+        }
+      ]
+    },
+    "csrf_protection": {
+      "total_endpoints": 3,
+      "results": [
+        {
+          "endpoint": "challenges:join-challenge",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:leave-challenge",
+          "status": "PASS"
+        },
+        {
+          "endpoint": "challenges:request-cheat",
+          "status": "PASS"
+        }
+      ]
+    },
+    "data_isolation": {
+      "tests_run": 1,
+      "results": [
+        {
+          "test": "own_challenges",
+          "status": "PASS"
+        }
+      ]
+    },
+    "error_handling": {
+      "authentication_error_format": "validated",
+      "korean_messages": "validated"
+    },
+    "bypass_prevention": {
+      "views_checked": 8,
+      "results": [
+        {
+          "view": "JoinChallengeView",
+          "status": "PASS"
+        },
+        {
+          "view": "MyChallengeView",
+          "status": "PASS"
+        },
+        {
+          "view": "LeaveChallengeView",
+          "status": "PASS"
+        },
+        {
+          "view": "RequestCheatDayView",
+          "status": "PASS"
+        },
+        {
+          "view": "PersonalStatsView",
+          "status": "PASS"
+        },
+        {
+          "view": "ExtendChallengeView",
+          "status": "PASS"
+        },
+        {
+          "view": "CheatStatusView",
+          "status": "PASS"
+        },
+        {
+          "view": "ChallengeReportView",
+          "status": "PASS"
+        }
+      ]
+    }
+  },
+  "issues": [],
+  "passed_checks": [
+    "✓ challenges:join-challenge requires authentication",
+    "✓ challenges:my-challenge requires authentication",
+    "✓ challenges:leave-challenge requires authentication",
+    "✓ challenges:extend-challenge requires authentication",
+    "✓ challenges:request-cheat requires authentication",
+    "✓ challenges:cheat-status requires authentication",
+    "✓ challenges:personal-stats requires authentication",
+    "✓ challenges:challenge-report requires authentication",
+    "✓ challenges:challenge-room-list publicly accessible",
+    "✓ challenges:leaderboard publicly accessible",
+    "✓ challenges:join-challenge CSRF protection active",
+    "✓ challenges:leave-challenge CSRF protection active",
+    "✓ challenges:request-cheat CSRF protection active",
+    "✓ User can only access own challenges",
+    "✓ No bypass in JoinChallengeView",
+    "✓ Proper authentication in JoinChallengeView",
+    "✓ No bypass in MyChallengeView",
+    "✓ Proper authentication in MyChallengeView",
+    "✓ No bypass in LeaveChallengeView",
+    "✓ Proper authentication in LeaveChallengeView",
+    "✓ No bypass in RequestCheatDayView",
+    "✓ Proper authentication in RequestCheatDayView",
+    "✓ No bypass in PersonalStatsView",
+    "✓ Proper authentication in PersonalStatsView",
+    "✓ No bypass in ExtendChallengeView",
+    "✓ Proper authentication in ExtendChallengeView",
+    "✓ No bypass in CheatStatusView",
+    "✓ Proper authentication in CheatStatusView",
+    "✓ No bypass in ChallengeReportView",
+    "✓ Proper authentication in ChallengeReportView",
+    "✓ Error response has required fields",
+    "✓ Authentication error has proper fields",
+    "✓ Error message in Korean"
+  ]
+}

@@ -42,13 +42,13 @@ urlpatterns = [
     path(
         "report/", views.ChallengeReportView.as_view(), name="challenge-report"
     ),
-    # 내부 API (자동 판정용)
-    path(
-        "judge/",
-        views.DailyChallengeJudgmentView.as_view(),
-        name="daily-judgment",
-    ),
-    path(
-        "reset/weekly/", views.WeeklyResetView.as_view(), name="weekly-reset"
-    ),
+    # 내부 API (자동 판정용) - 현재 구현되지 않음
+    # path(
+    #     "judge/",
+    #     views.DailyChallengeJudgmentView.as_view(),
+    #     name="daily-judgment",
+    # ),
+    # path(
+    #     "reset/weekly/", views.WeeklyResetView.as_view(), name="weekly-reset"
+    # ),
 ]
