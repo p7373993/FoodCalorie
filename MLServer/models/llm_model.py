@@ -432,21 +432,23 @@ class LLMMassEstimator(BaseModel):
     - **중요**: 조정한 최종 질량을 "verified_mass_g" 필드에 정확히 입력하세요
 
 📋 응답 형식 (JSON):
+**중요: 모든 텍스트는 한국어로 작성하세요. 음식 이름도 반드시 한국어로 응답하세요.**
+
 {{
     "foods": [
         {{
-            "food_name": "<음식 이름>",
+            "food_name": "<한국어 음식 이름>",
             "quoted_text": {{
                 "product_name": "<라벨에서 읽은 제품명 그대로>",
                 "weight": "<라벨에서 읽은 중량 그대로>"
             }},
             "verified_mass_g": <이 음식 1개의 질량(g)>,
             "confidence": <신뢰도(0.0~1.0)>,
-            "reasoning": "<이 음식에 대한 분석 과정 및 근거>"
+            "reasoning": "<이 음식에 대한 분석 과정 및 근거 (한국어)>"
         }}
     ],
     "overall_confidence": <전체 신뢰도(0.0~1.0)>,
-    "reasoning": "<전체 분석 과정 및 근거>"
+    "reasoning": "<전체 분석 과정 및 근거 (한국어)>"
 }}
 """
         return prompt.strip()

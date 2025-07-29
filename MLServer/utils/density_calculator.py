@@ -205,15 +205,17 @@ class DensityCalculator:
 - 면류: 1.0-1.2 g/cm³
 
 📋 응답 형식 (JSON):
+**중요: 모든 텍스트는 한국어로 작성하세요. 음식 이름도 반드시 한국어로 응답하세요.**
+
 {{
-    "food_name": "<구체적인 음식명>",
+    "food_name": "<한국어 구체적인 음식명>",
     "density_g_per_cm3": <밀도값>,
     "density_range": {{"min": <최소값>, "max": <최대값>}},
-    "food_category": "<음식 카테고리>",
-    "cooking_state": "<조리상태>",
+    "food_category": "<음식 카테고리 (한국어)>",
+    "cooking_state": "<조리상태 (한국어)>",
     "confidence": <신뢰도(0.0~1.0)>,
-    "identification_reasoning": "<음식 식별 근거>",
-    "density_reasoning": "<밀도 결정 근거>"
+    "identification_reasoning": "<음식 식별 근거 (한국어)>",
+    "density_reasoning": "<밀도 결정 근거 (한국어)>"
 }}"""
         
         return prompt.strip()
@@ -248,14 +250,16 @@ class DensityCalculator:
 - 견과류: 0.6-0.8 g/cm³
 
 📋 응답 형식 (JSON):
+**중요: 모든 텍스트는 한국어로 작성하세요. 음식 이름도 반드시 한국어로 응답하세요.**
+
 {{
-    "food_name": "<정확한 음식명>",
+    "food_name": "<한국어 정확한 음식명>",
     "density_g_per_cm3": <밀도값>,
     "density_range": {{"min": <최소값>, "max": <최대값>}},
-    "food_category": "<음식 카테고리>",
-    "cooking_state": "<조리상태>",
+    "food_category": "<음식 카테고리 (한국어)>",
+    "cooking_state": "<조리상태 (한국어)>",
     "confidence": <신뢰도(0.0~1.0)>,
-    "reasoning": "<밀도 결정 근거>"
+    "reasoning": "<밀도 결정 근거 (한국어)>"
 }}"""
         
         return prompt.strip()

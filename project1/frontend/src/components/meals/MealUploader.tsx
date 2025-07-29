@@ -43,8 +43,9 @@ export function MealUploader() {
   // MLServer 작업 모니터링 함수
   const monitorMLServerTask = async (taskId: string) => {
     return new Promise((resolve, reject) => {
-      console.log('WebSocket 연결 시도:', `ws://localhost:8000/ws/task/${taskId}/`);
-      const ws = new WebSocket(`ws://localhost:8000/ws/task/${taskId}/`);
+      const wsUrl = apiClient.getWebSocketURL(taskId);
+      console.log('WebSocket 연결 시도:', wsUrl);
+      const ws = new WebSocket(wsUrl);
       
       let connectionTimeout = setTimeout(() => {
         console.log('WebSocket 연결 타임아웃');
