@@ -726,6 +726,63 @@ class ApiClient {
 
     return response.json();
   }
+
+  // Gemini AI 이미지 분석
+  async analyzeImageGemini(file: File): Promise<{
+    foodName: string;
+    calories: number;
+    mass?: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+    grade: string;
+    aiComment: string;
+  }> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    // CSRF 토큰 가져오기
+    const csrfToken = await this.getCSRFToken();
+
+    const response = await fetch(`${this.baseURL}/api/analyze-image-gemini/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRFToken': csrfToken,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini analysis failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // MLServer 이미지 분석
+  async analyzeImageMLServer(file: File): Promise<ApiResponse<{ task_id: string }>> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    // CSRF 토큰 가져오기
+    const csrfToken = await this.getCSRFToken();
+
+    const response = await fetch(`${this.baseURL}/api/analyze-image-mlserver/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRFToken': csrfToken,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`MLServer analysis failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

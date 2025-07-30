@@ -510,6 +510,61 @@ class AICoachingService:
         else:
             return 'encouragement'
     
+    def generate_nutrition_coaching(self, user, focus_nutrient='protein'):
+        """영양소 중심 코칭 생성"""
+        try:
+            # 최근 7일간 영양소 데이터 분석
+            week_ago = date.today() - timedelta(days=7)
+            recent_meals = MealLog.objects.filter(user=user, date__gte=week_ago)
+            
+            if not recent_meals.exists():
+                return "최근 식사 기록이 없어서 영양소 분석이 어려워요. 식사를 기록해보세요! 📝"
+            
+            # 영양소별 평균 섭취량 계산
+            avg_carbs = recent_meals.aggregate(avg=Avg('carbs'))['avg'] or 0
+            avg_protein = recent_meals.aggregate(avg=Avg('protein'))['avg'] or 0
+            avg_fat = recent_meals.aggregate(avg=Avg('fat'))['avg'] or 0
+            
+            # 권장량 대비 비율 계산
+            recommended = {'carbs': 300, 'protein': 60, 'fat': 65}  # 일반 성인 기준
+            current_values = {'carbs': avg_carbs, 'protein': avg_protein, 'fat': avg_fat}
+            
+            focus_value = current_values.get(focus_nutrient, 0)
+            focus_recommended = recommended.get(focus_nutrient, 60)
+            ratio = (focus_value / focus_recommended) * 100 if focus_recommended > 0 else 0
+            
+            # 영양소별 맞춤 조언 생성
+            if focus_nutrient == 'protein':
+                if ratio < 80:
+                    return f"단백질 섭취가 부족해요! 🥩 현재 하루 평균 {focus_value:.1f}g인데, {focus_recommended}g 정도가 좋아요. 계란, 닭가슴살, 두부를 더 드셔보세요."
+                elif ratio > 120:
+                    return f"단백질 섭취가 충분해요! 💪 현재 하루 평균 {focus_value:.1f}g로 잘 관리하고 계시네요. 이 수준을 유지하세요."
+                else:
+                    return f"단백질 섭취가 적절해요! ✅ 하루 평균 {focus_value:.1f}g로 균형 잡힌 식단을 유지하고 계시네요."
+            
+            elif focus_nutrient == 'carbs':
+                if ratio < 70:
+                    return f"탄수화물이 부족할 수 있어요. 🍚 현재 하루 평균 {focus_value:.1f}g인데, 적절한 에너지 공급을 위해 현미, 고구마 등을 추가해보세요."
+                elif ratio > 130:
+                    return f"탄수화물 섭취가 많아요. 🥖 현재 하루 평균 {focus_value:.1f}g인데, 조금 줄이고 단백질과 채소를 늘려보는 건 어때요?"
+                else:
+                    return f"탄수화물 섭취가 적절해요! 🌾 하루 평균 {focus_value:.1f}g로 균형 잡힌 에너지 공급을 하고 계시네요."
+            
+            elif focus_nutrient == 'fat':
+                if ratio < 70:
+                    return f"건강한 지방 섭취를 늘려보세요! 🥑 현재 하루 평균 {focus_value:.1f}g인데, 견과류, 올리브오일, 아보카도를 추가해보세요."
+                elif ratio > 130:
+                    return f"지방 섭취가 많아요. 🧈 현재 하루 평균 {focus_value:.1f}g인데, 튀김보다는 구이나 찜 요리를 선택해보세요."
+                else:
+                    return f"지방 섭취가 적절해요! 🌰 하루 평균 {focus_value:.1f}g로 건강한 지방을 잘 섭취하고 계시네요."
+            
+            else:
+                return "지원하지 않는 영양소입니다. protein, carbs, fat 중에서 선택해주세요."
+                
+        except Exception as e:
+            print(f"❌ 영양소 코칭 생성 실패: {e}")
+            return f"{focus_nutrient} 중심의 영양 관리를 위해 균형 잡힌 식단을 유지해보세요! 💪"
+    
     def _determine_priority(self, nutrition, pattern):
         """우선순위 결정"""
         if pattern['avg_meals_per_day'] < 2:

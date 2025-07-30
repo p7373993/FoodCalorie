@@ -284,16 +284,17 @@ export function AIRecommendationModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b bg-gray-50">
           <div className="flex items-center space-x-2">
-            <ChefHat className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold">🤖 AI 음식 추천</h2>
+            <ChefHat className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-800">🤖 AI 음식 추천</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+            className="p-1 rounded-md hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-800"
+            aria-label="닫기"
           >
             <X className="w-5 h-5" />
           </button>
@@ -333,7 +334,7 @@ export function AIRecommendationModal({
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
             >
               닫기
             </button>

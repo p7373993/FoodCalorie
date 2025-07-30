@@ -15,10 +15,10 @@ body {
 
 :root { 
   --bg-dark: #121212; 
-  --point-green: #00FFA3; 
-  --text-light: #EAEAEA; 
-  --card-bg: rgba(38, 38, 38, 0.5); 
-  --border-color: rgba(74, 74, 74, 0.7); 
+  --point-green: #10B981; 
+  --text-light: #F3F4F6; 
+  --card-bg: rgba(55, 65, 81, 0.8); 
+  --border-color: rgba(107, 114, 128, 0.6); 
 }
 
 .bg-grid-pattern { 

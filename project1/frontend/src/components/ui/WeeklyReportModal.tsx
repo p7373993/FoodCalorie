@@ -32,14 +32,15 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-      <div className="w-full max-w-lg bg-gray-800 border border-[var(--border-color)] rounded-2xl flex flex-col">
-        <div className="p-4 border-b border-[var(--border-color)] flex justify-between items-center">
-          <h2 className="text-xl font-bold text-[var(--point-green)]">주간 AI 리포트</h2>
+      <div className="w-full max-w-lg bg-gray-800 border border-gray-600 rounded-2xl flex flex-col shadow-2xl">
+        <div className="p-4 border-b border-gray-600 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-green-400">주간 AI 리포트</h2>
           <button 
             onClick={onClose} 
             className="text-gray-400 hover:text-white text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-700 transition-colors"
+            aria-label="닫기"
           >
-            &times;
+            ✕
           </button>
         </div>
         
@@ -108,10 +109,10 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
           )}
         </div>
         
-        <div className="p-4 border-t border-[var(--border-color)]">
+        <div className="p-4 border-t border-gray-600">
           <button 
             onClick={onClose} 
-            className="w-full bg-gray-700 text-white font-bold py-3 rounded-lg"
+            className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition-colors"
           >
             닫기
           </button>

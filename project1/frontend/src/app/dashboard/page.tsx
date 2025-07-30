@@ -194,17 +194,17 @@ export default function DashboardPage() {
         */}
 
           {/* 주간 칼로리 섭취량 */}
-          <div className="w-full bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-4 sm:p-6 lg:p-8">
+          <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-3xl p-4 sm:p-6 lg:p-8 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white mb-1">주간 칼로리 섭취량</h2>
-                <p className="text-gray-400 text-sm">이번 주 식사 기록을 한눈에 확인하세요</p>
+                <p className="text-gray-200 text-sm">이번 주 식사 기록을 한눈에 확인하세요</p>
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-green-400">
                   {weeklyData.filter(d => d.has_data).length}
                 </div>
-                <div className="text-xs text-gray-500">기록된 날</div>
+                <div className="text-xs text-gray-200">기록된 날</div>
               </div>
             </div>
             
@@ -212,23 +212,23 @@ export default function DashboardPage() {
               <div className="space-y-4 sm:space-y-6 lg:space-y-8">
                 {/* 요약 통계 */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-                  <div className="bg-gray-800/50 rounded-2xl p-3 sm:p-4 text-center">
+                  <div className="bg-gray-700/60 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
                     <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-400">
                       {Math.round(validCalories.reduce((sum, cal) => sum + cal, 0) / validCalories.length)}kcal
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">평균</div>
+                    <div className="text-xs text-gray-300 mt-1">평균</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-2xl p-3 sm:p-4 text-center">
+                  <div className="bg-gray-700/60 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
                     <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-400">
                       {Math.max(...validCalories)}kcal
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">최고</div>
+                    <div className="text-xs text-gray-300 mt-1">최고</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-2xl p-3 sm:p-4 text-center">
+                  <div className="bg-gray-700/60 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
                     <div className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-400">
                       {Math.min(...validCalories)}kcal
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">최저</div>
+                    <div className="text-xs text-gray-300 mt-1">최저</div>
                   </div>
                 </div>
 
@@ -314,9 +314,9 @@ export default function DashboardPage() {
           </div>
 
           {/* 주간 체중 변화 */}
-          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 min-h-[420px]">
+          <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 min-h-[420px] shadow-xl">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-left">주간 체중 변화</h2>
+              <h2 className="text-xl font-bold text-left text-white">주간 체중 변화</h2>
               <div className="flex items-center space-x-4">
                 {dashboardData?.weight_data?.latest_weight && (
                   <div className="flex items-center space-x-3 text-sm">
@@ -340,7 +340,7 @@ export default function DashboardPage() {
                 )}
                 <button
                   onClick={() => setIsWeightModalOpen(true)}
-                  className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
+                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all hover:scale-105 shadow-lg"
                 >
                   기록하기
                 </button>
@@ -505,12 +505,12 @@ export default function DashboardPage() {
           </div>
 
           {/* 최근 식사 기록 */}
-          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
+          <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 shadow-xl">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-left">최근 식사 기록</h2>
+              <h2 className="text-xl font-bold text-left text-white">최근 식사 기록</h2>
               <button
                 onClick={handleReset}
-                className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all hover:scale-105 shadow-lg"
               >
                 새 분석
               </button>
@@ -519,7 +519,7 @@ export default function DashboardPage() {
             {recentMeals.length > 0 ? (
               <div className="space-y-3">
                 {recentMeals.map((meal) => (
-                  <div key={meal.id} className="flex items-center space-x-4 p-3 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition-colors">
+                  <div key={meal.id} className="flex items-center space-x-4 p-3 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition-colors group">
                     {/* 이미지 */}
                     <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
                       {meal.imageUrl ? (
@@ -543,14 +543,14 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2 mb-1">
                         <h3 className="font-medium text-white truncate">{meal.foodName}</h3>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${meal.nutriScore === 'A' ? 'bg-green-500' :
+                        <span className={`px-2 py-1 rounded text-xs font-medium text-white ${meal.nutriScore === 'A' ? 'bg-green-500' :
                           meal.nutriScore === 'B' ? 'bg-yellow-500' :
                             meal.nutriScore === 'C' ? 'bg-orange-500' : 'bg-red-500'
                           }`}>
                           {meal.nutriScore}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-4 text-sm text-gray-400">
+                      <div className="flex items-center space-x-4 text-sm text-gray-300">
                         <span>{meal.date}</span>
                         <span>{
                           meal.mealType === 'breakfast' ? '🌅 아침' :
@@ -565,17 +565,45 @@ export default function DashboardPage() {
                     <div className="hidden md:flex space-x-4 text-sm">
                       <div className="text-center">
                         <p className="text-blue-400 font-medium">{meal.protein}g</p>
-                        <p className="text-xs text-gray-500">단백질</p>
+                        <p className="text-xs text-gray-400">단백질</p>
                       </div>
                       <div className="text-center">
                         <p className="text-yellow-400 font-medium">{meal.carbs}g</p>
-                        <p className="text-xs text-gray-500">탄수화물</p>
+                        <p className="text-xs text-gray-400">탄수화물</p>
                       </div>
                       <div className="text-center">
                         <p className="text-red-400 font-medium">{meal.fat}g</p>
-                        <p className="text-xs text-gray-500">지방</p>
+                        <p className="text-xs text-gray-400">지방</p>
                       </div>
                     </div>
+
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={async () => {
+                        if (confirm(`${meal.foodName}을(를) 삭제하시겠습니까?`)) {
+                          try {
+                            await apiClient.deleteMeal(meal.id);
+                            // 성공적으로 삭제되면 목록에서 제거
+                            setRecentMeals(prev => prev.filter(m => m.id !== meal.id));
+                            alert('식사 기록이 삭제되었습니다.');
+                            
+                            // 대시보드 데이터 새로고침
+                            const dashboardResponse = await apiClient.getDashboardData();
+                            setDashboardData(dashboardResponse);
+                            if (dashboardResponse.weekly_calories && dashboardResponse.weekly_calories.days) {
+                              setWeeklyCalories(dashboardResponse.weekly_calories.days);
+                            }
+                          } catch (error) {
+                            console.error('식사 기록 삭제 실패:', error);
+                            alert('식사 기록 삭제에 실패했습니다.');
+                          }
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                      aria-label="삭제"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 ))}
               </div>
@@ -591,34 +619,34 @@ export default function DashboardPage() {
           </div>
 
           <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 text-left flex flex-col justify-center">
-              <h2 className="text-xl font-bold mb-2">나의 활동</h2>
+            <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 text-left flex flex-col justify-center shadow-xl">
+              <h2 className="text-xl font-bold mb-2 text-white">나의 활동</h2>
               <div className="flex items-center space-x-4">
                 <div className="text-center">
-                  <p className="text-3xl font-bold text-[var(--point-green)]">{gamificationData.points}</p>
-                  <p className="text-sm text-gray-400">포인트</p>
+                  <p className="text-3xl font-bold text-green-400">{gamificationData.points}</p>
+                  <p className="text-sm text-gray-300">포인트</p>
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold mb-1">획득 배지</p>
+                  <p className="font-bold mb-1 text-white">획득 배지</p>
                   <div className="flex space-x-2">
                     {gamificationData.badges.length > 0 ? (
                       gamificationData.badges.map(b => (
                         <span key={b} title={b} className="text-2xl">🏅</span>
                       ))
                     ) : (
-                      <p className="text-sm text-gray-500">아직 배지가 없어요.</p>
+                      <p className="text-sm text-gray-400">아직 배지가 없어요.</p>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 text-left flex flex-col justify-center">
-              <h2 className="text-xl font-bold mb-2">AI 분석</h2>
-              <p className="text-sm text-gray-400 mb-4">AI로 나의 활동을 분석하고 조언을 받으세요.</p>
+            <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 text-left flex flex-col justify-center shadow-xl">
+              <h2 className="text-xl font-bold mb-2 text-white">AI 분석</h2>
+              <p className="text-sm text-gray-300 mb-4">AI로 나의 활동을 분석하고 조언을 받으세요.</p>
               <button
                 onClick={() => setIsReportModalOpen(true)}
-                className="w-full bg-teal-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all hover:scale-105 shadow-lg"
               >
                 주간 리포트
               </button>

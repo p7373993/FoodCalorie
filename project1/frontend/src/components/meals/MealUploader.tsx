@@ -260,7 +260,7 @@ export function MealUploader() {
         date: new Date().toISOString().split('T')[0]
       };
       
-      await apiClient.createMealLog(mealData);
+      await apiClient.createMeal(mealData);
       setSuccess(true);
       
       // 폼 초기화
@@ -420,8 +420,14 @@ export function MealUploader() {
           <div className="card p-6">
             <h2 className="text-xl font-nanum mb-4">식사 정보</h2>
             {aiComment && (
-              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded">
-                {aiComment}
+              <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 mb-4 rounded shadow-sm">
+                <div className="flex items-start space-x-2">
+                  <span className="text-blue-600 text-lg">🤖</span>
+                  <div className="flex-1">
+                    <p className="font-medium text-blue-900 mb-1">AI 분석 결과</p>
+                    <p className="text-sm text-blue-700">{aiComment}</p>
+                  </div>
+                </div>
               </div>
             )}
             
