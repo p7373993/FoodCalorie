@@ -557,6 +557,82 @@ class ApiClient {
     });
   }
 
+  // 새로운 AI 기능들
+  async getDailyCoaching(): Promise<ApiResponse<{
+    message: string;
+    generated_at: string;
+  }>> {
+    return this.request('/api/ai/coaching/');
+  }
+
+  async getCustomCoaching(type: 'daily' | 'weekly' | 'nutrition', nutrient?: string): Promise<ApiResponse<any>> {
+    return this.request('/api/ai/coaching/', {
+      method: 'POST',
+      body: JSON.stringify({
+        type,
+        nutrient,
+      }),
+    });
+  }
+
+  // 음식 추천 API
+  async getFoodRecommendations(mealType: string = 'lunch', count: number = 5): Promise<ApiResponse<{
+    meal_type: string;
+    recommendations: Array<{
+      name: string;
+      calories: number;
+      grade: string;
+      score: number;
+      category: string;
+      protein?: number;
+      carbs?: number;
+      fat?: number;
+    }>;
+    generated_at: string;
+  }>> {
+    return this.request(`/api/ai/recommendations/?meal_type=${mealType}&count=${count}`);
+  }
+
+  async getSpecialRecommendations(type: 'alternatives' | 'nutrition_focused' | 'meal_plan' | 'personalized', options: {
+    food_name?: string;
+    nutrient?: string;
+    target_calories?: number;
+    meal_type?: string;
+    count?: number;
+  } = {}): Promise<ApiResponse<{
+    type: string;
+    result: any;
+    generated_at: string;
+  }>> {
+    return this.request('/api/ai/recommendations/', {
+      method: 'POST',
+      body: JSON.stringify({
+        type,
+        ...options,
+      }),
+    });
+  }
+
+  // 영양 분석 API
+  async getNutritionAnalysis(period: 'week' | 'month' = 'week'): Promise<ApiResponse<{
+    period: string;
+    nutrition_stats: {
+      total_calories: number;
+      avg_calories: number;
+      total_carbs: number;
+      total_protein: number;
+      total_fat: number;
+    };
+    grade_distribution: Record<string, number>;
+    daily_calories: Array<{
+      date: string;
+      calories: number;
+    }>;
+    total_meals: number;
+  }>> {
+    return this.request(`/api/ai/nutrition-analysis/?period=${period}`);
+  }
+
   // 캘린더 관련 API
   async getCalendarData() {
     return this.request('/api/calendar/data/');

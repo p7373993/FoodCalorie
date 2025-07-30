@@ -1,6 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, ImageUploadView, MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView, TestMealLogView
+from .views import (
+    MealLogViewSet, AICoachTipViewSet, AnalyzeImageView, ImageUploadView, 
+    MonthlyLogView, DailyReportView, RecommendedChallengesView, MyChallengesView, 
+    UserBadgesView, RegisterView, LoginView, UserProfileStatsView, UserStatisticsView, 
+    TestMealLogView, AICoachingView, FoodRecommendationView, NutritionAnalysisView
+)
 from .dashboard_views import get_dashboard_data, weight_records
 
 router = DefaultRouter()
@@ -24,6 +29,11 @@ urlpatterns = [
     path('users/profile/stats', UserProfileStatsView.as_view(), name='user-profile-stats'),
     path('users/statistics', UserStatisticsView.as_view(), name='user-statistics'),
     path('test/meal-log/', TestMealLogView.as_view(), name='test-meal-log'),
+    
+    # AI 코칭 및 추천 API
+    path('ai/coaching/', AICoachingView.as_view(), name='ai-coaching'),
+    path('ai/recommendations/', FoodRecommendationView.as_view(), name='food-recommendations'),
+    path('ai/nutrition-analysis/', NutritionAnalysisView.as_view(), name='nutrition-analysis'),
     
     # 대시보드 API
     path('dashboard/data/', get_dashboard_data, name='dashboard-data'),

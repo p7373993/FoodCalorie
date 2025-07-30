@@ -11,7 +11,8 @@ import {
   BarChart2,
   LogOut,
   Menu,
-  X
+  X,
+  Brain
 } from 'lucide-react';
 import { UserDropdown } from './UserDropdown';
 import { useAuthActions } from '@/contexts/AuthContext';
@@ -19,6 +20,7 @@ import { useAuthActions } from '@/contexts/AuthContext';
 const navigationItems = [
   { href: '/dashboard', label: '대시보드', icon: Home },
   { href: '/log', label: '식사 기록', icon: Camera },
+  { href: '/ai-coach', label: 'AI 코치', icon: Brain },
   { href: '/challenges', label: '챌린지', icon: Trophy },
   { href: '/statistics', label: '통계', icon: BarChart2 },
 ];

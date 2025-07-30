@@ -7,6 +7,10 @@ import { useActiveChallengeData } from '@/contexts/ChallengeContext';
 import { useAuthState } from '@/contexts/AuthContext';
 import CheatDayModal from '@/components/challenges/CheatDayModal';
 import ChallengeCompletionReport from '@/components/challenges/ChallengeCompletionReport';
+import { AICoachTip } from './AICoachTip';
+import { FoodRecommendations } from './FoodRecommendations';
+import { NutritionAnalysis } from './NutritionAnalysis';
+import { AIRecommendationModal } from '@/components/ui/AIRecommendationModal';
 
 interface PersonalDashboardProps {
   onNavigateToChallenge?: () => void;
@@ -42,6 +46,8 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   // 로컬 상태
   const [isCheatModalOpen, setIsCheatModalOpen] = useState(false);
   const [isCompletionReportOpen, setIsCompletionReportOpen] = useState(false);
+  const [isAIRecommendationOpen, setIsAIRecommendationOpen] = useState(false);
+  const [showAICoachTip, setShowAICoachTip] = useState(true);
 
   // 현재 챌린지 데이터 (React Query 우선, Context 백업)
   const currentChallenge = challengeResponse?.data || activeChallenge;
@@ -267,6 +273,27 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         </div>
       </div>
 
+      {/* AI 코칭 섹션 */}
+      {showAICoachTip && (
+        <AICoachTip onClose={() => setShowAICoachTip(false)} />
+      )}
+
+      {/* AI 기능 카드들 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <FoodRecommendations className="lg:col-span-1" />
+        <NutritionAnalysis className="lg:col-span-2" />
+      </div>
+
+      {/* AI 추천 버튼 */}
+      <div className="text-center">
+        <button
+          onClick={() => setIsAIRecommendationOpen(true)}
+          className="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-300 transform hover:scale-105"
+        >
+          🤖 AI 맞춤 추천 더보기
+        </button>
+      </div>
+
       {/* 하단 정보 카드들 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* 챌린지 기간 정보 */}
@@ -368,6 +395,13 @@ const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           }}
         />
       )}
+
+      {/* AI 추천 모달 */}
+      <AIRecommendationModal
+        isOpen={isAIRecommendationOpen}
+        onClose={() => setIsAIRecommendationOpen(false)}
+        initialType="personalized"
+      />
     </div>
   );
 };

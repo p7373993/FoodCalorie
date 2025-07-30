@@ -193,10 +193,7 @@ def weight_records(request):
         record_date = request.data.get('date', date.today().strftime('%Y-%m-%d'))
         
         if not weight:
-            return Response({
-                'success': False,
-                'error': 'Weight is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Weight is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             weight_value = float(weight)
@@ -244,3 +241,33 @@ def weight_records(request):
                 'success': False,
                 'error': f'체중 기록 저장 중 오류가 발생했습니다: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({
+                    'error': '체중은 20kg에서 300kg 사이의 값을 입력해주세요.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 소수점 첫째 자리까지만 허용
+            weight_value = round(weight_value, 1)
+            
+            # 같은 날짜의 기록이 있으면 업데이트, 없으면 생성
+            weight_record, created = WeightRecord.objects.update_or_create(
+                user=user,
+                date=record_date_obj,
+                defaults={'weight': weight_value}
+            )
+            
+            action = '생성' if created else '업데이트'
+            print(f"💪 체중 기록 {action}: {user.username} - {record_date_obj}: {weight_value}kg")
+            
+            return Response({
+                'success': True,
+                'message': f'{weight_value}kg 체중이 기록되었습니다.',
+                'record': {
+                    'id': weight_record.id,
+                    'weight': weight_record.weight,
+                    'date': weight_record.date.strftime('%Y-%m-%d'),
+                    'time': weight_record.time.strftime('%H:%M:%S'),
+                    'created': created
+                }
+            })
+        except ValueError as e:
+            return Response({'error': f'Invalid data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)

@@ -8,6 +8,10 @@ import UserInfo from '@/components/auth/UserInfo';
 import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
 import { useRequireAuth } from '@/hooks/useAuthGuard';
 import { apiClient } from '@/lib/api';
+import { AICoachTip } from '@/components/dashboard/AICoachTip';
+import { FoodRecommendations } from '@/components/dashboard/FoodRecommendations';
+import { NutritionAnalysis } from '@/components/dashboard/NutritionAnalysis';
+import { AIRecommendationModal } from '@/components/ui/AIRecommendationModal';
 
 interface GamificationData {
   points: number;
@@ -45,6 +49,8 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [weeklyCalories, setWeeklyCalories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAIRecommendationOpen, setIsAIRecommendationOpen] = useState(false);
+  const [showAICoachTip, setShowAICoachTip] = useState(true);
 
   // 인증 확인 중이면 로딩 화면 표시
   if (isLoading || !canRender) {
@@ -619,6 +625,27 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* AI 코칭 섹션 */}
+          {showAICoachTip && (
+            <AICoachTip onClose={() => setShowAICoachTip(false)} />
+          )}
+
+          {/* AI 기능 카드들 */}
+          <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <FoodRecommendations className="lg:col-span-1" />
+            <NutritionAnalysis className="lg:col-span-2" />
+          </div>
+
+          {/* AI 추천 버튼 */}
+          <div className="w-full text-center">
+            <button
+              onClick={() => setIsAIRecommendationOpen(true)}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold py-4 px-8 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-300 transform hover:scale-105"
+            >
+              🤖 AI 맞춤 추천 더보기
+            </button>
+          </div>
+
           <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 text-left flex flex-col justify-center">
               <h2 className="text-xl font-bold mb-2">식단 캘린더</h2>
@@ -652,6 +679,11 @@ export default function DashboardPage() {
         <WeeklyReportModal
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}
+        />
+        <AIRecommendationModal
+          isOpen={isAIRecommendationOpen}
+          onClose={() => setIsAIRecommendationOpen(false)}
+          initialType="personalized"
         />
 
       </div>

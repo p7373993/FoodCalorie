@@ -36,7 +36,7 @@ def test_celery(request):
 
 class MassEstimationTaskViewSet(APIView):
     """음식 질량 추정 작업 API 뷰셋"""
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, task_id=None):
         """작업 조회"""
@@ -108,7 +108,7 @@ class MassEstimationTaskViewSet(APIView):
 
 class MassEstimationTaskUpdateView(APIView):
     """음식 질량 추정 작업 업데이트 API"""
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def put(self, request, task_id):
         """작업 상태 업데이트"""
@@ -184,7 +184,7 @@ class MassEstimationTaskUpdateView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_test_task(request):
     """테스트용 작업 생성 API"""
     import uuid
@@ -211,7 +211,7 @@ def create_test_task(request):
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_test_task(request, task_id):
     """테스트용 작업 업데이트 API"""
     try:
