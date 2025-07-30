@@ -310,7 +310,7 @@ export default function DashboardPage() {
           </div>
 
           {/* 주간 체중 변화 */}
-          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
+          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 min-h-[420px]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-left">주간 체중 변화</h2>
               <div className="flex items-center space-x-4">
@@ -407,7 +407,7 @@ export default function DashboardPage() {
                                   if (!day.has_record && !day.has_approximate || !day.weight) return null;
                                   
                                   const x = (index / 6) * 83.33 + 8.33; // 7일을 83.33%로, 8.33% 여백
-                                  const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 70 : 50; // 70% 높이 사용
+                                  const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 80 : 50; // 80% 높이 사용
                                   
                                   return `${x},${y}`;
                                 })
@@ -441,7 +441,7 @@ export default function DashboardPage() {
                             const range = maxWeight - minWeight;
                             
                             const x = (index / 6) * 83.33 + 8.33;
-                            const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 70 : 50; // 70% 높이 사용
+                            const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 80 : 50; // 80% 높이 사용
                             
                             return (
                               <circle
