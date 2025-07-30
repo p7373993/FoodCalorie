@@ -209,18 +209,19 @@ export default function CalendarPage() {
     return map;
   }, [calendarData?.daily_logs]);
 
-  // 오늘의 영양소 정보
-  const todayNutrients = useMemo(() => {
-    if (!calendarData?.daily_logs) {
+  // 선택된 날짜의 영양소 정보
+  const selectedDateNutrients = useMemo(() => {
+    if (!calendarData?.daily_logs || !selectedDate) {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
 
-    const todayLog = calendarData.daily_logs.find(
-      (log) => log.date === new Date().toISOString().split("T")[0]
+    const selectedDateStr = selectedDate.toISOString().split("T")[0];
+    const selectedDateLog = calendarData.daily_logs.find(
+      (log) => log.date === selectedDateStr
     );
 
-    return todayLog
-      ? todayLog.meals.reduce(
+    return selectedDateLog
+      ? selectedDateLog.meals.reduce(
           (acc, meal) => {
             acc.calories += meal.nutrients.calories;
             acc.protein += meal.nutrients.protein;
@@ -231,7 +232,7 @@ export default function CalendarPage() {
           { calories: 0, protein: 0, carbs: 0, fat: 0 }
         )
       : { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  }, [calendarData?.daily_logs]);
+  }, [calendarData?.daily_logs, selectedDate]);
 
   // 목표 업데이트 핸들러
   const handleGoalUpdate = async (newGoals: Partial<CalendarUserProfile>) => {
@@ -330,7 +331,11 @@ export default function CalendarPage() {
           {/* 오늘의 영양소 현황 */}
           <div className="bg-gray-800 p-6 rounded-2xl">
             <h2 className="text-xl font-bold mb-4 text-green-400">
-              {new Date().toLocaleDateString("ko-KR", {
+              {selectedDate?.toLocaleDateString("ko-KR", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              }) || new Date().toLocaleDateString("ko-KR", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
@@ -340,36 +345,39 @@ export default function CalendarPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <ProgressBar
                 label="칼로리"
-                current={todayNutrients.calories}
+                current={selectedDateNutrients.calories}
                 goal={user_profile.calorie_goal}
                 unit="kcal"
                 colorClass="bg-blue-500"
               />
               <ProgressBar
                 label="단백질"
-                current={todayNutrients.protein}
+                current={selectedDateNutrients.protein}
                 goal={user_profile.protein_goal}
                 unit="g"
                 colorClass="bg-green-500"
               />
               <ProgressBar
                 label="탄수화물"
-                current={todayNutrients.carbs}
+                current={selectedDateNutrients.carbs}
                 goal={user_profile.carbs_goal}
                 unit="g"
                 colorClass="bg-yellow-500"
               />
               <ProgressBar
                 label="지방"
-                current={todayNutrients.fat}
+                current={selectedDateNutrients.fat}
                 goal={user_profile.fat_goal}
                 unit="g"
                 colorClass="bg-red-500"
               />
             </div>
-            {todayNutrients.calories === 0 && (
+            {selectedDateNutrients.calories === 0 && (
               <p className="text-gray-400 mt-4 text-center">
-                오늘은 아직 기록된 식단이 없습니다.
+                {selectedDate?.toLocaleDateString("ko-KR", {
+                  month: "long",
+                  day: "numeric",
+                }) || "오늘"}은 아직 기록된 식단이 없습니다.
               </p>
             )}
           </div>
@@ -655,8 +663,8 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* 주간 분석 섹션 */}
-          {weekly_analysis && (
+          {/* 주간 분석 섹션 - 주석처리됨 */}
+          {/* {weekly_analysis && (
             <div className="bg-gray-800 p-6 rounded-2xl">
               <h2 className="text-xl font-bold mb-4 text-green-400">
                 이번 주 분석
@@ -708,7 +716,7 @@ export default function CalendarPage() {
                 </p>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* 배지 섹션 */}
           {badges.length > 0 && (
