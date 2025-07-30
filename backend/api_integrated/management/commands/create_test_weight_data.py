@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
         today = date.today()
         
-        # 일주일치 체중 데이터 (현실적인 변화)
+        # 일주일치 체중 데이터 (현실적인 변화) - 오늘 제외
         weight_data = [
             (today - timedelta(days=6), 75.2),
             (today - timedelta(days=5), 75.0),
@@ -42,7 +42,7 @@ class Command(BaseCommand):
             (today - timedelta(days=3), 74.9),
             (today - timedelta(days=2), 74.7),
             (today - timedelta(days=1), 74.5),
-            (today, 74.3),
+            # 오늘은 기록하지 않음 (시연용)
         ]
 
         created_count = 0

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
-import AdvancedInsightModal from '@/components/ui/AdvancedInsightModal';
 import UserInfo from '@/components/auth/UserInfo';
 import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
 import { useRequireAuth } from '@/hooks/useAuthGuard';
@@ -40,7 +39,6 @@ export default function DashboardPage() {
   const { canRender, isLoading } = useRequireAuth();
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isInsightModalOpen, setIsInsightModalOpen] = useState(false);
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
   const [gamificationData, setGamificationData] = useState<GamificationData>({ points: 0, badges: [] });
   const [recentMeals, setRecentMeals] = useState<MealEntry[]>([]);
@@ -612,20 +610,12 @@ export default function DashboardPage() {
             <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 text-left flex flex-col justify-center">
               <h2 className="text-xl font-bold mb-2">AI 분석</h2>
               <p className="text-sm text-gray-400 mb-4">AI로 나의 활동을 분석하고 조언을 받으세요.</p>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setIsReportModalOpen(true)}
-                  className="w-full bg-teal-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105"
-                >
-                  주간 리포트
-                </button>
-                <button
-                  onClick={() => setIsInsightModalOpen(true)}
-                  className="w-full bg-teal-600 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105"
-                >
-                  고급 인사이트
-                </button>
-              </div>
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                className="w-full bg-teal-500 text-white font-bold py-3 rounded-lg transition-transform hover:scale-105"
+              >
+                주간 리포트
+              </button>
             </div>
           </div>
 
@@ -663,10 +653,7 @@ export default function DashboardPage() {
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}
         />
-        <AdvancedInsightModal
-          isOpen={isInsightModalOpen}
-          onClose={() => setIsInsightModalOpen(false)}
-        />
+
       </div>
     </>
   );
