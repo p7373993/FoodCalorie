@@ -185,32 +185,78 @@ export default function DashboardPage() {
           {/* 주간 칼로리 섭취량 */}
           <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
             <h2 className="text-xl font-bold text-left mb-4">주간 칼로리 섭취량</h2>
-            <div className="flex justify-between items-end h-48 space-x-2">
-              {weeklyData.map((data, index) => {
-                const calories = data.total_kcal || data.kcal || 0;
-                const heightPercentage = Math.max(2, (calories / maxKcal) * 100);
-
-                console.log(`📊 ${data.day}: ${calories}kcal → ${heightPercentage.toFixed(1)}%`);
-
-                return (
-                  <div key={index} className="flex-1 flex flex-col items-center justify-end">
-                    <div className="w-full h-full flex items-end">
-                      <div
-                        className={`w-full rounded-t-md transition-all duration-500 ${calories > 0 ? 'bg-[var(--point-green)]' : 'bg-gray-600 opacity-30'
-                          }`}
-                        style={{
-                          height: `${heightPercentage}%`,
-                          minHeight: calories > 0 ? '8px' : '2px'
-                        }}
-                      ></div>
-                    </div>
-                    <div className="mt-2 text-center">
-                      <span className="text-xs font-medium">{data.day}</span>
-                      <p className="text-xs text-gray-400">{calories}kcal</p>
-                    </div>
+            <div className="relative h-48">
+              {/* Y축 눈금선 */}
+              <div className="absolute inset-0 flex flex-col justify-between text-xs text-gray-500">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center">
+                    <span className="w-12 text-right pr-2">{Math.round((maxKcal * (4 - i)) / 4)}kcal</span>
+                    <div className="flex-1 h-px bg-gray-700 opacity-30"></div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+
+              {/* 선그래프 영역 */}
+              <div className="absolute inset-0 ml-14">
+                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  {/* 선그래프 */}
+                  <polyline
+                    fill="none"
+                    stroke="var(--point-green)"
+                    strokeWidth="2"
+                    points={weeklyData.map((data, index) => {
+                      const calories = data.total_kcal || data.kcal || 0;
+                      const x = (index / (weeklyData.length - 1)) * 100;
+                      const y = 100 - Math.max(5, (calories / maxKcal) * 95);
+                      return `${x},${y}`;
+                    }).join(' ')}
+                    className="drop-shadow-sm"
+                  />
+
+                  {/* 데이터 포인트 */}
+                  {weeklyData.map((data, index) => {
+                    const calories = data.total_kcal || data.kcal || 0;
+                    const x = (index / (weeklyData.length - 1)) * 100;
+                    const y = 100 - Math.max(5, (calories / maxKcal) * 95);
+
+                    return (
+                      <g key={index}>
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="3"
+                          fill={data.is_today ? "#fbbf24" : "var(--point-green)"}
+                          stroke="white"
+                          strokeWidth="1"
+                          className="drop-shadow-sm hover:r-4 transition-all cursor-pointer"
+                        />
+                        {/* 호버 영역 (투명한 큰 원) */}
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="8"
+                          fill="transparent"
+                          className="hover:fill-white hover:fill-opacity-10 cursor-pointer"
+                        >
+                          <title>{data.day}: {calories}kcal</title>
+                        </circle>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* X축 라벨 */}
+              <div className="absolute bottom-0 left-14 right-0 flex justify-between mt-2">
+                {weeklyData.map((data, index) => (
+                  <div key={index} className="text-center flex-1">
+                    <span className={`text-xs font-medium ${data.is_today ? 'text-yellow-400' : 'text-gray-300'}`}>
+                      {data.day}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">{data.total_kcal || data.kcal || 0}kcal</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -247,11 +293,13 @@ export default function DashboardPage() {
                         return (
                           <div key={index} className="flex-1 flex flex-col items-center justify-end">
                             <div className="w-full h-full flex items-end relative group">
-                              {day.has_record && day.weight ? (
+                              {(day.has_record || day.has_approximate) && day.weight ? (
                                 <>
                                   {/* 체중 막대 */}
                                   <div
-                                    className={`w-full rounded-t-md transition-all duration-500 ${day.is_today ? 'bg-yellow-500' : 'bg-blue-500'
+                                    className={`w-full rounded-t-md transition-all duration-500 ${day.is_today ? 'bg-yellow-500' :
+                                      day.has_record ? 'bg-blue-500' :
+                                        day.has_approximate ? 'bg-blue-400 opacity-70' : 'bg-gray-600'
                                       }`}
                                     style={{
                                       height: `${Math.max(20, ((day.weight - minWeight) / weightRange) * 85)}%`,
@@ -263,6 +311,9 @@ export default function DashboardPage() {
                                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-gray-800 text-white text-xs rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap">
                                     <p className="font-bold">{day.date}</p>
                                     <p>체중: {day.weight}kg</p>
+                                    {day.has_approximate && (
+                                      <p className="text-gray-300 text-xs">({day.record_date} 기록)</p>
+                                    )}
                                   </div>
                                 </>
                               ) : (
@@ -273,12 +324,16 @@ export default function DashboardPage() {
 
                             <div className="mt-2 text-center">
                               <span className={`text-xs font-medium ${day.is_today ? 'text-yellow-400' :
-                                day.has_record ? 'text-blue-400' : 'text-gray-500'
+                                day.has_record ? 'text-blue-400' :
+                                  day.has_approximate ? 'text-blue-300' : 'text-gray-500'
                                 }`}>
                                 {day.day}
                               </span>
-                              {day.has_record && (
-                                <p className="text-xs text-gray-400 mt-1">{day.weight}kg</p>
+                              {(day.has_record || day.has_approximate) && day.weight && (
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {day.weight}kg
+                                  {day.has_approximate && <span className="text-gray-500">*</span>}
+                                </p>
                               )}
                             </div>
                           </div>

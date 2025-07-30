@@ -72,7 +72,7 @@ def get_dashboard_data(request):
         week_meals = MealLog.objects.filter(user=user, date__range=[week_start, today])
         week_avg_calories = week_meals.aggregate(avg=Avg('calories'))['avg'] or 0
         
-        # 체중 데이터 계산 (슬라이스 전에 필터링)
+        # 체중 데이터 계산
         all_weight_records = WeightRecord.objects.filter(user=user).order_by('-date')
         
         # 주간 체중 데이터 생성
@@ -83,16 +83,32 @@ def get_dashboard_data(request):
             weekday = target_date.weekday()
             day_name = day_names[weekday]
             
-            # 해당 날짜의 체중 기록 찾기
-            day_weight = all_weight_records.filter(date=target_date).first()
+            # 해당 날짜의 체중 기록 찾기 (정확한 날짜 매칭)
+            day_weight = WeightRecord.objects.filter(user=user, date=target_date).first()
+            
+            # 해당 날짜에 기록이 없으면 가장 가까운 이전 기록 찾기 (선택사항)
+            if not day_weight:
+                # 해당 날짜 이전의 가장 최근 기록 찾기
+                previous_weight = WeightRecord.objects.filter(
+                    user=user, 
+                    date__lte=target_date
+                ).order_by('-date').first()
+                
+                # 7일 이내의 기록만 사용 (너무 오래된 데이터는 제외)
+                if previous_weight and (target_date - previous_weight.date).days <= 7:
+                    day_weight = previous_weight
             
             weekly_weights.append({
                 'day': day_name,
                 'date': target_date.strftime('%Y-%m-%d'),
                 'weight': round(day_weight.weight, 1) if day_weight else None,
-                'has_record': day_weight is not None,
-                'is_today': target_date == today
+                'has_record': day_weight is not None and day_weight.date == target_date,
+                'has_approximate': day_weight is not None and day_weight.date != target_date,
+                'is_today': target_date == today,
+                'record_date': day_weight.date.strftime('%Y-%m-%d') if day_weight else None
             })
+            
+            print(f"📅 {target_date} ({day_name}): {'✅' if day_weight else '❌'} {round(day_weight.weight, 1) if day_weight else 'N/A'}kg")
         
         # 체중 변화 계산
         weight_change = None

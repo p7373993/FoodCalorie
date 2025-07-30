@@ -13,15 +13,20 @@ from api_integrated.models import MealLog, WeightRecord
 from django.contrib.auth.models import User
 
 def create_dummy_data():
-    # xoxoda1111@gmail.com 사용자 생성 또는 가져오기
+    # xoxoda11111@gmail.com 사용자 생성 또는 가져오기
     user, created = User.objects.get_or_create(
-        email='xoxoda1111@gmail.com',
+        email='xoxoda11111@gmail.com',
         defaults={
             'username': 'xoxoda1111',
             'first_name': 'Demo',
             'last_name': 'User'
         }
     )
+    
+    # 비밀번호 설정 (항상 demo1234@로 설정)
+    user.set_password('demo1234@')  # 비밀번호: demo1234@
+    user.save()
+    print(f"🔑 사용자 비밀번호 설정 완료: demo1234")
     
     print(f"사용자: {user.username} ({'생성됨' if created else '기존 사용자'})")
     
