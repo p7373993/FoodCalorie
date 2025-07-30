@@ -18,15 +18,41 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
     };
   }, [isOpen]);
 
+  const [reportData, setReportData] = useState<any>(null);
+
   useEffect(() => {
     if (isOpen) { 
       setIsLoading(true);
-      // 하드코딩된 로딩 시뮬레이션
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 1000);
+      loadWeeklyReport();
     }
   }, [isOpen]);
+
+  const loadWeeklyReport = async () => {
+    try {
+      const response = await fetch('http://localhost:8001/api/ai/coaching/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ type: 'weekly' })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('주간 리포트 데이터:', data);
+        setReportData(data.data);
+      } else {
+        console.error('주간 리포트 로드 실패:', response.status);
+        const errorData = await response.text();
+        console.error('에러 상세:', errorData);
+      }
+    } catch (error) {
+      console.error('주간 리포트 로드 오류:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -47,64 +73,84 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
         <div className="p-6 overflow-y-auto max-h-[70vh]">
           {isLoading ? (
             <div className="flex justify-center items-center h-48">
-              <span className="spinner"></span>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
+              <span className="ml-3 text-white">AI가 주간 리포트를 생성하고 있습니다...</span>
             </div>
-          ) : (
+          ) : reportData ? (
             <div className="text-left text-white space-y-4">
-              <h3 className="text-lg font-bold text-green-400 mb-4">📊 이번 주 영양 분석 리포트</h3>
+              <h3 className="text-lg font-bold text-green-400 mb-4">📊 AI 주간 영양 분석 리포트</h3>
               
               <div className="bg-gray-700 p-4 rounded-lg">
                 <h4 className="font-bold text-blue-400 mb-2">🎯 주간 목표 달성도</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span>칼로리 목표:</span>
-                    <span className="text-green-400">1,620 / 2,000 kcal (81%)</span>
+                    <span>평균 일일 칼로리:</span>
+                    <span className="text-green-400">{reportData.avg_daily_calories}kcal</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>단백질 목표:</span>
-                    <span className="text-yellow-400">81 / 120g (68%)</span>
+                    <span>총 식사 횟수:</span>
+                    <span className="text-blue-400">{reportData.total_meals}회</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>탄수화물 목표:</span>
-                    <span className="text-blue-400">243 / 250g (97%)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>지방 목표:</span>
-                    <span className="text-red-400">36 / 65g (55%)</span>
+                    <span>총 칼로리:</span>
+                    <span className="text-yellow-400">{reportData.total_calories}kcal</span>
                   </div>
                 </div>
               </div>
 
               <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-green-400 mb-2">📈 주간 트렌드</h4>
-                <ul className="text-sm space-y-1">
-                  <li>• 평균 일일 칼로리: 1,620kcal (목표 대비 81%)</li>
-                  <li>• 가장 높은 칼로리: 1,900kcal (7월 28일)</li>
-                  <li>• 가장 낮은 칼로리: 1,100kcal (7월 31일)</li>
-                  <li>• 식사 기록 일수: 7일 중 7일 (100%)</li>
-                </ul>
-              </div>
-
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-yellow-400 mb-2">💡 AI 조언</h4>
-                <div className="text-sm space-y-2">
-                  <p>🎉 <strong>잘하고 있어요!</strong> 이번 주 식사 기록을 꾸준히 하셨네요.</p>
-                  <p>📊 <strong>칼로리:</strong> 목표 대비 81%로 양호하지만, 조금 더 균형잡힌 식사를 위해 단백질 섭취를 늘려보세요.</p>
-                  <p>🥩 <strong>단백질:</strong> 현재 68% 달성으로 부족합니다. 닭가슴살, 생선, 콩류 등을 더 섭취해보세요.</p>
-                  <p>🍚 <strong>탄수화물:</strong> 97% 달성으로 매우 좋습니다! 현재 수준을 유지하세요.</p>
-                  <p>🥑 <strong>지방:</strong> 55% 달성으로 적절합니다. 건강한 지방 섭취를 위해 견과류나 아보카도를 추가해보세요.</p>
+                <h4 className="font-bold text-green-400 mb-2">🥗 영양소 분석</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>탄수화물:</span>
+                    <span className="text-blue-400">{reportData.nutrition_summary?.carbs || 0}g</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>단백질:</span>
+                    <span className="text-green-400">{reportData.nutrition_summary?.protein || 0}g</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>지방:</span>
+                    <span className="text-orange-400">{reportData.nutrition_summary?.fat || 0}g</span>
+                  </div>
                 </div>
               </div>
 
               <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-purple-400 mb-2">🎯 다음 주 목표</h4>
-                <ul className="text-sm space-y-1">
-                  <li>• 일일 단백질 섭취량 100g 이상 달성</li>
-                  <li>• 건강한 지방 섭취량 50g 이상 달성</li>
-                  <li>• 식사 기록 7일 연속 유지</li>
-                  <li>• 물 섭취량 하루 2L 이상</li>
-                </ul>
+                <h4 className="font-bold text-purple-400 mb-2">🏆 음식 등급 분포</h4>
+                <div className="flex space-x-2 text-sm">
+                  {Object.entries(reportData.grade_distribution || {}).map(([grade, count]) => (
+                    <div key={grade} className="text-center">
+                      <div className={`px-2 py-1 rounded text-xs font-bold ${
+                        grade === 'A' ? 'bg-green-500' :
+                        grade === 'B' ? 'bg-blue-500' :
+                        grade === 'C' ? 'bg-yellow-500' :
+                        grade === 'D' ? 'bg-orange-500' : 'bg-red-500'
+                      }`}>
+                        {grade}
+                      </div>
+                      <div className="text-xs mt-1">{count}개</div>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              <div className="bg-gray-700 p-4 rounded-lg">
+                <h4 className="font-bold text-yellow-400 mb-2">🤖 AI 분석 및 조언</h4>
+                <div className="text-sm leading-relaxed">
+                  {reportData.ai_analysis || "AI 분석을 생성하는 중입니다..."}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-white">
+              <p>주간 리포트를 불러올 수 없습니다.</p>
+              <button 
+                onClick={loadWeeklyReport}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                다시 시도
+              </button>
             </div>
           )}
         </div>

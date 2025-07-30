@@ -532,37 +532,84 @@ class AICoachingView(APIView):
             coaching_service = AICoachingService()
             
             if coaching_type == 'weekly':
+                # 실제 LLM 기반 주간 리포트 생성
                 result = coaching_service.generate_weekly_report(request.user)
                 print(f"✅ 주간 리포트 생성 완료")
+                
+                return Response({
+                    "success": True,
+                    "data": result,
+                    "message": "주간 리포트 생성 완료"
+                })
+                
             elif coaching_type == 'nutrition':
                 focus_nutrient = request.data.get('nutrient', 'protein')
-                # 영양소 중심 코칭을 일일 코칭으로 대체
-                result = coaching_service.generate_daily_coaching(request.user)
+                result = coaching_service.generate_nutrition_coaching(request.user, focus_nutrient)
                 print(f"✅ 영양소 코칭 생성 완료: {focus_nutrient}")
+                
+                return Response({
+                    "success": True,
+                    "data": {
+                        "message": result,
+                        "nutrient": focus_nutrient,
+                        "generated_at": datetime.now().isoformat()
+                    },
+                    "message": f"{focus_nutrient} 영양소 코칭 생성 완료"
+                })
+                
+            elif coaching_type == 'detailed_meal_analysis':
+                # 음식 업로드 결과 페이지에서 사용하는 상세 분석
+                meal_data = request.data.get('meal_data', {})
+                result = coaching_service.generate_meal_analysis_coaching(request.user, meal_data)
+                print(f"✅ 상세 식사 분석 코칭 생성 완료")
+                
+                return Response({
+                    "success": True,
+                    "coaching": result,
+                    "generated_at": datetime.now().isoformat()
+                })
+                
             else:
+                # 실제 LLM 기반 일일 코칭 생성
                 result = coaching_service.generate_daily_coaching(request.user)
                 print(f"✅ 일일 코칭 생성 완료")
-            
-            return Response({
-                "success": True,
-                "data": result,
-                "message": f"{coaching_type} 코칭 생성 완료"
-            })
+                
+                return Response({
+                    "success": True,
+                    "data": {
+                        "message": result,
+                        "generated_at": datetime.now().isoformat()
+                    },
+                    "message": "일일 코칭 생성 완료"
+                })
             
         except Exception as e:
             print(f"❌ 맞춤형 AI 코칭 생성 실패: {str(e)}")
             import traceback
             traceback.print_exc()
             
-            return Response({
-                "success": False,
-                "data": {
-                    "message": "코칭 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+            # 에러 시 기본 메시지 반환
+            if request.data.get('type') == 'weekly':
+                default_data = {
+                    'period': '최근 7일',
+                    'total_calories': 0,
+                    'avg_daily_calories': 0,
+                    'total_meals': 0,
+                    'nutrition_summary': {'carbs': 0, 'protein': 0, 'fat': 0},
+                    'grade_distribution': {},
+                    'ai_analysis': '주간 분석을 생성하는 중 문제가 발생했습니다. 계속해서 건강한 식습관을 유지해보세요! 💪'
+                }
+            else:
+                default_data = {
+                    "message": "오늘도 건강한 식습관을 위해 노력해보세요! 💪",
                     "generated_at": datetime.now().isoformat()
-                },
-                "message": "AI 코칭 서비스 오류",
-                "error": str(e)
-            }, status=status.HTTP_200_OK)  # 200으로 반환하여 프론트엔드에서 처리
+                }
+            
+            return Response({
+                "success": True,  # 기본 메시지라도 성공으로 처리
+                "data": default_data,
+                "message": "기본 코칭 메시지 제공"
+            })
 
 class FoodRecommendationView(APIView):
     """음식 추천 API"""
@@ -570,7 +617,37 @@ class FoodRecommendationView(APIView):
     
     def get(self, request):
         """개인화된 음식 추천"""
-        from .recommendation_engine import FoodRecommendationEngine
+        try:
+            from .ai_coach import AICoachingService
+            
+            meal_type = request.GET.get('meal_type', 'lunch')
+            count = int(request.GET.get('count', 5))
+            
+            print(f"🍽️ 음식 추천 요청 - 사용자: {request.user.username}, 타입: {meal_type}")
+            
+            coaching_service = AICoachingService()
+            recommendations = coaching_service.generate_meal_recommendation(request.user, meal_type)
+            
+            return Response({
+                "success": True,
+                "data": {
+                    "meal_type": meal_type,
+                    "recommendations": recommendations.get('recommendations', []),
+                    "generated_at": datetime.now().isoformat()
+                },
+                "message": f"{meal_type} 추천 생성 완료"
+            })
+            
+        except Exception as e:
+            print(f"❌ 음식 추천 생성 실패: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            return Response({
+                "success": False,
+                "message": "음식 추천 서비스에 일시적인 문제가 발생했습니다.",
+                "error": str(e)
+            }, status=status.HTTP_200_OK)
         
         meal_type = request.query_params.get('meal_type', 'lunch')
         count = int(request.query_params.get('count', 5))

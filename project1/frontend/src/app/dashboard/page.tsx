@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
@@ -11,7 +11,7 @@ import { apiClient } from '@/lib/api';
 import { AICoachTip } from '@/components/dashboard/AICoachTip';
 import { FoodRecommendations } from '@/components/dashboard/FoodRecommendations';
 import { NutritionAnalysis } from '@/components/dashboard/NutritionAnalysis';
-import { AIRecommendationModal } from '@/components/ui/AIRecommendationModal';
+
 
 interface GamificationData {
   points: number;
@@ -49,12 +49,129 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [weeklyCalories, setWeeklyCalories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAIRecommendationOpen, setIsAIRecommendationOpen] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showAICoachTip, setShowAICoachTip] = useState(true);
+
+
+
+  // 대시보드 데이터 새로고침
+  const refreshDashboard = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 대시보드 데이터 새로고침...');
+
+      // 대시보드 데이터 가져오기
+      const dashboardResponse = await apiClient.getDashboardData();
+      console.log('📊 새로고침된 대시보드 데이터:', dashboardResponse);
+      setDashboardData(dashboardResponse);
+
+      // 주간 칼로리 데이터 설정
+      if (dashboardResponse.weekly_calories && dashboardResponse.weekly_calories.days) {
+        setWeeklyCalories(dashboardResponse.weekly_calories.days);
+      }
+
+      // 최근 식사 기록 설정
+      if (dashboardResponse.recent_meals) {
+        setRecentMeals(dashboardResponse.recent_meals);
+      }
+
+      // 체중 데이터 가져오기
+      const weightResponse = await apiClient.getWeightEntries();
+      if (weightResponse.success && weightResponse.records) {
+        const formattedWeights = weightResponse.records.map((record: any) => ({
+          id: record.id.toString(),
+          weight: record.weight,
+          timestamp: {
+            seconds: new Date(record.created_at).getTime() / 1000,
+            nanoseconds: 0
+          }
+        }));
+        setWeightHistory(formattedWeights);
+      }
+
+      // 게임화 데이터 설정
+      setGamificationData({
+        points: dashboardResponse.today_stats?.total_calories || 0,
+        badges: []
+      });
+
+    } catch (error) {
+      console.error('❌ 대시보드 새로고침 실패:', error);
+      setError('데이터 새로고침에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 자동 새로고침 (5분마다)
+  useEffect(() => {
+    if (!dataLoaded) return;
+
+    const interval = setInterval(() => {
+      console.log('🔄 자동 새로고침 실행');
+      refreshDashboard();
+    }, 5 * 60 * 1000); // 5분
+
+    return () => clearInterval(interval);
+  }, [dataLoaded]);
 
   // 인증 확인 중이면 로딩 화면 표시
   if (isLoading || !canRender) {
     return <AuthLoadingScreen message="대시보드를 불러오고 있습니다..." />;
+  }
+
+  // 데이터 로딩 중일 때 스켈레톤 UI 표시
+  if (loading && !dataLoaded) {
+    return (
+      <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-4xl space-y-6">
+          {/* 로딩 스켈레톤 */}
+          <div className="bg-gray-800/60 rounded-2xl p-6 animate-pulse">
+            <div className="h-6 bg-gray-700 rounded w-1/3 mb-4"></div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-20 bg-gray-700 rounded"></div>
+              <div className="h-20 bg-gray-700 rounded"></div>
+              <div className="h-20 bg-gray-700 rounded"></div>
+            </div>
+          </div>
+          <div className="bg-gray-800/60 rounded-2xl p-6 animate-pulse">
+            <div className="h-6 bg-gray-700 rounded w-1/4 mb-4"></div>
+            <div className="h-32 bg-gray-700 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 에러 상태 표시
+  if (error) {
+    return (
+      <div className="bg-grid-pattern text-white min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold mb-4">오류가 발생했습니다</h2>
+          <p className="text-gray-300 mb-6">{error}</p>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setError(null);
+                refreshDashboard();
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              다시 시도
+            </button>
+            <button
+              onClick={() => router.push('/upload')}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              식사 기록하기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   useEffect(() => {
@@ -104,8 +221,10 @@ export default function DashboardPage() {
 
       } catch (error) {
         console.error('❌ 대시보드 데이터 로드 실패:', error);
+        setError('대시보드 데이터를 불러오는데 실패했습니다. 새로고침을 시도해보세요.');
       } finally {
         setLoading(false);
+        setDataLoaded(true);
       }
     };
 
@@ -158,18 +277,31 @@ export default function DashboardPage() {
     router.push('/calendar');
   };
 
-  // 실제 데이터 또는 기본값 사용
-  const weeklyData = weeklyCalories.length > 0 ? weeklyCalories : [];
+  // 메모이제이션된 계산값들
+  const { weeklyData, validCalories, maxKcal, todayNutrition } = useMemo(() => {
+    const data = weeklyCalories.length > 0 ? weeklyCalories : [];
+    const valid = data
+      .map(d => d.total_kcal || d.kcal || 0)
+      .filter(cal => cal > 0);
 
-  // 최대값 계산 (실제 데이터가 있는 값들만 고려)
-  const validCalories = weeklyData
-    .map(d => d.total_kcal || d.kcal || 0)
-    .filter(cal => cal > 0); // 0보다 큰 값만 고려
-  
-  // 실제 최대값을 기준으로 하되, 최소 2000kcal 보장
-  const actualMax = validCalories.length > 0 ? Math.max(...validCalories) : 0;
-  const maxKcal = Math.max(2000, actualMax);
-  
+    const actualMax = valid.length > 0 ? Math.max(...valid) : 0;
+    const max = Math.max(dashboardData?.user_goals?.daily_calories || 2000, actualMax);
+
+    const nutrition = {
+      carbs: recentMeals.reduce((sum, meal) => sum + (meal.carbs || 0), 0),
+      protein: recentMeals.reduce((sum, meal) => sum + (meal.protein || 0), 0),
+      fat: recentMeals.reduce((sum, meal) => sum + (meal.fat || 0), 0),
+      calories: recentMeals.reduce((sum, meal) => sum + meal.calories, 0)
+    };
+
+    return {
+      weeklyData: data,
+      validCalories: valid,
+      maxKcal: max,
+      todayNutrition: nutrition
+    };
+  }, [weeklyCalories, recentMeals, dashboardData]);
+
   // 디버깅용 로그
   console.log('📊 주간 데이터:', weeklyData);
   console.log('📊 유효한 칼로리:', validCalories);
@@ -207,28 +339,28 @@ export default function DashboardPage() {
                 <div className="text-xs text-gray-200">기록된 날</div>
               </div>
             </div>
-            
+
             {weeklyData.length > 0 ? (
               <div className="space-y-4 sm:space-y-6 lg:space-y-8">
                 {/* 요약 통계 */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-                  <div className="bg-gray-700/60 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
+                  <div className="bg-gray-800/80 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
                     <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-400">
-                      {Math.round(validCalories.reduce((sum, cal) => sum + cal, 0) / validCalories.length)}kcal
+                      {validCalories.length > 0 ? Math.round(validCalories.reduce((sum, cal) => sum + cal, 0) / validCalories.length) : 0}kcal
                     </div>
-                    <div className="text-xs text-gray-300 mt-1">평균</div>
+                    <div className="text-xs text-white mt-1">평균</div>
                   </div>
-                  <div className="bg-gray-700/60 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
+                  <div className="bg-gray-800/80 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
                     <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-400">
-                      {Math.max(...validCalories)}kcal
+                      {validCalories.length > 0 ? Math.max(...validCalories) : 0}kcal
                     </div>
-                    <div className="text-xs text-gray-300 mt-1">최고</div>
+                    <div className="text-xs text-white mt-1">최고</div>
                   </div>
-                  <div className="bg-gray-700/60 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
+                  <div className="bg-gray-800/80 border border-gray-600 rounded-2xl p-3 sm:p-4 text-center shadow-lg">
                     <div className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-400">
-                      {Math.min(...validCalories)}kcal
+                      {validCalories.length > 0 ? Math.min(...validCalories) : 0}kcal
                     </div>
-                    <div className="text-xs text-gray-300 mt-1">최저</div>
+                    <div className="text-xs text-white mt-1">최저</div>
                   </div>
                 </div>
 
@@ -237,10 +369,10 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-end h-full space-x-3 pb-12">
                     {weeklyData.map((data, index) => {
                       const calories = data.total_kcal || data.kcal || 0;
-                      
+
                       // 디버깅용 로그
                       console.log(`📊 ${data.day}: ${calories}kcal, has_data: ${data.has_data}, maxKcal: ${maxKcal}`);
-                      
+
                       // 반응형 픽셀 기반 높이 계산 (라벨 공간 고려)
                       let barHeightPx = 8; // 최소 높이
                       if (data.has_data && calories > 0) {
@@ -250,25 +382,24 @@ export default function DashboardPage() {
                         barHeightPx = Math.max(8, (percentage / 100) * containerHeight);
                         console.log(`📊 ${data.day} 막대 높이: ${barHeightPx}px (${percentage.toFixed(1)}%)`);
                       }
-                      
+
                       return (
                         <div key={index} className="flex-1 flex flex-col items-center justify-end group relative">
                           {/* 막대 */}
-                          <div 
-                            className={`w-full rounded-t-lg transition-all duration-700 cursor-pointer relative overflow-hidden ${
-                              data.has_data 
-                                ? (data.is_today 
-                                    ? 'bg-gradient-to-t from-yellow-500 to-yellow-400 shadow-lg shadow-yellow-500/25' 
-                                    : 'bg-gradient-to-t from-green-500 to-green-400 shadow-lg shadow-green-500/25')
-                                : 'bg-gray-700/30'
-                            }`}
-                            style={{ 
+                          <div
+                            className={`w-full rounded-t-lg transition-all duration-700 cursor-pointer relative overflow-hidden ${data.has_data
+                              ? (data.is_today
+                                ? 'bg-gradient-to-t from-yellow-500 to-yellow-400 shadow-lg shadow-yellow-500/25'
+                                : 'bg-gradient-to-t from-green-500 to-green-400 shadow-lg shadow-green-500/25')
+                              : 'bg-gray-700/30'
+                              }`}
+                            style={{
                               height: `${barHeightPx}px`
                             }}
                           >
                             {/* 호버 효과 */}
                             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                            
+
                             {/* 툴팁 */}
                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 bg-gray-900/95 backdrop-blur-sm text-white text-sm rounded-xl p-3 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20 whitespace-nowrap pointer-events-none border border-gray-700/50">
                               <div className="text-center">
@@ -278,7 +409,7 @@ export default function DashboardPage() {
                                 </div>
                                 {data.has_data && (
                                   <div className="text-xs text-gray-400">
-                                    목표 대비 {Math.round((calories / 2000) * 100)}%
+                                    목표 대비 {Math.round((calories / (dashboardData?.user_goals?.daily_calories || 2000)) * 100)}%
                                   </div>
                                 )}
                               </div>
@@ -286,7 +417,7 @@ export default function DashboardPage() {
                               <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900/95"></div>
                             </div>
                           </div>
-                          
+
                           {/* 요일 라벨 */}
                           <div className="mt-3 text-center absolute bottom-0">
                             <div className={`text-sm font-semibold ${data.is_today ? 'text-yellow-400' : 'text-white'}`}>
@@ -314,7 +445,7 @@ export default function DashboardPage() {
           </div>
 
           {/* 주간 체중 변화 */}
-          <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 min-h-[420px] shadow-xl">
+          <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 min-h-[420px] shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-left text-white">주간 체중 변화</h2>
               <div className="flex items-center space-x-4">
@@ -358,13 +489,13 @@ export default function DashboardPage() {
                           const recordedWeights = dashboardData?.weight_data?.weekly_weights
                             ?.filter((d: any) => d.has_record && d.weight)
                             ?.map((d: any) => d.weight) || [];
-                          
+
                           if (recordedWeights.length === 0) return null;
-                          
+
                           const avgWeight = recordedWeights.reduce((sum, w) => sum + w, 0) / recordedWeights.length;
                           const minWeight = avgWeight - 2; // 평균 -2kg
                           const maxWeight = avgWeight + 2; // 평균 +2kg
-                          
+
                           return [4, 3, 2, 1, 0].map((i) => {
                             const weight = minWeight + ((maxWeight - minWeight) / 4) * i;
                             return (
@@ -382,11 +513,11 @@ export default function DashboardPage() {
                           {/* 그리드 라인 */}
                           <defs>
                             <pattern id="grid" width="16.67" height="20" patternUnits="userSpaceOnUse">
-                              <path d="M 16.67 0 L 0 0 0 20" fill="none" stroke="rgba(75, 85, 99, 0.2)" strokeWidth="0.5"/>
+                              <path d="M 16.67 0 L 0 0 0 20" fill="none" stroke="rgba(75, 85, 99, 0.2)" strokeWidth="0.5" />
                             </pattern>
                           </defs>
                           <rect width="100" height="100" fill="url(#grid)" />
-                          
+
                           {/* 선그래프 */}
                           <polyline
                             fill="none"
@@ -398,28 +529,28 @@ export default function DashboardPage() {
                               const recordedWeights = dashboardData?.weight_data?.weekly_weights
                                 ?.filter((d: any) => d.has_record && d.weight)
                                 ?.map((d: any) => d.weight) || [];
-                              
+
                               if (recordedWeights.length === 0) return "";
-                              
+
                               const avgWeight = recordedWeights.reduce((sum, w) => sum + w, 0) / recordedWeights.length;
                               const minWeight = avgWeight - 2; // 평균 -2kg
                               const maxWeight = avgWeight + 2; // 평균 +2kg
                               const range = maxWeight - minWeight;
-                              
+
                               return dashboardData?.weight_data?.weekly_weights
                                 ?.map((day: any, index: number) => {
                                   if (!day.has_record && !day.has_approximate || !day.weight) return null;
-                                  
+
                                   const x = (index / 6) * 83.33 + 8.33; // 7일을 83.33%로, 8.33% 여백
                                   const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 80 : 50; // 80% 높이 사용
-                                  
+
                                   return `${x},${y}`;
                                 })
                                 .filter(Boolean)
                                 .join(" ");
                             })()}
                           />
-                          
+
                           {/* 그라데이션 정의 */}
                           <defs>
                             <linearGradient id="weightGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -428,25 +559,25 @@ export default function DashboardPage() {
                               <stop offset="100%" stopColor="#F59E0B" />
                             </linearGradient>
                           </defs>
-                          
+
                           {/* 데이터 포인트 */}
                           {dashboardData?.weight_data?.weekly_weights?.map((day: any, index: number) => {
                             if (!day.has_record && !day.has_approximate || !day.weight) return null;
-                            
+
                             const recordedWeights = dashboardData?.weight_data?.weekly_weights
                               ?.filter((d: any) => d.has_record && d.weight)
                               ?.map((d: any) => d.weight) || [];
-                            
+
                             if (recordedWeights.length === 0) return null;
-                            
+
                             const avgWeight = recordedWeights.reduce((sum, w) => sum + w, 0) / recordedWeights.length;
                             const minWeight = avgWeight - 2; // 평균 -2kg
                             const maxWeight = avgWeight + 2; // 평균 +2kg
                             const range = maxWeight - minWeight;
-                            
+
                             const x = (index / 6) * 83.33 + 8.33;
                             const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 80 : 50; // 80% 높이 사용
-                            
+
                             return (
                               <circle
                                 key={index}
@@ -461,7 +592,7 @@ export default function DashboardPage() {
                             );
                           })}
                         </svg>
-                        
+
                         {/* X축 라벨 */}
                         <div className="flex justify-between mt-6 space-x-1">
                           {dashboardData?.weight_data?.weekly_weights?.map((day: any, index: number) => (
@@ -505,15 +636,24 @@ export default function DashboardPage() {
           </div>
 
           {/* 최근 식사 기록 */}
-          <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 shadow-xl">
+          <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-left text-white">최근 식사 기록</h2>
-              <button
-                onClick={handleReset}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all hover:scale-105 shadow-lg"
-              >
-                새 분석
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={refreshDashboard}
+                  disabled={loading}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all hover:scale-105 shadow-lg disabled:opacity-50"
+                >
+                  {loading ? '🔄' : '새로고침'}
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all hover:scale-105 shadow-lg"
+                >
+                  새 분석
+                </button>
+              </div>
             </div>
 
             {recentMeals.length > 0 ? (
@@ -586,7 +726,7 @@ export default function DashboardPage() {
                             // 성공적으로 삭제되면 목록에서 제거
                             setRecentMeals(prev => prev.filter(m => m.id !== meal.id));
                             alert('식사 기록이 삭제되었습니다.');
-                            
+
                             // 대시보드 데이터 새로고침
                             const dashboardResponse = await apiClient.getDashboardData();
                             setDashboardData(dashboardResponse);
@@ -619,31 +759,44 @@ export default function DashboardPage() {
           </div>
 
           <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 text-left flex flex-col justify-center shadow-xl">
-              <h2 className="text-xl font-bold mb-2 text-white">나의 활동</h2>
-              <div className="flex items-center space-x-4">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-green-400">{gamificationData.points}</p>
-                  <p className="text-sm text-gray-300">포인트</p>
+            <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 text-left flex flex-col justify-center shadow-2xl">
+              <h2 className="text-xl font-bold mb-4 text-white">📈 나의 활동 통계</h2>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-200">총 기록 일수</span>
+                  <span className="text-2xl font-bold text-green-400">
+                    {dashboardData?.total_record_days || recentMeals.length}일
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <p className="font-bold mb-1 text-white">획득 배지</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-200">평균 일일 칼로리</span>
+                  <span className="text-2xl font-bold text-blue-400">
+                    {dashboardData?.weekly_stats?.avg_calories || 0}kcal
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-200">건강 점수</span>
+                  <span className="text-2xl font-bold text-purple-400">
+                    {dashboardData?.health_score || 0}점
+                  </span>
+                </div>
+                <div className="pt-2">
+                  <p className="font-bold mb-2 text-white">🏆 달성 배지</p>
                   <div className="flex space-x-2">
-                    {gamificationData.badges.length > 0 ? (
-                      gamificationData.badges.map(b => (
-                        <span key={b} title={b} className="text-2xl">🏅</span>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-400">아직 배지가 없어요.</p>
+                    {recentMeals.length >= 5 && <span title="꾸준한 기록" className="text-2xl">📝</span>}
+                    {recentMeals.filter(m => m.nutriScore === 'A').length >= 3 && <span title="건강한 선택" className="text-2xl">🥗</span>}
+                    {recentMeals.length >= 10 && <span title="식단 마스터" className="text-2xl">👑</span>}
+                    {recentMeals.length === 0 && (
+                      <p className="text-sm text-gray-200">식사를 기록하면 배지를 획득할 수 있어요!</p>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="w-full bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-2xl p-6 text-left flex flex-col justify-center shadow-xl">
+            <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 text-left flex flex-col justify-center shadow-2xl">
               <h2 className="text-xl font-bold mb-2 text-white">AI 분석</h2>
-              <p className="text-sm text-gray-300 mb-4">AI로 나의 활동을 분석하고 조언을 받으세요.</p>
+              <p className="text-sm text-gray-200 mb-4">AI로 나의 활동을 분석하고 조언을 받으세요.</p>
               <button
                 onClick={() => setIsReportModalOpen(true)}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all hover:scale-105 shadow-lg"
@@ -653,10 +806,142 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* 영양소 분석 섹션 */}
+          <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-4">📊 오늘의 영양소 분석</h2>
+            {dashboardData && recentMeals.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gray-800/60 rounded-lg p-4 text-center border border-gray-700">
+                  <div className="text-2xl font-bold text-blue-400 mb-1">
+                    {todayNutrition.carbs.toFixed(1)}g
+                  </div>
+                  <div className="text-sm text-gray-200">탄수화물</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    권장량: {dashboardData?.nutrition_goals?.carbs || 300}g
+                  </div>
+                  <div className="text-xs text-green-400 mt-1">
+                    {Math.round((todayNutrition.carbs / (dashboardData?.nutrition_goals?.carbs || 300)) * 100)}% 달성
+                  </div>
+                </div>
+                <div className="bg-gray-800/60 rounded-lg p-4 text-center border border-gray-700">
+                  <div className="text-2xl font-bold text-green-400 mb-1">
+                    {todayNutrition.protein.toFixed(1)}g
+                  </div>
+                  <div className="text-sm text-gray-200">단백질</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    권장량: {dashboardData?.nutrition_goals?.protein || 60}g
+                  </div>
+                  <div className="text-xs text-green-400 mt-1">
+                    {Math.round((todayNutrition.protein / (dashboardData?.nutrition_goals?.protein || 60)) * 100)}% 달성
+                  </div>
+                </div>
+                <div className="bg-gray-800/60 rounded-lg p-4 text-center border border-gray-700">
+                  <div className="text-2xl font-bold text-orange-400 mb-1">
+                    {todayNutrition.fat.toFixed(1)}g
+                  </div>
+                  <div className="text-sm text-gray-200">지방</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    권장량: {dashboardData?.nutrition_goals?.fat || 65}g
+                  </div>
+                  <div className="text-xs text-green-400 mt-1">
+                    {Math.round((todayNutrition.fat / (dashboardData?.nutrition_goals?.fat || 65)) * 100)}% 달성
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-8">
+                <div className="text-4xl mb-2">📊</div>
+                <p>오늘의 식사를 기록하면 영양소 분석을 볼 수 있어요!</p>
+              </div>
+            )}
+          </div>
+
+          {/* 개인 목표 설정 섹션 */}
+          <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-4">🎯 나의 건강 목표</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-800/60 rounded-lg p-4">
+                <h3 className="font-semibold text-white mb-2">일일 칼로리 목표</h3>
+                <div className="flex items-center space-x-2">
+                  <div className="text-2xl font-bold text-green-400">
+                    {dashboardData?.user_goals?.daily_calories || 2000}
+                  </div>
+                  <div className="text-sm text-gray-200">kcal</div>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  오늘 섭취: {todayNutrition.calories}kcal
+                  <span className="ml-2">
+                    ({Math.round((todayNutrition.calories / (dashboardData?.user_goals?.daily_calories || 2000)) * 100)}%)
+                  </span>
+                </div>
+              </div>
+              <div className="bg-gray-800/60 rounded-lg p-4">
+                <h3 className="font-semibold text-white mb-2">주간 운동 목표</h3>
+                <div className="flex items-center space-x-2">
+                  <div className="text-2xl font-bold text-blue-400">
+                    {dashboardData?.user_goals?.weekly_exercise || 5}
+                  </div>
+                  <div className="text-sm text-gray-200">일</div>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  이번 주 달성: {Math.min(weeklyData.filter(d => d.has_data).length, dashboardData?.user_goals?.weekly_exercise || 5)}일
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <button className="bg-green-500/20 border border-green-500/30 rounded-lg p-2 text-center hover:bg-green-500/30 transition-colors">
+                <div className="text-sm text-white font-medium">체중 감량</div>
+              </button>
+              <button className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-2 text-center hover:bg-blue-500/30 transition-colors">
+                <div className="text-sm text-white font-medium">근육 증가</div>
+              </button>
+              <button className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-2 text-center hover:bg-purple-500/30 transition-colors">
+                <div className="text-sm text-white font-medium">건강 유지</div>
+              </button>
+            </div>
+          </div>
+
+          {/* 빠른 액션 버튼들 */}
+          <div className="w-full bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-4">⚡ 빠른 액션</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <button
+                onClick={() => router.push('/upload')}
+                className="bg-green-500/20 border border-green-500/30 rounded-lg p-4 text-center hover:bg-green-500/30 transition-colors group"
+              >
+                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">📸</div>
+                <div className="text-sm text-white font-medium">식사 기록</div>
+              </button>
+              <button
+                onClick={() => setIsWeightModalOpen(true)}
+                className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4 text-center hover:bg-blue-500/30 transition-colors group"
+              >
+                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">⚖️</div>
+                <div className="text-sm text-white font-medium">체중 기록</div>
+              </button>
+              <button
+                onClick={() => router.push('/calendar')}
+                className="bg-purple-500/20 border border-purple-500/30 rounded-lg p-4 text-center hover:bg-purple-500/30 transition-colors group"
+              >
+                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">📅</div>
+                <div className="text-sm text-white font-medium">캘린더</div>
+              </button>
+              <button
+                onClick={() => router.push('/statistics')}
+                className="bg-orange-500/20 border border-orange-500/30 rounded-lg p-4 text-center hover:bg-orange-500/30 transition-colors group"
+              >
+                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">📊</div>
+                <div className="text-sm text-white font-medium">통계</div>
+              </button>
+            </div>
+          </div>
+
           {/* AI 코칭 섹션 */}
           {showAICoachTip && (
             <AICoachTip onClose={() => setShowAICoachTip(false)} />
           )}
+
+
 
           {/* AI 기능 카드들 */}
           <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -708,11 +993,7 @@ export default function DashboardPage() {
           isOpen={isReportModalOpen}
           onClose={() => setIsReportModalOpen(false)}
         />
-        <AIRecommendationModal
-          isOpen={isAIRecommendationOpen}
-          onClose={() => setIsAIRecommendationOpen(false)}
-          initialType="personalized"
-        />
+
 
       </div>
     </>

@@ -180,7 +180,7 @@ function ResultPageContent() {
     setAiCoaching('');
 
     try {
-      const response = await fetch('/api/ai/coaching/', {
+      const response = await fetch('http://localhost:8001/api/ai/coaching/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

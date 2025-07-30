@@ -41,8 +41,8 @@ def get_dashboard_data(request):
             weekly_calories.append({
                 'day': day_name,
                 'date': target_date.strftime('%Y-%m-%d'),
-                'total_kcal': int(total_calories) if has_data else None,
-                'kcal': int(total_calories) if has_data else None,  # 프론트엔드 호환성
+                'total_kcal': int(total_calories) if has_data else 0,
+                'kcal': int(total_calories) if has_data else 0,  # 프론트엔드 호환성
                 'is_today': target_date == today,
                 'has_data': has_data,
                 'meal_count': day_meals.count()
@@ -148,7 +148,19 @@ def get_dashboard_data(request):
             'user_info': {
                 'username': user.username,
                 'total_days': (today - user.date_joined.date()).days if user.date_joined else 0
-            }
+            },
+            'user_goals': {
+                'daily_calories': 2000,  # 기본값, 나중에 사용자 설정으로 변경 가능
+                'weekly_exercise': 5,
+                'target_weight': latest_weight - 2 if latest_weight else 70
+            },
+            'nutrition_goals': {
+                'carbs': 300,  # 탄수화물 권장량 (g)
+                'protein': 60,  # 단백질 권장량 (g)
+                'fat': 65  # 지방 권장량 (g)
+            },
+            'total_record_days': MealLog.objects.filter(user=user).values('date').distinct().count(),
+            'health_score': int((len([m for m in recent_meals if m.nutriScore in ['A', 'B']]) / max(1, len(recent_meals))) * 100) if recent_meals else 0
         }
         
         print(f"📊 대시보드 데이터 조회 완료: 주간 칼로리 {len(weekly_calories)}일, 최근 식사 {recent_meals.count()}개")

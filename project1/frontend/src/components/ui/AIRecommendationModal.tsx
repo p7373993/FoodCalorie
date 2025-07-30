@@ -100,24 +100,34 @@ export function AIRecommendationModal({
   const renderPersonalizedRecommendations = (recommendations: any[]) => (
     <div className="space-y-3">
       {recommendations.map((food, index) => (
-        <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+        <div key={index} className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
             {index + 1}
           </div>
           <div className="flex-1">
-            <div className="flex items-center space-x-2 mb-1">
-              <h4 className="font-medium">{food.name}</h4>
-              <span className={`px-2 py-1 rounded-full text-xs ${
-                food.grade === 'A' ? 'bg-green-100 text-green-600' :
-                food.grade === 'B' ? 'bg-blue-100 text-blue-600' :
-                'bg-yellow-100 text-yellow-600'
+            <div className="flex items-center space-x-2 mb-2">
+              <h4 className="font-semibold text-gray-800">{food.name}</h4>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                food.grade === 'A' ? 'bg-green-100 text-green-700' :
+                food.grade === 'B' ? 'bg-blue-100 text-blue-700' :
+                food.grade === 'C' ? 'bg-yellow-100 text-yellow-700' :
+                food.grade === 'D' ? 'bg-orange-100 text-orange-700' :
+                'bg-red-100 text-red-700'
               }`}>
                 {food.grade}등급
               </span>
             </div>
-            <div className="text-sm text-gray-500">
-              {food.calories}kcal • {food.category} • 추천점수 {food.score}점
+            <div className="text-sm text-gray-600 mb-2">
+              <span className="font-medium">{food.calories}kcal</span>
+              {food.protein && <span className="ml-3">단백질 {food.protein}g</span>}
+              {food.carbs && <span className="ml-3">탄수화물 {food.carbs}g</span>}
+              {food.fat && <span className="ml-3">지방 {food.fat}g</span>}
             </div>
+            {food.reason && (
+              <div className="text-sm text-gray-700 bg-blue-50 p-2 rounded border-l-3 border-blue-400">
+                <span className="font-medium">추천 이유:</span> {food.reason}
+              </div>
+            )}
           </div>
         </div>
       ))}
