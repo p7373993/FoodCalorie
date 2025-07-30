@@ -56,7 +56,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',  # 임시로 CSRF 비활성화
+    'django.middleware.csrf.CsrfViewMiddleware',  # CSRF 활성화
     'accounts.middleware.SessionExpiryMiddleware',  # 세션 만료 처리
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'accounts.middleware.AuthenticationErrorMiddleware',  # 인증 에러 처리

@@ -54,11 +54,17 @@ def get_dashboard_data(request):
             weekday = target_date.weekday()
             day_name = day_names[weekday]
             
+            # 실제 데이터가 있는지 확인
+            has_data = day_meals.exists()
+            
             weekly_calories.append({
                 'day': day_name,
                 'date': target_date.strftime('%Y-%m-%d'),
-                'total_kcal': int(total_calories),
-                'is_today': target_date == today
+                'total_kcal': int(total_calories) if has_data else None,
+                'kcal': int(total_calories) if has_data else None,  # 프론트엔드 호환성
+                'is_today': target_date == today,
+                'has_data': has_data,
+                'meal_count': day_meals.count()
             })
         
         # 최근 식사 기록 (최근 5개)
