@@ -237,6 +237,16 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+# CSRF 설정
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CSRF_COOKIE_SECURE = False  # 개발 환경에서는 False
+CSRF_COOKIE_HTTPONLY = False  # JavaScript에서 접근 가능하도록
+CSRF_COOKIE_SAMESITE = 'Lax'
+
 # Channels 설정
 ASGI_APPLICATION = 'config.asgi.application'
 
