@@ -56,27 +56,54 @@ class ApiClient {
 
   // CSRF 토큰 가져오기
   private async getCSRFToken(): Promise<string> {
+    // 캐시된 토큰이 있으면 사용
     if (this.csrfToken) {
       return this.csrfToken;
     }
 
     try {
+      console.log('🔐 CSRF 토큰 요청 중...');
       const response = await fetch(`${this.baseURL}/api/auth/csrf-token/`, {
         method: 'GET',
         credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
       if (!response.ok) {
+        console.error(`CSRF 토큰 요청 실패: ${response.status}`);
         throw new Error(`Failed to get CSRF token: ${response.status}`);
       }
 
       const data = await response.json();
       this.csrfToken = data.csrf_token || '';
+      console.log('✅ CSRF 토큰 획득 성공:', this.csrfToken ? '토큰 있음' : '토큰 없음');
       return this.csrfToken || '';
     } catch (error) {
-      console.error('Error getting CSRF token:', error);
+      console.error('❌ CSRF 토큰 획득 실패:', error);
+      // CSRF 토큰 획득 실패 시 쿠키에서 직접 읽기 시도
+      const cookieToken = this.getCSRFTokenFromCookie();
+      if (cookieToken) {
+        console.log('🍪 쿠키에서 CSRF 토큰 사용');
+        this.csrfToken = cookieToken;
+        return cookieToken;
+      }
       throw error;
     }
+  }
+
+  // 쿠키에서 CSRF 토큰 직접 읽기
+  private getCSRFTokenFromCookie(): string | null {
+    if (typeof document === 'undefined') return null;
+    
+    const name = 'csrftoken';
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return parts.pop()?.split(';').shift() || null;
+    }
+    return null;
   }
 
   // CSRF 토큰 초기화 (로그아웃 시 사용)
@@ -194,18 +221,25 @@ class ApiClient {
     // POST, PUT, DELETE 요청에 CSRF 토큰 추가
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method?.toUpperCase() || 'GET')) {
       try {
+        console.log(`🔐 ${options.method} 요청에 CSRF 토큰 추가 중...`);
         const csrfToken = await this.getCSRFToken();
         config.headers = {
           ...config.headers,
           'X-CSRFToken': csrfToken,
         };
+        console.log(`✅ CSRF 토큰 헤더 추가 완료: ${csrfToken ? '토큰 있음' : '토큰 없음'}`);
       } catch (error) {
-        console.error('Failed to get CSRF token for request:', error);
+        console.error('❌ CSRF 토큰 획득 실패:', error);
         // CSRF 토큰을 가져올 수 없어도 요청을 계속 진행
       }
     }
 
+    console.log(`🌐 API 요청: ${options.method || 'GET'} ${url}`);
+    console.log('📋 요청 헤더:', config.headers);
+    
     const response = await fetch(url, config);
+    
+    console.log(`📡 응답 상태: ${response.status} ${response.statusText}`);
 
     // 401 또는 403 응답 시 CSRF 토큰 초기화
     if (response.status === 401 || response.status === 403) {

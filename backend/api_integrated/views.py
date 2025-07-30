@@ -95,11 +95,10 @@ class LoginView(APIView):
         print(f"[DEBUG] Authentication failed for user: {user_obj.username}")
         return Response({"success": False, "message": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
-@method_decorator(csrf_exempt, name='dispatch')
 class MealLogViewSet(viewsets.ModelViewSet):
     queryset = MealLog.objects.all()
     serializer_class = MealLogSerializer
-    permission_classes = [AllowAny] # 임시로 AllowAny 사용하여 권한 문제 우회
+    permission_classes = [IsAuthenticatedWithProperError] # 제대로 된 권한 클래스 사용
     lookup_field = 'id'
     
     def create(self, request, *args, **kwargs):
@@ -108,6 +107,14 @@ class MealLogViewSet(viewsets.ModelViewSet):
         print(f"인증 상태: {request.user.is_authenticated}")
         print(f"요청 데이터: {request.data}")
         print(f"Content-Type: {request.content_type}")
+        print(f"요청 헤더:")
+        for key, value in request.headers.items():
+            if key.lower() in ['authorization', 'x-csrftoken', 'cookie']:
+                print(f"  {key}: {value[:50]}..." if len(str(value)) > 50 else f"  {key}: {value}")
+        
+        # 세션 정보 확인
+        print(f"세션 키: {request.session.session_key}")
+        print(f"세션 데이터: {dict(request.session)}")
         
         try:
             return super().create(request, *args, **kwargs)
@@ -134,27 +141,8 @@ class MealLogViewSet(viewsets.ModelViewSet):
         print(f"요청 데이터: {self.request.data}")
         
         try:
-            # 인증된 사용자가 있으면 해당 사용자 사용, 없으면 기본 사용자 사용
-            if self.request.user.is_authenticated:
-                user = self.request.user
-            else:
-                # 임시로 기본 사용자 사용 (테스트용)
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                user = User.objects.filter(email='test@example.com').first()
-                if not user:
-                    # 기본 사용자가 없으면 첫 번째 사용자 사용
-                    user = User.objects.first()
-                    if not user:
-                        # 사용자가 아예 없으면 생성
-                        user = User.objects.create_user(
-                            username='testuser',
-                            email='test@example.com',
-                            password='testpass123'
-                        )
-                print(f"기본 사용자 사용: {user}")
-            
-            meal_log = serializer.save(user=user)
+            # 인증된 사용자만 사용 (권한 클래스에서 이미 검증됨)
+            meal_log = serializer.save(user=self.request.user)
             print(f"✅ MealLog 생성 성공: {meal_log}")
             # 챌린지 판정은 signals.py에서 자동으로 처리됩니다.
             # MealLog 생성 시 post_save 신호가 발생하여 자동으로 챌린지 판정이 실행됩니다.
@@ -208,10 +196,9 @@ class TestMealLogView(APIView):
                 'message': '서버 오류'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@method_decorator(csrf_exempt, name='dispatch')
 class ImageUploadView(APIView):
     """이미지 파일만 업로드하는 API"""
-    permission_classes = [AllowAny]  # 임시로 인증 없이 허용
+    permission_classes = [IsAuthenticatedWithProperError]  # 인증 필요
     
     def post(self, request):
         if 'image' not in request.FILES:
