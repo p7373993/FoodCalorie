@@ -399,22 +399,47 @@ class AICoachingService:
                 result = response.json()
                 if 'candidates' in result and result['candidates']:
                     text = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                    print(f"🔍 Gemini 원본 응답: {text[:200]}...")
                     
-                    # JSON 추출 시도
+                    # JSON 추출 시도 - 여러 패턴으로 시도
                     import re
+                    
+                    # 패턴 1: 기본 JSON 패턴
                     json_match = re.search(r'\{.*\}', text, re.DOTALL)
+                    
+                    # 패턴 2: 코드 블록 내 JSON
+                    if not json_match:
+                        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+                        if json_match:
+                            json_match = type('obj', (object,), {'group': lambda x: json_match.group(1)})()
+                    
+                    # 패턴 3: 백틱 없는 코드 블록
+                    if not json_match:
+                        json_match = re.search(r'```\s*(\{.*?\})\s*```', text, re.DOTALL)
+                        if json_match:
+                            json_match = type('obj', (object,), {'group': lambda x: json_match.group(1)})()
+                    
                     if json_match:
                         try:
-                            parsed_json = json.loads(json_match.group(0))
+                            json_text = json_match.group(0)
+                            # JSON 텍스트 정리
+                            json_text = json_text.strip()
+                            if json_text.startswith('```'):
+                                json_text = re.sub(r'^```[a-z]*\s*', '', json_text)
+                                json_text = re.sub(r'\s*```$', '', json_text)
+                            
+                            parsed_json = json.loads(json_text)
                             print(f"✅ Gemini AI 추천 생성 성공: {len(parsed_json.get('recommendations', []))}개")
                             return parsed_json
                         except json.JSONDecodeError as e:
                             print(f"❌ JSON 파싱 실패: {e}")
-                            print(f"원본 텍스트: {text}")
+                            print(f"정리된 JSON 텍스트: {json_text[:300]}...")
                     else:
-                        print(f"❌ JSON 형태를 찾을 수 없음: {text}")
+                        print(f"❌ JSON 형태를 찾을 수 없음:")
+                        print(f"전체 응답: {text}")
                 else:
                     print("❌ Gemini 응답에 candidates가 없습니다.")
+                    print(f"전체 응답: {result}")
             else:
                 print(f"❌ Gemini API 호출 실패: {response.status_code}")
             

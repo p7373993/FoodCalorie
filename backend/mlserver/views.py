@@ -298,7 +298,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.permissions import IsAuthenticated
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])  # 임시로 권한 제거
 def upload_image(request):
     """이미지 파일 업로드 API"""
     try:

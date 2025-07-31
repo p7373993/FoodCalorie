@@ -339,58 +339,23 @@ class MLServerClient:
     
     def _find_food_in_csv(self, food_name):
         """CSV 파일에서 유사도 기반으로 음식 찾기"""
-        import csv
-        import os
-        from difflib import SequenceMatcher
+        from api_integrated.utils import get_nutrition_from_csv
         
         try:
-            csv_path = os.path.join(os.path.dirname(__file__), '..', 'korean_food_nutri_score_final.csv')
+            # utils.py의 get_nutrition_from_csv 함수 사용
+            calories, carbs, protein, fat, grade = get_nutrition_from_csv(food_name, mass=100)
             
-            if not os.path.exists(csv_path):
-                logger.warning(f"CSV 파일을 찾을 수 없습니다: {csv_path}")
-                return None
-            
-            best_match = None
-            best_similarity = 0.0
-            
-            with open(csv_path, 'r', encoding='utf-8-sig') as file:
-                reader = csv.DictReader(file)
-                
-                for row in reader:
-                    csv_food_name = row['식품명']
-                    
-                    # 유사도 계산
-                    similarity = SequenceMatcher(None, food_name.lower(), csv_food_name.lower()).ratio()
-                    
-                    # 부분 문자열 매칭도 확인
-                    if food_name.lower() in csv_food_name.lower() or csv_food_name.lower() in food_name.lower():
-                        similarity = max(similarity, 0.8)
-                    
-                    if similarity > best_similarity and similarity > 0.6:  # 60% 이상 유사도
-                        best_similarity = similarity
-                        
-                        # 디버깅을 위한 로그 추가
-                        if csv_food_name == '약과':
-                            logger.info(f"[DEBUG] 약과 CSV 데이터:")
-                            logger.info(f"[DEBUG] 에너지(kcal): {row['에너지(kcal)']}")
-                            logger.info(f"[DEBUG] 단백질(g): {row['단백질(g)']}")
-                            logger.info(f"[DEBUG] 탄수화물(g): {row['탄수화물(g)']}")
-                            logger.info(f"[DEBUG] 지방(g): {row['지방(g)']}")
-                            logger.info(f"[DEBUG] Nutri_Score: {row['Nutri_Score']}")
-                        
-                        best_match = {
-                            'matched_name': csv_food_name,
-                            'calories': float(row['에너지(kcal)']),
-                            'protein': float(row['단백질(g)']),
-                            'carbs': float(row['탄수화물(g)']),
-                            'fat': float(row['지방(g)']),
-                            'grade': row['Nutri_Score'],
-                            'similarity': similarity
-                        }
-            
-            if best_match:
-                logger.info(f"음식 매칭 성공: {food_name} -> {best_match['matched_name']} (유사도: {best_similarity:.2f})")
-                return best_match
+            if calories is not None:
+                logger.info(f"음식 매칭 성공: {food_name} -> 칼로리: {calories}, 탄수화물: {carbs}, 단백질: {protein}, 지방: {fat}, 등급: {grade}")
+                return {
+                    'matched_name': food_name,
+                    'calories': calories,
+                    'protein': protein,
+                    'carbs': carbs,
+                    'fat': fat,
+                    'grade': grade,
+                    'similarity': 1.0  # utils 함수에서 이미 매칭됨
+                }
             else:
                 logger.info(f"음식 매칭 실패: {food_name} (데이터베이스에 없음)")
                 return None

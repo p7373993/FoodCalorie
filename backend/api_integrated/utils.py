@@ -109,16 +109,28 @@ def get_nutrition_from_csv(food_name, mass=100):
             calories_per_100g = float(first_row['에너지(kcal)']) if first_row['에너지(kcal)'] else 0
             calories = round(calories_per_100g * (mass / 100), 1)
             
-            # 탄수화물 = 당류 + 식이섬유
-            sugar = float(first_row['당류(g)']) if '당류(g)' in first_row and first_row['당류(g)'] else 0
-            fiber = float(first_row['식이섬유(g)']) if '식이섬유(g)' in first_row and first_row['식이섬유(g)'] else 0
-            carbs_per_100g = sugar + fiber
+            # 탄수화물 계산 - CSV에 전체 탄수화물 컬럼이 없으므로 추정
+            sugar = float(first_row['당류(g)']) if '당류(g)' in first_row and pd.notna(first_row['당류(g)']) else 0
+            fiber = float(first_row['식이섬유(g)']) if '식이섬유(g)' in first_row and pd.notna(first_row['식이섬유(g)']) else 0
+            
+            # 단백질과 지방 정보 추출
+            protein_per_100g = float(first_row['단백질(g)']) if pd.notna(first_row['단백질(g)']) else 0
+            fat_per_100g = float(first_row['포화지방산(g)']) if '포화지방산(g)' in first_row and pd.notna(first_row['포화지방산(g)']) else 0
+            
+            # 탄수화물 추정: 칼로리에서 단백질과 지방 칼로리를 빼고 나머지를 탄수화물로 계산
+            # 단백질 4kcal/g, 지방 9kcal/g, 탄수화물 4kcal/g
+            protein_calories = protein_per_100g * 4
+            fat_calories = fat_per_100g * 9
+            remaining_calories = max(0, calories_per_100g - protein_calories - fat_calories)
+            estimated_carbs_per_100g = remaining_calories / 4
+            
+            # 당류와 식이섬유의 합이 추정 탄수화물보다 크면 그 값을 사용
+            known_carbs = sugar + fiber
+            carbs_per_100g = max(known_carbs, estimated_carbs_per_100g)
+            
+            # 실제 질량에 맞게 계산
             carbs = round(carbs_per_100g * (mass / 100), 1)
-            
-            protein_per_100g = float(first_row['단백질(g)']) if first_row['단백질(g)'] else 0
             protein = round(protein_per_100g * (mass / 100), 1)
-            
-            fat_per_100g = float(first_row['포화지방산(g)']) if '포화지방산(g)' in first_row and first_row['포화지방산(g)'] else 0
             fat = round(fat_per_100g * (mass / 100), 1)
             
             grade = first_row['kfni_grade'] if 'kfni_grade' in first_row and first_row['kfni_grade'] else 'C'
