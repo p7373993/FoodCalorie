@@ -23,13 +23,13 @@ def get_calendar_data(request):
     if request.user.is_authenticated:
         user = request.user
     else:
-        # 인증되지 않은 경우 테스트 사용자 사용
+        # 인증되지 않은 경우 리치 테스트 사용자 사용
         user, created = User.objects.get_or_create(
-            username='test_user',
+            username='rich_test_user',
             defaults={
-                'email': 'test@example.com',
-                'first_name': 'Test',
-                'last_name': 'User'
+                'email': 'rich_test@example.com',
+                'first_name': 'Rich',
+                'last_name': 'Tester'
             }
         )
     
@@ -57,16 +57,39 @@ def get_calendar_data(request):
     user_badges = UserBadge.objects.filter(user=user).select_related('badge')
     badges = [ub.badge for ub in user_badges]
     
-    # 최근 45일간의 식사 기록 조회
-    end_date = date.today()
-    start_date = end_date - timedelta(days=45)
+    # 요청된 년월 파라미터 처리 (없으면 현재 월)
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+    
+    if year and month:
+        try:
+            year = int(year)
+            month = int(month)
+            # 해당 월의 첫날과 마지막날
+            start_date = date(year, month, 1)
+            if month == 12:
+                end_date = date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = date(year, month + 1, 1) - timedelta(days=1)
+        except (ValueError, TypeError):
+            # 잘못된 파라미터인 경우 현재 월 사용
+            today = date.today()
+            start_date = date(today.year, today.month, 1)
+            if today.month == 12:
+                end_date = date(today.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = date(today.year, today.month + 1, 1) - timedelta(days=1)
+    else:
+        # 파라미터가 없으면 최근 60일간 데이터 (기본값)
+        end_date = date.today()
+        start_date = end_date - timedelta(days=60)
     
     meal_logs = MealLog.objects.filter(
         user=user,
         date__range=[start_date, end_date]
     ).order_by('date', 'time')
     
-    print(f"🔍 사용자 {user.username}의 식사 기록 조회: {meal_logs.count()}개")
+    print(f"🔍 사용자 {user.username}의 식사 기록 조회 ({start_date} ~ {end_date}): {meal_logs.count()}개")
     
     # 날짜별로 그룹화하여 DailyLog 형식으로 변환
     daily_logs = []
@@ -82,9 +105,9 @@ def get_calendar_data(request):
         daily_log = {
             'date': current_date.strftime('%Y-%m-%d'),
             'meals': MealLogSerializer(date_meals, many=True).data,
-            'mission': 'Drink 8 glasses of water today.',
+            'mission': get_daily_mission(current_date),
             'emotion': get_daily_emotion(date_meals),
-            'memo': 'Felt energetic today!',
+            'memo': get_daily_memo(date_meals),
             'daily_goal': goal_text
         }
         
@@ -116,11 +139,11 @@ def update_user_profile(request):
         user = request.user
     else:
         user, created = User.objects.get_or_create(
-            username='test_user',
+            username='rich_test_user',
             defaults={
-                'email': 'test@example.com',
-                'first_name': 'Test',
-                'last_name': 'User'
+                'email': 'rich_test@example.com',
+                'first_name': 'Rich',
+                'last_name': 'Tester'
             }
         )
     profile, created = CalendarUserProfile.objects.get_or_create(user=user)
@@ -160,11 +183,11 @@ def get_calendar_meals(request):
         user = request.user
     else:
         user, created = User.objects.get_or_create(
-            username='test_user',
+            username='rich_test_user',
             defaults={
-                'email': 'test@example.com',
-                'first_name': 'Test',
-                'last_name': 'User'
+                'email': 'rich_test@example.com',
+                'first_name': 'Rich',
+                'last_name': 'Tester'
             }
         )
     
@@ -278,6 +301,43 @@ def get_random_daily_goal():
     ]
     return random.choice(goals)
 
+
+def get_daily_mission(current_date):
+    """일별 미션 생성"""
+    missions = [
+        '물 8잔 마시기 💧',
+        '30분 운동하기 🏃‍♂️',
+        '야채 5접시 먹기 🥬',
+        '단백질 충분히 섭취하기 💪',
+        '건강한 간식 선택하기 🍎',
+        '규칙적인 식사 시간 지키기 ⏰',
+        '충분한 수면 취하기 😴',
+        '스트레스 관리하기 🧘‍♀️'
+    ]
+    # 날짜를 시드로 사용해서 같은 날에는 같은 미션이 나오도록
+    random.seed(current_date.toordinal())
+    mission = random.choice(missions)
+    random.seed()  # 시드 초기화
+    return mission
+
+def get_daily_memo(meals):
+    """일별 메모 생성"""
+    if not meals:
+        return '오늘은 식사 기록이 없네요. 내일은 더 신경써보세요!'
+    
+    meal_count = len(meals)
+    total_calories = sum(meal.calories for meal in meals)
+    
+    if meal_count >= 3 and 1800 <= total_calories <= 2200:
+        return '완벽한 하루였어요! 이 패턴을 유지해보세요. ✨'
+    elif meal_count < 2:
+        return '식사 횟수가 적네요. 규칙적인 식사를 권장해요. 🍽️'
+    elif total_calories < 1500:
+        return '칼로리가 부족해 보여요. 영양가 있는 식사를 더 드세요. 🥗'
+    elif total_calories > 2500:
+        return '칼로리가 조금 높네요. 내일은 조금 조절해보세요. 😊'
+    else:
+        return '좋은 하루였어요! 내일도 건강한 식단 유지해보세요. 👍'
 
 def get_daily_emotion(meals):
     """일별 감정 상태 결정"""

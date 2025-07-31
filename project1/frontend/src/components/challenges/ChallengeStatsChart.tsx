@@ -13,19 +13,11 @@ const ChallengeStatsChart: React.FC<ChallengeStatsChartProps> = ({ statistics })
   const successPercentage = totalDays > 0 ? (statistics.total_success_days / totalDays) * 100 : 0;
   const failurePercentage = totalDays > 0 ? (statistics.total_failure_days / totalDays) * 100 : 0;
 
-  // 주간 성과 시뮬레이션 (실제로는 백엔드에서 받아와야 함)
-  const weeklyData = Array.from({ length: 4 }, (_, i) => ({
-    week: i + 1,
-    success: Math.floor(Math.random() * 7),
-    failure: Math.floor(Math.random() * 3),
-  }));
+  // 실제 주간 데이터 사용 (백엔드에서 제공)
+  const weeklyData = statistics.weekly_data || [];
 
-  // 일일 칼로리 트렌드 시뮬레이션
-  const dailyCalories = Array.from({ length: 7 }, (_, i) => ({
-    day: ['월', '화', '수', '목', '금', '토', '일'][i],
-    calories: Math.floor(Math.random() * 500) + 1500,
-    target: 2000,
-  }));
+  // 실제 일일 칼로리 데이터 사용 (백엔드에서 제공)
+  const dailyCalories = statistics.daily_calories || [];
 
   return (
     <div className="space-y-8">
@@ -116,36 +108,50 @@ const ChallengeStatsChart: React.FC<ChallengeStatsChartProps> = ({ statistics })
                     style={{ bottom: `${(day.target / 3000) * 100}%` }}
                   />
                   {/* 실제 칼로리 바 */}
-                  <div
-                    className={`absolute bottom-0 w-full transition-all duration-500 ${day.calories <= day.target + 100 && day.calories >= day.target - 100
-                        ? 'bg-[var(--point-green)]'
-                        : day.calories > day.target + 100
-                          ? 'bg-red-500'
-                          : 'bg-blue-500'
-                      }`}
-                    style={{ height: `${Math.min((day.calories / 3000) * 100, 100)}%` }}
-                  />
+                  {day.has_record ? (
+                    <div
+                      className={`absolute bottom-0 w-full transition-all duration-500 ${day.is_cheat_day
+                        ? 'bg-yellow-500'  // 치팅 데이
+                        : day.is_success
+                          ? 'bg-[var(--point-green)]'  // 성공
+                          : 'bg-red-500'  // 실패
+                        }`}
+                      style={{ height: `${Math.min((day.calories / 3000) * 100, 100)}%` }}
+                    />
+                  ) : (
+                    // 기록이 없는 경우
+                    <div className="absolute bottom-0 w-full h-2 bg-gray-500 opacity-50" />
+                  )}
                 </div>
                 <div className="mt-2 text-xs">
-                  <div className="text-white font-semibold">{day.calories}</div>
-                  <div className="text-gray-400">목표: {day.target}</div>
+                  <div className="text-white font-semibold">
+                    {day.has_record ? `${day.calories}kcal` : '기록 없음'}
+                  </div>
+                  <div className="text-gray-400">목표: {day.target}kcal</div>
+                  {day.is_cheat_day && (
+                    <div className="text-yellow-400 text-xs">치팅</div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+          <div className="mt-4 flex items-center justify-center gap-4 text-sm flex-wrap">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-[var(--point-green)] rounded"></div>
-              <span className="text-gray-300">목표 달성</span>
+              <span className="text-gray-300">성공</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-red-500 rounded"></div>
-              <span className="text-gray-300">목표 초과</span>
+              <span className="text-gray-300">실패</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded"></div>
-              <span className="text-gray-300">목표 미달</span>
+              <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+              <span className="text-gray-300">치팅 데이</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-1 bg-gray-500 opacity-50 rounded"></div>
+              <span className="text-gray-300">기록 없음</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-yellow-400 border-dashed border-t-2"></div>

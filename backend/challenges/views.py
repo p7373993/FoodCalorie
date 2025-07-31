@@ -477,11 +477,11 @@ class PersonalStatsView(APIView):
         try:
             challenge_id = request.query_params.get('challenge_id')
             
-            # 임시로 테스트 사용자 사용
+            # 풍부한 데이터를 가진 테스트 사용자 사용
             from django.contrib.auth.models import User
             test_user, created = User.objects.get_or_create(
-                username='test_user',
-                defaults={'email': 'test@example.com'}
+                username='rich_test_user',
+                defaults={'email': 'rich_test@example.com'}
             )
             
             # 챌린지 조회

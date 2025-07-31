@@ -11,6 +11,38 @@ import type {
   CalendarMeal,
 } from "@/types/calendar";
 
+// 상수 정의
+const MEAL_TYPES = {
+  Breakfast: { label: "아침", color: "bg-blue-400" },
+  Lunch: { label: "점심", color: "bg-green-400" },
+  Dinner: { label: "저녁", color: "bg-orange-400" },
+  Snack: { label: "간식", color: "bg-purple-400" },
+} as const;
+
+const NUTRI_SCORE_COLORS = {
+  A: "bg-green-600",
+  B: "bg-yellow-600",
+  C: "bg-orange-600",
+  D: "bg-red-600",
+  E: "bg-red-800",
+} as const;
+
+const PROGRESS_BAR_COLORS = {
+  calories: "bg-blue-500",
+  protein: "bg-green-500",
+  carbs: "bg-yellow-500",
+  fat: "bg-red-500",
+} as const;
+
+const GOAL_LIMITS = {
+  calorie: { min: 1000, max: 5000 },
+  protein: { min: 50, max: 300 },
+  carbs: { min: 100, max: 500 },
+  fat: { min: 30, max: 150 },
+} as const;
+
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
 // 진행률 바 컴포넌트
 const ProgressBar: React.FC<{
   label: string;
@@ -76,8 +108,8 @@ const GoalModal: React.FC<{
                 setGoals({ ...goals, calorie_goal: parseInt(e.target.value) })
               }
               className="w-full p-2 bg-gray-700 text-white rounded-lg"
-              min="1000"
-              max="5000"
+              min={GOAL_LIMITS.calorie.min}
+              max={GOAL_LIMITS.calorie.max}
             />
           </div>
           <div>
@@ -91,8 +123,8 @@ const GoalModal: React.FC<{
                 setGoals({ ...goals, protein_goal: parseInt(e.target.value) })
               }
               className="w-full p-2 bg-gray-700 text-white rounded-lg"
-              min="50"
-              max="300"
+              min={GOAL_LIMITS.protein.min}
+              max={GOAL_LIMITS.protein.max}
             />
           </div>
           <div>
@@ -106,8 +138,8 @@ const GoalModal: React.FC<{
                 setGoals({ ...goals, carbs_goal: parseInt(e.target.value) })
               }
               className="w-full p-2 bg-gray-700 text-white rounded-lg"
-              min="100"
-              max="500"
+              min={GOAL_LIMITS.carbs.min}
+              max={GOAL_LIMITS.carbs.max}
             />
           </div>
           <div>
@@ -121,8 +153,8 @@ const GoalModal: React.FC<{
                 setGoals({ ...goals, fat_goal: parseInt(e.target.value) })
               }
               className="w-full p-2 bg-gray-700 text-white rounded-lg"
-              min="30"
-              max="150"
+              min={GOAL_LIMITS.fat.min}
+              max={GOAL_LIMITS.fat.max}
             />
           </div>
           <div className="flex space-x-3 pt-4">
@@ -192,6 +224,7 @@ export default function CalendarPage() {
       {
         mealTypes: Set<"Breakfast" | "Lunch" | "Dinner" | "Snack">;
         totalCalories: number;
+        mealCount: number;
       }
     >();
 
@@ -203,6 +236,7 @@ export default function CalendarPage() {
             (sum, meal) => sum + meal.nutrients.calories,
             0
           ),
+          mealCount: log.meals.length,
         });
       }
     });
@@ -222,15 +256,15 @@ export default function CalendarPage() {
 
     return selectedDateLog
       ? selectedDateLog.meals.reduce(
-          (acc, meal) => {
-            acc.calories += meal.nutrients.calories;
-            acc.protein += meal.nutrients.protein;
-            acc.carbs += meal.nutrients.carbs;
-            acc.fat += meal.nutrients.fat;
-            return acc;
-          },
-          { calories: 0, protein: 0, carbs: 0, fat: 0 }
-        )
+        (acc, meal) => {
+          acc.calories += meal.nutrients.calories;
+          acc.protein += meal.nutrients.protein;
+          acc.carbs += meal.nutrients.carbs;
+          acc.fat += meal.nutrients.fat;
+          return acc;
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      )
       : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   }, [calendarData?.daily_logs, selectedDate]);
 
@@ -250,12 +284,14 @@ export default function CalendarPage() {
     }
   };
 
-  // 캘린더 데이터 로드 useEffect
+  // 캘린더 데이터 로드 useEffect (월 변경 시 새로 로딩)
   useEffect(() => {
     const loadCalendarData = async () => {
       try {
         setLoading(true);
-        const data = await apiClient.getCalendarData();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1; // JavaScript month는 0부터 시작
+        const data = await apiClient.getCalendarData(year, month);
         setCalendarData(data);
         setError(null);
       } catch (err) {
@@ -267,7 +303,7 @@ export default function CalendarPage() {
     };
 
     loadCalendarData();
-  }, []);
+  }, [currentDate]); // currentDate 변경 시 데이터 다시 로드
 
   // 로딩 상태 렌더링
   if (loading) {
@@ -348,28 +384,28 @@ export default function CalendarPage() {
                 current={selectedDateNutrients.calories}
                 goal={user_profile.calorie_goal}
                 unit="kcal"
-                colorClass="bg-blue-500"
+                colorClass={PROGRESS_BAR_COLORS.calories}
               />
               <ProgressBar
                 label="단백질"
                 current={selectedDateNutrients.protein}
                 goal={user_profile.protein_goal}
                 unit="g"
-                colorClass="bg-green-500"
+                colorClass={PROGRESS_BAR_COLORS.protein}
               />
               <ProgressBar
                 label="탄수화물"
                 current={selectedDateNutrients.carbs}
                 goal={user_profile.carbs_goal}
                 unit="g"
-                colorClass="bg-yellow-500"
+                colorClass={PROGRESS_BAR_COLORS.carbs}
               />
               <ProgressBar
                 label="지방"
                 current={selectedDateNutrients.fat}
                 goal={user_profile.fat_goal}
                 unit="g"
-                colorClass="bg-red-500"
+                colorClass={PROGRESS_BAR_COLORS.fat}
               />
             </div>
             {selectedDateNutrients.calories === 0 && (
@@ -427,27 +463,17 @@ export default function CalendarPage() {
                   식사 타입별 색상 가이드
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                    <div className="w-4 h-4 rounded-full bg-blue-400 flex-shrink-0"></div>
-                    <span className="text-sm text-white font-medium">아침</span>
-                  </div>
-                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                    <div className="w-4 h-4 rounded-full bg-green-400 flex-shrink-0"></div>
-                    <span className="text-sm text-white font-medium">점심</span>
-                  </div>
-                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                    <div className="w-4 h-4 rounded-full bg-orange-400 flex-shrink-0"></div>
-                    <span className="text-sm text-white font-medium">저녁</span>
-                  </div>
-                  <div className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
-                    <div className="w-4 h-4 rounded-full bg-purple-400 flex-shrink-0"></div>
-                    <span className="text-sm text-white font-medium">간식</span>
-                  </div>
+                  {Object.entries(MEAL_TYPES).map(([type, config]) => (
+                    <div key={type} className="flex items-center space-x-2 bg-gray-600 p-2 rounded-lg">
+                      <div className={`w-4 h-4 rounded-full ${config.color} flex-shrink-0`}></div>
+                      <span className="text-sm text-white font-medium">{config.label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="grid grid-cols-7 border-t border-l border-gray-600 flex-1">
-                {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                {WEEKDAYS.map((day) => (
                   <div
                     key={day}
                     className="text-center font-semibold text-xs p-2 border-r border-b border-gray-600 text-gray-300"
@@ -470,21 +496,27 @@ export default function CalendarPage() {
                   const dateKey = date.toISOString().split("T")[0];
                   const isToday =
                     new Date().toISOString().split("T")[0] === dateKey;
+                  const isSelected = selectedDate &&
+                    selectedDate.toISOString().split("T")[0] === dateKey;
                   const logInfo = dailyLogInfo.get(dateKey);
 
                   return (
                     <div
                       key={day}
-                      className="p-2 border-r border-b border-gray-600 min-h-[7rem] cursor-pointer hover:bg-gray-700 transition-colors flex flex-col justify-between"
+                      className={`p-2 border-r border-b border-gray-600 min-h-[7rem] cursor-pointer transition-colors flex flex-col justify-between ${isSelected
+                        ? "bg-green-600 hover:bg-green-500"
+                        : "hover:bg-gray-700"
+                        }`}
                       onClick={() => setSelectedDate(date)}
                     >
                       <div>
                         <span
-                          className={`text-sm ${
-                            isToday
-                              ? "bg-green-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold"
+                          className={`text-sm ${isToday
+                            ? "bg-yellow-500 text-black rounded-full h-6 w-6 flex items-center justify-center font-bold"
+                            : isSelected
+                              ? "text-white font-bold"
                               : "text-white"
-                          }`}
+                            }`}
                         >
                           {day}
                         </span>
@@ -492,35 +524,40 @@ export default function CalendarPage() {
 
                       {logInfo && (
                         <div className="text-right space-y-1">
-                          <div className="flex justify-end space-x-1">
+                          <div className="flex justify-end space-x-1 mb-1">
                             {logInfo.mealTypes.has("Breakfast") && (
                               <div
-                                className="w-2 h-2 rounded-full bg-blue-400"
-                                title="Breakfast"
+                                className="w-3 h-3 rounded-full bg-blue-400 border border-white"
+                                title="아침"
                               ></div>
                             )}
                             {logInfo.mealTypes.has("Lunch") && (
                               <div
-                                className="w-2 h-2 rounded-full bg-green-400"
-                                title="Lunch"
+                                className="w-3 h-3 rounded-full bg-green-400 border border-white"
+                                title="점심"
                               ></div>
                             )}
                             {logInfo.mealTypes.has("Dinner") && (
                               <div
-                                className="w-2 h-2 rounded-full bg-orange-400"
-                                title="Dinner"
+                                className="w-3 h-3 rounded-full bg-orange-400 border border-white"
+                                title="저녁"
                               ></div>
                             )}
                             {logInfo.mealTypes.has("Snack") && (
                               <div
-                                className="w-2 h-2 rounded-full bg-purple-400"
-                                title="Snack"
+                                className="w-3 h-3 rounded-full bg-purple-400 border border-white"
+                                title="간식"
                               ></div>
                             )}
                           </div>
-                          <p className="text-xs font-bold text-green-400">
-                            {logInfo.totalCalories.toLocaleString()} kcal
-                          </p>
+                          <div className="text-xs">
+                            <p className="font-bold text-green-300">
+                              {Math.round(logInfo.totalCalories)} kcal
+                            </p>
+                            <p className="text-gray-300">
+                              {logInfo.mealCount}끼
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -534,10 +571,10 @@ export default function CalendarPage() {
               <h2 className="text-xl font-bold text-white mb-4">
                 {selectedDate
                   ? `${selectedDate.toLocaleDateString("ko-KR", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })} 식사 기록`
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })} 식사 기록`
                   : "날짜를 선택하세요"}
               </h2>
 
@@ -560,6 +597,14 @@ export default function CalendarPage() {
                 const selectedLog = daily_logs.find(
                   (log) => log.date === selectedDateKey
                 );
+
+                // 디버깅: 선택된 날짜의 데이터 확인
+                if (selectedDateKey === "2025-07-31") {
+                  console.log("🔍 7월 31일 선택됨");
+                  console.log("selectedLog:", selectedLog);
+                  console.log("meals count:", selectedLog?.meals?.length || 0);
+                  console.log("meals data:", selectedLog?.meals);
+                }
 
                 if (!selectedLog || selectedLog.meals.length === 0) {
                   return (
@@ -587,36 +632,14 @@ export default function CalendarPage() {
                           <div className="p-3 flex-1">
                             <div className="flex items-center justify-between mb-1">
                               <span
-                                className={`text-xs px-2 py-1 rounded-full text-white ${
-                                  meal.type === "Breakfast"
-                                    ? "bg-blue-500"
-                                    : meal.type === "Lunch"
-                                    ? "bg-green-500"
-                                    : meal.type === "Dinner"
-                                    ? "bg-orange-500"
-                                    : "bg-purple-500"
-                                }`}
+                                className={`text-xs px-2 py-1 rounded-full text-white ${MEAL_TYPES[meal.type as keyof typeof MEAL_TYPES]?.color || "bg-gray-500"
+                                  }`}
                               >
-                                {meal.type === "Breakfast"
-                                  ? "아침"
-                                  : meal.type === "Lunch"
-                                  ? "점심"
-                                  : meal.type === "Dinner"
-                                  ? "저녁"
-                                  : "간식"}
+                                {MEAL_TYPES[meal.type as keyof typeof MEAL_TYPES]?.label || "기타"}
                               </span>
                               <span
-                                className={`text-xs px-2 py-1 rounded-full text-white ${
-                                  meal.nutrients.nutriScore === "A"
-                                    ? "bg-green-600"
-                                    : meal.nutrients.nutriScore === "B"
-                                    ? "bg-yellow-600"
-                                    : meal.nutrients.nutriScore === "C"
-                                    ? "bg-orange-600"
-                                    : meal.nutrients.nutriScore === "D"
-                                    ? "bg-red-600"
-                                    : "bg-red-800"
-                                }`}
+                                className={`text-xs px-2 py-1 rounded-full text-white ${NUTRI_SCORE_COLORS[meal.nutrients.nutriScore as keyof typeof NUTRI_SCORE_COLORS] || "bg-gray-600"
+                                  }`}
                               >
                                 {meal.nutrients.nutriScore}
                               </span>
@@ -663,8 +686,8 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* 주간 분석 섹션 - 주석처리됨 */}
-          {/* {weekly_analysis && (
+          {/* 주간 분석 섹션 */}
+          {weekly_analysis && (
             <div className="bg-gray-800 p-6 rounded-2xl">
               <h2 className="text-xl font-bold mb-4 text-green-400">
                 이번 주 분석
@@ -673,39 +696,37 @@ export default function CalendarPage() {
                 <div className="text-center">
                   <p className="text-sm text-gray-400">평균 칼로리</p>
                   <p className="text-2xl font-bold text-blue-400">
-                    {weekly_analysis.avg_calories.toFixed(0)} kcal
+                    {Math.round(weekly_analysis.avg_calories)} kcal
                   </p>
                   <p className="text-xs text-gray-500">
-                    달성률:{" "}
-                    {weekly_analysis.calorie_achievement_rate.toFixed(0)}%
+                    달성률: {Math.round(weekly_analysis.calorie_achievement_rate)}%
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-gray-400">평균 단백질</p>
                   <p className="text-2xl font-bold text-green-400">
-                    {weekly_analysis.avg_protein.toFixed(0)}g
+                    {Math.round(weekly_analysis.avg_protein)}g
                   </p>
                   <p className="text-xs text-gray-500">
-                    달성률:{" "}
-                    {weekly_analysis.protein_achievement_rate.toFixed(0)}%
+                    달성률: {Math.round(weekly_analysis.protein_achievement_rate)}%
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-gray-400">평균 탄수화물</p>
                   <p className="text-2xl font-bold text-yellow-400">
-                    {weekly_analysis.avg_carbs.toFixed(0)}g
+                    {Math.round(weekly_analysis.avg_carbs)}g
                   </p>
                   <p className="text-xs text-gray-500">
-                    달성률: {weekly_analysis.carbs_achievement_rate.toFixed(0)}%
+                    달성률: {Math.round(weekly_analysis.carbs_achievement_rate)}%
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-gray-400">평균 지방</p>
                   <p className="text-2xl font-bold text-red-400">
-                    {weekly_analysis.avg_fat.toFixed(0)}g
+                    {Math.round(weekly_analysis.avg_fat)}g
                   </p>
                   <p className="text-xs text-gray-500">
-                    달성률: {weekly_analysis.fat_achievement_rate.toFixed(0)}%
+                    달성률: {Math.round(weekly_analysis.fat_achievement_rate)}%
                   </p>
                 </div>
               </div>
@@ -716,7 +737,7 @@ export default function CalendarPage() {
                 </p>
               </div>
             </div>
-          )} */}
+          )}
 
           {/* 배지 섹션 */}
           {badges.length > 0 && (

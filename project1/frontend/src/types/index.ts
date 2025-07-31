@@ -172,15 +172,38 @@ export interface LeaderboardEntry {
   is_me?: boolean;
 }
 
+export interface WeeklyData {
+  week: number;
+  success: number;
+  failure: number;
+  week_start: string;
+  week_end: string;
+}
+
+export interface DailyCaloriesData {
+  day: string;
+  date: string;
+  calories: number;
+  target: number;
+  has_record: boolean;
+  is_success: boolean;
+  is_cheat_day: boolean;
+}
+
 export interface ChallengeStatistics {
   current_streak: number;
   max_streak: number;
   total_success_days: number;
   total_failure_days: number;
   success_rate: number;
-  average_calories: number;
+  recent_success_rate: number;
+  cheat_days_used: number;
   remaining_days: number;
+  challenge_progress: number;
+  average_calories: number;
   days_since_start: number;
+  weekly_data?: WeeklyData[];
+  daily_calories?: DailyCaloriesData[];
 }
 
 export interface ChallengeReportData {

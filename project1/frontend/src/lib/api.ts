@@ -480,11 +480,20 @@ class ApiClient {
           reason: reason || '사용자 요청'
         }),
       });
-      return {
-        success: true,
-        data: response,
-        message: '챌린지를 포기했습니다.'
-      };
+      
+      // 백엔드 응답 구조에 맞게 처리
+      if (response.success) {
+        return {
+          success: true,
+          data: response.data,
+          message: response.message || '챌린지를 포기했습니다.'
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || '챌린지 포기에 실패했습니다.'
+        };
+      }
     } catch (error) {
       console.error('Error leaving challenge:', error);
       return {
@@ -600,8 +609,12 @@ class ApiClient {
   }
 
   // 캘린더 관련 API
-  async getCalendarData() {
-    return this.request('/api/calendar/data/');
+  async getCalendarData(year?: number, month?: number) {
+    let url = '/api/calendar/data/';
+    if (year && month) {
+      url += `?year=${year}&month=${month}`;
+    }
+    return this.request(url);
   }
 
   async updateCalendarProfile(profileData: {
