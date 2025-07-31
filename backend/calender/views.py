@@ -16,22 +16,21 @@ from api_integrated.models import MealLog
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])  # 임시로 인증 해제, 나중에 IsAuthenticated로 변경
+@permission_classes([AllowAny])  # 임시로 인증 해제
 def get_calendar_data(request):
     """캘린더 페이지 전체 데이터 조회"""
-    # 실제 사용자 또는 테스트 사용자 사용
+    print(f"🔍 캘린더 API 호출 - 사용자: {request.user}")
+    print(f"🔍 인증 상태: {request.user.is_authenticated}")
+    
+    # 인증된 사용자가 있으면 사용, 없으면 xoxoda@naver.com 사용
     if request.user.is_authenticated:
         user = request.user
     else:
-        # 인증되지 않은 경우 리치 테스트 사용자 사용
-        user, created = User.objects.get_or_create(
-            username='rich_test_user',
-            defaults={
-                'email': 'rich_test@example.com',
-                'first_name': 'Rich',
-                'last_name': 'Tester'
-            }
-        )
+        try:
+            user = User.objects.get(email='xoxoda@naver.com')
+            print(f"🔧 기본 사용자 사용: {user.username}")
+        except User.DoesNotExist:
+            return Response({'error': '사용자를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
     
     # user가 null인 MealLog들을 현재 사용자에게 할당 (데이터 복구)
     null_user_meals = MealLog.objects.filter(user__isnull=True)
@@ -131,21 +130,10 @@ def get_calendar_data(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])  # 임시로 인증 해제
+@permission_classes([IsAuthenticated])
 def update_user_profile(request):
     """사용자 프로필 업데이트"""
-    # 실제 사용자 또는 테스트 사용자 사용
-    if request.user.is_authenticated:
-        user = request.user
-    else:
-        user, created = User.objects.get_or_create(
-            username='rich_test_user',
-            defaults={
-                'email': 'rich_test@example.com',
-                'first_name': 'Rich',
-                'last_name': 'Tester'
-            }
-        )
+    user = request.user
     profile, created = CalendarUserProfile.objects.get_or_create(user=user)
     
     serializer = CalendarUserProfileSerializer(profile, data=request.data, partial=True)
@@ -175,21 +163,10 @@ def get_meals_by_date(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_calendar_meals(request):
     """캘린더용 월별 식사 데이터 조회"""
-    # 실제 사용자 또는 테스트 사용자 사용
-    if request.user.is_authenticated:
-        user = request.user
-    else:
-        user, created = User.objects.get_or_create(
-            username='rich_test_user',
-            defaults={
-                'email': 'rich_test@example.com',
-                'first_name': 'Rich',
-                'last_name': 'Tester'
-            }
-        )
+    user = request.user
     
     year = request.GET.get('year', datetime.now().year)
     month = request.GET.get('month', datetime.now().month)

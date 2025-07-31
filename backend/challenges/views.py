@@ -46,16 +46,19 @@ class JoinChallengeView(APIView):
                 # 챌린지 방은 시리얼라이저에서 이미 검증됨
                 room = serializer.validated_data['room']
                 
-                # 임시로 테스트 사용자 생성 (인증 없이 테스트용)
-                from django.contrib.auth.models import User
-                test_user, created = User.objects.get_or_create(
-                    username='test_user',
-                    defaults={'email': 'test@example.com'}
-                )
+                # 인증된 사용자만 챌린지 참여 가능
+                if not request.user.is_authenticated:
+                    return Response({
+                        'success': False,
+                        'error': 'AUTHENTICATION_REQUIRED',
+                        'message': '로그인이 필요합니다.'
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+                
+                user = request.user
                 
                 # 중복 참여 방지: 활성 챌린지가 있는지 확인 (모든 방)
                 existing_active_challenge = UserChallenge.objects.filter(
-                    user=test_user,
+                    user=user,
                     status='active'
                 ).first()
                 
@@ -74,11 +77,11 @@ class JoinChallengeView(APIView):
                 
                 # 새 챌린지 참여 생성 (시리얼라이저 사용)
                 validated_data = serializer.validated_data.copy()
-                validated_data['user'] = test_user
+                validated_data['user'] = user
                 validated_data['status'] = 'active'
-                user_challenge = serializer.save(user=test_user, status='active')
+                user_challenge = serializer.save(user=user, status='active')
                 
-                logger.info(f"User {test_user.id} joined challenge room {room.name}")
+                logger.info(f"User {user.id} joined challenge room {room.name}")
                 
                 # 응답 데이터
                 response_data = UserChallengeSerializer(user_challenge).data
@@ -100,20 +103,15 @@ class JoinChallengeView(APIView):
 
 class MyChallengeView(APIView):
     """내 챌린지 현황 API"""
-    permission_classes = []  # 인증 없이 테스트
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
-            # 임시로 테스트 사용자 사용
-            from django.contrib.auth.models import User
-            test_user, created = User.objects.get_or_create(
-                username='test_user',
-                defaults={'email': 'test@example.com'}
-            )
+            user = request.user
             
-            # 테스트 사용자의 활성 챌린지 조회
+            # 사용자의 활성 챌린지 조회
             active_challenges = UserChallenge.objects.filter(
-                user=test_user,
+                user=user,
                 status='active'
             ).select_related('room').order_by('-created_at')
             
@@ -223,7 +221,7 @@ class ExtendChallengeView(APIView):
 
 class LeaveChallengeView(APIView):
     """챌린지 포기/탈퇴 API"""
-    permission_classes = []  # 임시로 인증 없이 테스트
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
         try:
@@ -235,14 +233,12 @@ class LeaveChallengeView(APIView):
                     'message': '포기할 챌린지 ID가 필요합니다.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # 임시로 테스트 사용자 사용
-            from django.contrib.auth.models import User
-            test_user = User.objects.get(username='test_user')
+            user = request.user
             
             # 사용자의 활성 챌린지 조회
             user_challenge = UserChallenge.objects.get(
                 id=challenge_id,
-                user=test_user,
+                user=user,
                 status='active'
             )
             
@@ -471,31 +467,25 @@ class LeaderboardView(APIView):
 
 class PersonalStatsView(APIView):
     """개인 통계 API"""
-    permission_classes = []  # 임시로 인증 비활성화
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
             challenge_id = request.query_params.get('challenge_id')
-            
-            # 풍부한 데이터를 가진 테스트 사용자 사용
-            from django.contrib.auth.models import User
-            test_user, created = User.objects.get_or_create(
-                username='rich_test_user',
-                defaults={'email': 'rich_test@example.com'}
-            )
+            user = request.user
             
             # 챌린지 조회
             if challenge_id:
                 user_challenge = get_object_or_404(
                     UserChallenge,
                     id=challenge_id,
-                    user=test_user,
+                    user=user,
                     status='active'
                 )
             else:
                 # 기본: 사용자의 첫 번째 활성 챌린지
                 user_challenge = UserChallenge.objects.filter(
-                    user=test_user,
+                    user=user,
                     status='active'
                 ).first()
                 
@@ -513,7 +503,7 @@ class PersonalStatsView(APIView):
             
             # 획득한 배지 조회
             user_badges = UserChallengeBadge.objects.filter(
-                user=test_user
+                user=user
             ).select_related('badge').order_by('-earned_at')
             
             from .serializers import UserChallengeBadgeSerializer

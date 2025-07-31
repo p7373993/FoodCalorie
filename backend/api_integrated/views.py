@@ -159,14 +159,14 @@ class TestMealLogView(APIView):
         try:
             serializer = MealLogSerializer(data=request.data)
             if serializer.is_valid():
-                # 테스트용으로 임시 사용자 사용
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                test_user = User.objects.filter(email='test@meal.com').first()
-                if not test_user:
-                    test_user = request.user if request.user.is_authenticated else None
+                # 인증된 사용자만 식사 기록 생성 가능
+                if not request.user.is_authenticated:
+                    return Response({
+                        'success': False,
+                        'error': '로그인이 필요합니다.'
+                    }, status=status.HTTP_401_UNAUTHORIZED)
                 
-                meal_log = serializer.save(user=test_user)
+                meal_log = serializer.save(user=request.user)
                 return Response({
                     'success': True,
                     'data': MealLogSerializer(meal_log).data,

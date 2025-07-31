@@ -217,7 +217,14 @@ export default function CalendarPage() {
 
   // 일별 로그 정보 맵 생성
   const dailyLogInfo = useMemo(() => {
-    if (!calendarData?.daily_logs) return new Map();
+    console.log("🔄 dailyLogInfo 맵 생성 중...");
+    console.log("calendarData:", calendarData);
+    console.log("daily_logs:", calendarData?.daily_logs);
+
+    if (!calendarData?.daily_logs) {
+      console.log("❌ daily_logs가 없습니다.");
+      return new Map();
+    }
 
     const map = new Map<
       string,
@@ -229,17 +236,26 @@ export default function CalendarPage() {
     >();
 
     calendarData.daily_logs.forEach((log) => {
+      console.log(`📅 처리 중인 날짜: ${log.date}, 식사 개수: ${log.meals?.length || 0}`);
+
       if (log.meals && log.meals.length > 0) {
+        const mealTypes = log.meals.map((m) => m.type);
+        console.log(`🍽️ ${log.date} 식사 타입들:`, mealTypes);
+
         map.set(log.date, {
-          mealTypes: new Set(log.meals.map((m) => m.type)),
+          mealTypes: new Set(mealTypes),
           totalCalories: log.meals.reduce(
             (sum, meal) => sum + meal.nutrients.calories,
             0
           ),
           mealCount: log.meals.length,
         });
+
+        console.log(`✅ ${log.date} 맵에 추가됨:`, map.get(log.date));
       }
     });
+
+    console.log("🗺️ 최종 dailyLogInfo 맵:", map);
     return map;
   }, [calendarData?.daily_logs]);
 
@@ -291,11 +307,24 @@ export default function CalendarPage() {
         setLoading(true);
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth() + 1; // JavaScript month는 0부터 시작
+        console.log(`🔄 캘린더 데이터 로딩: ${year}년 ${month}월`);
+
         const data = await apiClient.getCalendarData(year, month);
+        console.log("📊 받은 캘린더 데이터:", data);
+
+        // 7월 31일 데이터 특별 확인
+        if (data?.daily_logs) {
+          const july31 = data.daily_logs.find(log => log.date === "2025-07-31");
+          if (july31) {
+            console.log("🔍 7월 31일 데이터 확인:", july31);
+            console.log("🔍 7월 31일 식사 개수:", july31.meals?.length || 0);
+          }
+        }
+
         setCalendarData(data);
         setError(null);
       } catch (err) {
-        console.error("Error loading calendar data:", err);
+        console.error("❌ 캘린더 데이터 로드 에러:", err);
         setError("캘린더 데이터를 불러오는데 실패했습니다.");
       } finally {
         setLoading(false);
@@ -598,12 +627,17 @@ export default function CalendarPage() {
                   (log) => log.date === selectedDateKey
                 );
 
-                // 디버깅: 선택된 날짜의 데이터 확인
+                // 7월 31일 디버깅
                 if (selectedDateKey === "2025-07-31") {
                   console.log("🔍 7월 31일 선택됨");
                   console.log("selectedLog:", selectedLog);
                   console.log("meals count:", selectedLog?.meals?.length || 0);
                   console.log("meals data:", selectedLog?.meals);
+
+                  // 각 식사의 ID 확인
+                  selectedLog?.meals?.forEach((meal, index) => {
+                    console.log(`Meal ${index + 1}: ID=${meal.id}, Type=${meal.type}, Name=${meal.foodName}`);
+                  });
                 }
 
                 if (!selectedLog || selectedLog.meals.length === 0) {

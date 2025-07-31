@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth.models import User
 from django.db.models import Sum, Avg
@@ -17,19 +17,10 @@ def get_dashboard_data(request):
     """대시보드 페이지 전체 데이터 조회"""
     try:
         # 실제 사용자 또는 데모 사용자 사용
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            # test_user 사용자 찾기 또는 생성
-            user, created = User.objects.get_or_create(
-                username='test_user',
-                defaults={
-                    'email': 'test@example.com',
-                    'first_name': 'Test',
-                    'last_name': 'User'
-                }
-            )
-            print(f"🔧 사용자: {user.username} ({'생성됨' if created else '기존 사용자'})")
+        if not request.user.is_authenticated:
+            return Response({'error': '인증이 필요합니다.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        user = request.user
         
         # user가 null인 MealLog들을 현재 사용자에게 할당 (데이터 복구)
         null_user_meals = MealLog.objects.filter(user__isnull=True)
@@ -184,25 +175,10 @@ def get_dashboard_data(request):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([AllowAny])  # 임시로 인증 해제
+@permission_classes([IsAuthenticated])
 def weight_records(request):
     """체중 기록 관리"""
-    # 실제 사용자 또는 데모 사용자 사용
-    if request.user.is_authenticated:
-        user = request.user
-    else:
-        # xoxoda1111@gmail.com 사용자 찾기
-        try:
-            user = User.objects.get(email='xoxoda1111@gmail.com')
-        except User.DoesNotExist:
-            user, created = User.objects.get_or_create(
-                username='test_user',
-                defaults={
-                    'email': 'test@example.com',
-                    'first_name': 'Test',
-                    'last_name': 'User'
-                }
-            )
+    user = request.user
     
     if request.method == 'GET':
         # 체중 기록 조회
