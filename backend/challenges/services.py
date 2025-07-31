@@ -332,6 +332,12 @@ class ChallengeStatisticsService:
         # 참여 일수 계산
         days_since_start = (timezone.now().date() - user_challenge.challenge_start_date).days
         
+        # 주간 데이터 생성 (최근 4주)
+        weekly_data = self._get_weekly_data(user_challenge)
+        
+        # 일일 칼로리 데이터 (최근 7일)
+        daily_calories = self._get_daily_calories_data(user_challenge)
+        
         return {
             'current_streak': user_challenge.current_streak_days,
             'max_streak': user_challenge.max_streak_days,
@@ -343,8 +349,72 @@ class ChallengeStatisticsService:
             'remaining_days': user_challenge.remaining_duration_days,
             'challenge_progress': round((total_days / user_challenge.user_challenge_duration_days * 100), 1),
             'average_calories': round(avg_calories, 0),
-            'days_since_start': days_since_start
+            'days_since_start': days_since_start,
+            'weekly_data': weekly_data,
+            'daily_calories': daily_calories
         }
+    
+    def _get_weekly_data(self, user_challenge):
+        """주간 성과 데이터 생성"""
+        weekly_data = []
+        today = timezone.now().date()
+        
+        for week in range(4):  # 최근 4주
+            week_start = today - timedelta(days=(week + 1) * 7)
+            week_end = week_start + timedelta(days=6)
+            
+            week_records = DailyChallengeRecord.objects.filter(
+                user_challenge=user_challenge,
+                date__range=[week_start, week_end]
+            )
+            
+            success_count = week_records.filter(is_success=True).count()
+            failure_count = week_records.filter(is_success=False).count()
+            
+            weekly_data.append({
+                'week': 4 - week,  # 1주차, 2주차, 3주차, 4주차
+                'success': success_count,
+                'failure': failure_count,
+                'week_start': week_start.isoformat(),
+                'week_end': week_end.isoformat()
+            })
+        
+        return list(reversed(weekly_data))  # 시간순으로 정렬
+    
+    def _get_daily_calories_data(self, user_challenge):
+        """일일 칼로리 데이터 (최근 7일)"""
+        daily_data = []
+        today = timezone.now().date()
+        days_korean = ['월', '화', '수', '목', '금', '토', '일']
+        
+        for i in range(7):
+            target_date = today - timedelta(days=6-i)
+            day_name = days_korean[target_date.weekday()]
+            
+            daily_record = DailyChallengeRecord.objects.filter(
+                user_challenge=user_challenge,
+                date=target_date
+            ).first()
+            
+            if daily_record:
+                calories = daily_record.total_calories
+                target = daily_record.target_calories
+            else:
+                # 기록이 없는 경우 0으로 설정
+                calories = 0
+                target = user_challenge.room.target_calorie
+            
+            daily_data.append({
+                'day': day_name,
+                'date': target_date.isoformat(),
+                'calories': int(calories),
+                'target': int(target),
+                'has_record': daily_record is not None,
+                'is_success': daily_record.is_success if daily_record else False,
+                'is_cheat_day': daily_record.is_cheat_day if daily_record else False
+            })
+        
+        return daily_data
     
     def get_leaderboard(self, room_id: int, limit: int = 50) -> list:
         """리더보드 조회"""

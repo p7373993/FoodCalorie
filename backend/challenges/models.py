@@ -92,7 +92,7 @@ class UserChallenge(models.Model):
     
     class Meta:
         db_table = 'user_challenge'
-        unique_together = ['user', 'room', 'status']
+        # unique_together 제약 조건 제거 - 사용자가 같은 방에 여러 번 참여할 수 있도록 허용
         indexes = [
             models.Index(fields=['user', 'status']),
             models.Index(fields=['room', 'status']),
