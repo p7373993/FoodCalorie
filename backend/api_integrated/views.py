@@ -41,6 +41,7 @@ import json
 from django.conf import settings
 import os
 import csv
+from rest_framework.decorators import api_view, permission_classes
 
 class RegisterView(APIView):
     permission_classes = [AllowAny] # 권한 추가
@@ -841,3 +842,318 @@ class UserStatisticsView(APIView):
             },
             "message": "User statistics fetched successfully"
         }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def ai_coaching_view(request):
+    """AI 식단 코칭 API"""
+    try:
+        # 요청 데이터 파싱
+        coaching_type = request.data.get('type', 'meal_feedback')
+        meal_data = request.data.get('meal_data', {})
+        
+        print(f"AI 코칭 요청: type={coaching_type}, user={request.user}")
+        
+        # 사용자의 최근 식단 데이터 수집
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+        
+        # 오늘의 식단 데이터
+        today_meals = MealLog.objects.filter(user=request.user, date=today)
+        today_total_calories = sum(meal.calories for meal in today_meals)
+        today_meal_list = [f"{meal.foodName}({int(meal.calories)}kcal)" for meal in today_meals]
+        
+        # 주간 식단 데이터
+        weekly_meals = MealLog.objects.filter(user=request.user, date__gte=week_ago)
+        weekly_avg_calories = weekly_meals.aggregate(Avg('calories'))['calories__avg'] or 0
+        weekly_meal_count = weekly_meals.count()
+        
+        # 체중 데이터 (WeightRecord 모델 사용)
+        from .models import WeightRecord
+        recent_weights = WeightRecord.objects.filter(user=request.user, date__gte=week_ago).order_by('date')
+        weight_change = 0
+        if recent_weights.count() >= 2:
+            weight_change = recent_weights.last().weight - recent_weights.first().weight
+        
+        # 코칭 타입별 처리
+        if coaching_type == 'meal_feedback':
+            # 개별 식사에 대한 피드백
+            food_name = meal_data.get('food_name', '분석된 음식')
+            calories = meal_data.get('calories', 0)
+            
+            coaching_result = generate_meal_coaching(
+                food_name=food_name,
+                calories=calories,
+                today_total_calories=today_total_calories,
+                today_meals=today_meal_list,
+                user=request.user
+            )
+            
+        elif coaching_type == 'detailed_meal_analysis':
+            # 상세한 식사 분석
+            coaching_result = generate_detailed_analysis(meal_data, request.user)
+            
+        elif coaching_type == 'weekly_report':
+            # 주간 리포트
+            coaching_result = generate_weekly_report(
+                weekly_avg_calories=weekly_avg_calories,
+                weekly_meal_count=weekly_meal_count,
+                weight_change=weight_change,
+                user=request.user
+            )
+            
+        elif coaching_type == 'insights':
+            # 고급 인사이트
+            coaching_result = generate_insights(
+                weekly_meals=weekly_meals,
+                weight_change=weight_change,
+                user=request.user
+            )
+            
+        else:
+            return Response({
+                'success': False,
+                'message': '지원하지 않는 코칭 타입입니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'success': True,
+            'coaching': coaching_result,
+            'message': 'AI 코칭이 생성되었습니다.'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"AI 코칭 오류: {e}")
+        return Response({
+            'success': False,
+            'coaching': "AI 코칭을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def generate_meal_coaching(food_name, calories, today_total_calories, today_meals, user):
+    """개별 식사에 대한 AI 코칭 생성"""
+    try:
+        api_key = getattr(settings, 'GEMINI_API_KEY', '')
+        if not api_key:
+            return "AI 코칭 서비스가 설정되지 않았습니다."
+        
+        # 권장 칼로리 (기본값: 2000kcal, 실제로는 사용자별 설정 가능)
+        recommended_calories = 2000
+        remaining_calories = recommended_calories - today_total_calories
+        
+        prompt = f"""
+저는 건강한 식습관을 위해 노력하고 있습니다. 방금 '{food_name}'을 먹었고, 칼로리는 {calories}kcal입니다.
+
+**오늘의 식단 현황:**
+- 현재까지 총 섭취 칼로리: {today_total_calories}kcal
+- 남은 권장 칼로리: {remaining_calories}kcal
+- 오늘 먹은 음식: {', '.join(today_meals) if today_meals else '없음'}
+
+이 정보를 바탕으로 아래 형식에 맞춰 친근하고 격려적인 식단 코칭을 한국어로 해주세요:
+
+## 🍽️ 식사 평가
+(이번 식사에 대한 긍정적인 평가 1-2문장)
+
+## 💡 오늘의 조언
+(남은 하루 식단 관리를 위한 구체적이고 실천 가능한 조언 2-3문장)
+
+## 🎯 다음 식사 가이드
+- (영양 균형을 위한 구체적인 제안)
+- (칼로리 관리를 위한 팁)
+
+※ 너무 길지 않게, 친근하고 격려하는 톤으로 작성해주세요.
+"""
+        
+        return call_gemini_api(prompt)
+        
+    except Exception as e:
+        print(f"식사 코칭 생성 실패: {e}")
+        return f"'{food_name}'을 드셨네요! 칼로리는 {calories}kcal입니다. 균형 잡힌 식단을 위해 다음 식사에서는 채소와 단백질을 충분히 섭취해보세요."
+
+
+def generate_detailed_analysis(meal_data, user):
+    """상세한 식사 분석 생성"""
+    try:
+        food_name = meal_data.get('food_name', '분석된 음식')
+        calories = meal_data.get('calories', 0)
+        protein = meal_data.get('protein', 0)
+        carbs = meal_data.get('carbs', 0)
+        fat = meal_data.get('fat', 0)
+        mass = meal_data.get('mass', 0)
+        grade = meal_data.get('grade', 'C')
+        
+        # 영양소 비율 계산
+        total_macro = protein + carbs + fat
+        protein_ratio = (protein / total_macro * 100) if total_macro > 0 else 0
+        carbs_ratio = (carbs / total_macro * 100) if total_macro > 0 else 0
+        fat_ratio = (fat / total_macro * 100) if total_macro > 0 else 0
+        
+        prompt = f"""
+영양 전문가로서 다음 음식을 상세히 분석해주세요:
+
+**음식 정보:**
+- 음식명: {food_name}
+- 질량: {mass}g
+- 총 칼로리: {calories}kcal
+- 단백질: {protein}g ({protein_ratio:.1f}%)
+- 탄수화물: {carbs}g ({carbs_ratio:.1f}%)
+- 지방: {fat}g ({fat_ratio:.1f}%)
+- 영양 등급: {grade}
+
+아래 형식에 맞춰 전문적이고 실용적인 분석을 한국어로 제공해주세요:
+
+## 🔍 영양 분석
+
+### 칼로리 평가
+(칼로리 수준이 적절한지 평가)
+
+### 영양소 균형
+(단백질, 탄수화물, 지방 비율 분석)
+
+### 영양 등급 해석
+(등급 {grade}의 의미와 건강 영향)
+
+## 💡 개인화된 조언
+
+### 긍정적인 점
+- (이 음식의 좋은 점들)
+
+### 주의사항
+- (개선이 필요한 부분들)
+
+## 🍽️ 다음 식사 가이드
+(영양 균형을 맞추기 위한 구체적인 제안)
+"""
+        
+        return call_gemini_api(prompt)
+        
+    except Exception as e:
+        print(f"상세 분석 생성 실패: {e}")
+        return "상세한 영양 분석을 생성하는 중 오류가 발생했습니다."
+
+
+def generate_weekly_report(weekly_avg_calories, weekly_meal_count, weight_change, user):
+    """주간 리포트 생성"""
+    try:
+        prompt = f"""
+저는 지난 주 동안 건강한 식습관을 위해 노력했습니다. 
+
+**주간 데이터:**
+- 평균 일일 섭취 칼로리: {weekly_avg_calories:.0f}kcal
+- 총 식사 기록 횟수: {weekly_meal_count}회
+- 체중 변화: {weight_change:+.1f}kg
+
+이 데이터를 바탕으로 아래 형식에 맞춰 격려적인 주간 리포트를 한국어로 생성해주세요:
+
+## 📊 주간 요약
+(전체적인 활동에 대한 긍정적인 총평)
+
+## 🎉 잘한 점
+- (구체적인 칭찬 포인트들)
+
+## 🎯 다음 주 목표
+- (실천 가능한 구체적인 제안들)
+
+## 💪 격려 메시지
+(동기부여가 되는 한 줄 메시지)
+
+※ 긍정적이고 격려하는 톤으로 작성해주세요.
+"""
+        
+        return call_gemini_api(prompt)
+        
+    except Exception as e:
+        print(f"주간 리포트 생성 실패: {e}")
+        return "주간 리포트를 생성하는 중 오류가 발생했습니다."
+
+
+def generate_insights(weekly_meals, weight_change, user):
+    """고급 인사이트 생성"""
+    try:
+        # 식단 패턴 분석
+        meal_pattern = []
+        days = ['월', '화', '수', '목', '금', '토', '일']
+        week_ago = datetime.now().date() - timedelta(days=7)
+        
+        for i in range(7):
+            day_date = week_ago + timedelta(days=i)
+            day_meals = weekly_meals.filter(date=day_date)
+            if day_meals.exists():
+                total_calories = sum(meal.calories for meal in day_meals)
+                meal_pattern.append(f"{days[i]}: {total_calories:.0f}kcal")
+            else:
+                meal_pattern.append(f"{days[i]}: 기록 없음")
+        
+        pattern_text = ', '.join(meal_pattern)
+        
+        prompt = f"""
+저의 지난 일주일간 식단 패턴을 분석해주세요:
+
+**식단 패턴:** {pattern_text}
+**체중 변화:** {weight_change:+.1f}kg
+
+이 데이터를 바탕으로 아래 형식에 맞춰 인사이트를 한국어로 제공해주세요:
+
+## 🔍 발견된 패턴
+(데이터 기반 식습관 패턴 분석)
+
+## ✅ 긍정적인 점
+- (패턴에서 발견된 좋은 부분들)
+
+## 🎯 개선 제안
+- (패턴 개선을 위한 구체적 제안들)
+
+## 💡 맞춤 조언
+(개인화된 실천 가능한 조언)
+
+※ 데이터에 기반한 객관적이면서도 격려적인 분석을 해주세요.
+"""
+        
+        return call_gemini_api(prompt)
+        
+    except Exception as e:
+        print(f"인사이트 생성 실패: {e}")
+        return "식단 인사이트를 생성하는 중 오류가 발생했습니다."
+
+
+def call_gemini_api(prompt):
+    """Gemini API 호출 공통 함수"""
+    try:
+        api_key = getattr(settings, 'GEMINI_API_KEY', '')
+        if not api_key:
+            return "AI 코칭 서비스가 설정되지 않았습니다."
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+        
+        payload = {
+            "contents": [{
+                "role": "user",
+                "parts": [{"text": prompt}]
+            }]
+        }
+        
+        response = requests.post(
+            url,
+            headers={'Content-Type': 'application/json'},
+            json=payload,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('candidates') and result['candidates'][0].get('content'):
+                return result['candidates'][0]['content']['parts'][0]['text']
+            else:
+                return "AI 응답을 처리할 수 없습니다."
+        else:
+            print(f"Gemini API 오류: {response.status_code} - {response.text}")
+            return f"AI 서비스 오류가 발생했습니다. (코드: {response.status_code})"
+            
+    except requests.exceptions.Timeout:
+        return "AI 서비스 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."
+    except requests.exceptions.ConnectionError:
+        return "AI 서비스에 연결할 수 없습니다. 네트워크 연결을 확인해주세요."
+    except Exception as e:
+        print(f"Gemini API 호출 실패: {e}")
+        return f"AI 코칭 생성 중 오류가 발생했습니다: {str(e)}"

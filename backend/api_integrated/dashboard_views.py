@@ -135,13 +135,19 @@ def get_dashboard_data(request):
                 elif weight_change < -0.5:
                     weight_trend = 'decreasing'
 
+        # None 값을 0으로 처리하여 계산
+        valid_calories = [day['total_kcal'] for day in weekly_calories if day['total_kcal'] is not None]
+        total_week_calories = sum(valid_calories) if valid_calories else 0
+        avg_daily_calories = int(total_week_calories / len(valid_calories)) if valid_calories else 0
+        max_day_calories = max(valid_calories) if valid_calories else 0
+        
         response_data = {
             'weekly_calories': {
                 'days': weekly_calories,
-                'total_week_calories': sum(day['total_kcal'] for day in weekly_calories),
-                'avg_daily_calories': int(sum(day['total_kcal'] for day in weekly_calories) / 7),
-                'max_day_calories': max(day['total_kcal'] for day in weekly_calories) if weekly_calories else 0,
-                'chart_max': max(3000, max(day['total_kcal'] for day in weekly_calories) if weekly_calories else 0)
+                'total_week_calories': total_week_calories,
+                'avg_daily_calories': avg_daily_calories,
+                'max_day_calories': max_day_calories,
+                'chart_max': max(3000, max_day_calories)
             },
             'weight_data': {
                 'weekly_weights': weekly_weights,

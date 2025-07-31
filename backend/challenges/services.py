@@ -6,12 +6,47 @@ from .models import (
     UserChallenge, DailyChallengeRecord, CheatDayRequest, 
     ChallengeBadge, UserChallengeBadge, MEAL_TIME_RANGES
 )
-from .cache import ChallengeCache, CachedLeaderboardService, CachedUserStatsService, invalidate_cache_on_change
-from .optimizations import OptimizedChallengeQueries, BulkOperations, PerformanceMonitor
 import logging
 from datetime import date, timedelta, time
 
 logger = logging.getLogger('challenges')
+
+# 캐시 관련 기능들을 간단하게 구현 (실제 캐시 시스템이 없는 경우)
+class DummyCache:
+    @staticmethod
+    def get(key, **kwargs):
+        return None
+    
+    @staticmethod
+    def set(key, value, **kwargs):
+        pass
+    
+    @staticmethod
+    def invalidate_user_cache(user_id):
+        pass
+    
+    @staticmethod
+    def invalidate_room_cache(room_id):
+        pass
+
+# 캐시가 없는 경우 더미 캐시 사용
+try:
+    from .cache import ChallengeCache, invalidate_cache_on_change
+except ImportError:
+    ChallengeCache = DummyCache()
+    def invalidate_cache_on_change(cache_types):
+        def decorator(func):
+            return func
+        return decorator
+
+# 성능 모니터링이 없는 경우 더미 데코레이터 사용
+try:
+    from .optimizations import PerformanceMonitor
+except ImportError:
+    class PerformanceMonitor:
+        @staticmethod
+        def measure_query_time(func):
+            return func
 
 
 class ChallengeJudgmentService:
@@ -290,6 +325,13 @@ class ChallengeStatisticsService:
         recent_records = records.filter(date__gte=recent_date)
         recent_success_rate = (recent_records.filter(is_success=True).count() / recent_records.count() * 100) if recent_records.count() > 0 else 0
         
+        # 평균 칼로리 계산
+        from django.db.models import Avg
+        avg_calories = records.aggregate(avg_cal=Avg('total_calories'))['avg_cal'] or 0
+        
+        # 참여 일수 계산
+        days_since_start = (timezone.now().date() - user_challenge.challenge_start_date).days
+        
         return {
             'current_streak': user_challenge.current_streak_days,
             'max_streak': user_challenge.max_streak_days,
@@ -299,14 +341,74 @@ class ChallengeStatisticsService:
             'recent_success_rate': round(recent_success_rate, 1),
             'cheat_days_used': cheat_days,
             'remaining_days': user_challenge.remaining_duration_days,
-            'challenge_progress': round((total_days / user_challenge.user_challenge_duration_days * 100), 1)
+            'challenge_progress': round((total_days / user_challenge.user_challenge_duration_days * 100), 1),
+            'average_calories': round(avg_calories, 0),
+            'days_since_start': days_since_start
         }
     
-    @PerformanceMonitor.measure_query_time
     def get_leaderboard(self, room_id: int, limit: int = 50) -> list:
-        """리더보드 조회 (최적화된 쿼리 사용)"""
-        # 캐시된 리더보드 서비스 사용
-        return CachedLeaderboardService.get_leaderboard(room_id, limit)
+        """리더보드 조회"""
+        try:
+            # 해당 방의 활성 챌린지 참여자들 조회
+            user_challenges = UserChallenge.objects.filter(
+                room_id=room_id,
+                status='active'
+            ).select_related('user', 'room').order_by(
+                '-current_streak_days',  # 연속 성공 일수 내림차순
+                '-total_success_days',   # 총 성공 일수 내림차순
+                'challenge_start_date'   # 시작일 오름차순
+            )[:limit]
+            
+            leaderboard = []
+            for rank, challenge in enumerate(user_challenges, 1):
+                leaderboard.append({
+                    'rank': rank,
+                    'user_id': challenge.user.id,
+                    'username': challenge.user.username,
+                    'current_streak': challenge.current_streak_days,
+                    'total_success': challenge.total_success_days,
+                    'start_date': challenge.challenge_start_date.isoformat(),
+                    'is_me': False  # 프론트엔드에서 설정
+                })
+            
+            return leaderboard
+            
+        except Exception as e:
+            logger.error(f"Error getting leaderboard for room {room_id}: {e}")
+            return []
+
+
+    def _check_and_award_badges(self, user_challenge: UserChallenge):
+        """배지 획득 조건 확인 및 부여"""
+        user = user_challenge.user
+        
+        # 연속 성공 배지 확인
+        streak_badges = ChallengeBadge.objects.filter(
+            condition_type='streak',
+            condition_value__lte=user_challenge.current_streak_days,
+            is_active=True
+        )
+        
+        for badge in streak_badges:
+            UserChallengeBadge.objects.get_or_create(
+                user=user,
+                badge=badge,
+                defaults={'user_challenge': user_challenge}
+            )
+        
+        # 총 성공 일수 배지 확인
+        total_success_badges = ChallengeBadge.objects.filter(
+            condition_type='total_success',
+            condition_value__lte=user_challenge.total_success_days,
+            is_active=True
+        )
+        
+        for badge in total_success_badges:
+            UserChallengeBadge.objects.get_or_create(
+                user=user,
+                badge=badge,
+                defaults={'user_challenge': user_challenge}
+            )
 
 
 class WeeklyResetService:

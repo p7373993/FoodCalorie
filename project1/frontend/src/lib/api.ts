@@ -437,7 +437,28 @@ class ApiClient {
     has_active_challenge: boolean;
     total_active_count: number;
   }>> {
-    return this.request('/api/challenges/my/');
+    try {
+      const response = await this.request('/api/challenges/my/');
+      // 백엔드 응답 구조에 맞게 데이터 추출
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          message: response.message
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || '내 챌린지를 불러올 수 없습니다.'
+        };
+      }
+    } catch (error) {
+      console.error('My challenges API error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '내 챌린지 조회 중 오류가 발생했습니다.'
+      };
+    }
   }
 
   async extendChallenge(challengeId: number, extendDays: number = 7): Promise<ApiResponse<UserChallenge>> {
@@ -504,7 +525,28 @@ class ApiClient {
     my_rank: number | null;
     total_participants: number;
   }>> {
-    return this.request(`/api/challenges/leaderboard/${roomId}/?limit=${limit}`);
+    try {
+      const response = await this.request(`/api/challenges/leaderboard/${roomId}/?limit=${limit}`);
+      // 백엔드 응답 구조에 맞게 데이터 추출
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          message: response.message
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || '리더보드를 불러올 수 없습니다.'
+        };
+      }
+    } catch (error) {
+      console.error('Leaderboard API error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '리더보드 조회 중 오류가 발생했습니다.'
+      };
+    }
   }
 
   async getPersonalStats(challengeId?: number): Promise<ApiResponse<{
