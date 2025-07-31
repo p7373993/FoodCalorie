@@ -10,16 +10,16 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen) { 
-      document.body.style.overflow = 'hidden'; 
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
     }
-    return () => { 
-      document.body.style.overflow = 'unset'; 
+    return () => {
+      document.body.style.overflow = 'unset';
     };
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) { 
+    if (isOpen) {
       setIsLoading(true);
       // 하드코딩된 로딩 시뮬레이션
       setTimeout(() => {
@@ -31,18 +31,18 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end justify-center z-50 animate-fade-in p-4 pb-8">
       <div className="w-full max-w-lg bg-gray-800 border border-[var(--border-color)] rounded-2xl flex flex-col">
         <div className="p-4 border-b border-[var(--border-color)] flex justify-between items-center">
           <h2 className="text-xl font-bold text-[var(--point-green)]">주간 AI 리포트</h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="text-gray-400 hover:text-white text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-700 transition-colors"
           >
             &times;
           </button>
         </div>
-        
+
         <div className="p-6 overflow-y-auto max-h-[70vh]">
           {isLoading ? (
             <div className="flex justify-center items-center h-48">
@@ -51,7 +51,7 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
           ) : (
             <div className="text-left text-white space-y-4">
               <h3 className="text-lg font-bold text-green-400 mb-4">📊 이번 주 영양 분석 리포트</h3>
-              
+
               <div className="bg-gray-700 p-4 rounded-lg">
                 <h4 className="font-bold text-blue-400 mb-2">🎯 주간 목표 달성도</h4>
                 <div className="space-y-2 text-sm">
@@ -107,10 +107,10 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
             </div>
           )}
         </div>
-        
+
         <div className="p-4 border-t border-[var(--border-color)]">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="w-full bg-gray-700 text-white font-bold py-3 rounded-lg"
           >
             닫기
