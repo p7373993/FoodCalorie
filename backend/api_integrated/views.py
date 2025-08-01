@@ -698,8 +698,18 @@ def ai_coaching_view(request):
         
         # 주간 식단 데이터
         weekly_meals = MealLog.objects.filter(user=request.user, date__gte=week_ago)
-        weekly_avg_calories = weekly_meals.aggregate(Avg('calories'))['calories__avg'] or 0
         weekly_meal_count = weekly_meals.count()
+        
+        # 🔧 일별 총 칼로리의 평균 계산 (개별 식사 평균이 아님)
+        from django.db.models import Sum
+        daily_calories = []
+        for i in range(7):  # 최근 7일
+            check_date = today - timedelta(days=i)
+            day_total = weekly_meals.filter(date=check_date).aggregate(Sum('calories'))['calories__sum'] or 0
+            if day_total > 0:  # 식사 기록이 있는 날만 포함
+                daily_calories.append(day_total)
+        
+        weekly_avg_calories = sum(daily_calories) / len(daily_calories) if daily_calories else 0
         
         # 체중 데이터 (WeightRecord 모델 사용)
         from .models import WeightRecord
