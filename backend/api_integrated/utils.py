@@ -3,8 +3,8 @@ import os
 from django.conf import settings
 import pandas as pd
 
-# CSV 파일 경로 (프로젝트 루트에 있다고 가정)
-CSV_FILE_PATH = os.path.join(settings.BASE_DIR.parent, '음식만개등급화.csv')
+# CSV 파일 경로 (backend 폴더에 있음)
+CSV_FILE_PATH = os.path.join(settings.BASE_DIR, '음식만개등급화.csv')
 
 # CSV 파일 로드 (서버 시작 시 한 번만 로드)
 try:
@@ -22,7 +22,7 @@ def load_food_grades():
     if food_data_df is not None:
         food_grades = {}
         for index, row in food_data_df.iterrows():
-            food_name = row['음식명'].strip()
+            food_name = row['식품명'].strip()  # '음식명' -> '식품명'으로 수정
             grade = row['kfni_grade'].strip() if 'kfni_grade' in row else '' # kfni_grade 컬럼이 없을 경우 대비
             calories = float(row['에너지(kcal)']) if '에너지(kcal)' in row and row['에너지(kcal)'] else 0
             food_grades[food_name] = {
@@ -170,21 +170,59 @@ def calculate_nutrition_score(food_name, calories, mass):
     final_score = max(1, min(15, base_score + bonus))
     return final_score
 
-def generate_ai_feedback(food_name, calories, mass, grade):
+def generate_ai_feedback(food_name, calories, mass, grade, user=None):
     """Gemini LLM을 활용한 개인화된 AI 피드백 생성"""
     import requests
     from django.conf import settings
+    from datetime import datetime
     
     try:
         # Gemini API 호출
         api_key = settings.GEMINI_API_KEY
         api_url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}'
         
-        prompt = f"""다음 음식에 대한 건강한 조언을 해주세요:\n\n음식명: {food_name}\n칼로리: {calories}kcal\n질량: {mass}g\n등급: {grade}\n\n다음 형식으로 답해주세요:\n1. 간단한 한 줄 코멘트 (예: \"돈까스는 지방이 높으니 채소를 함께 드세요!\")\n2. 구체적인 조언 (2-3문장)\n3. 대체 음식 추천\n\n친근하고 격려하는 톤으로 답해주세요."""
+        # 사용자별 개인화된 피드백을 위한 추가 정보
+        additional_context = ""
+        if user:
+            from .models import MealLog
+            today = datetime.now().date()
+            today_logs = MealLog.objects.filter(user=user, date=today)
+            today_meal_list = ', '.join([log.foodName for log in today_logs])
+            today_total_calories = sum([log.calories for log in today_logs])
+            recommended_calories = 2000
+            remaining_calories = recommended_calories - today_total_calories
+            
+            additional_context = f"""
+오늘 {food_name}을(를) 드셨습니다.
+- 현재까지 섭취한 총 칼로리: {today_total_calories}kcal
+- 남은 권장 칼로리: {remaining_calories}kcal
+- 오늘 먹은 음식 목록: {today_meal_list}
+
+이 정보를 바탕으로, 아래 형식으로 건강한 식습관을 위한 코멘트와 구체적인 조언을 주세요.
+
+1. 한 줄 코멘트 (예: '오늘 점심은 단백질이 풍부해서 좋아요! 남은 칼로리도 잘 관리해보세요.')
+2. 구체적인 조언 (2~3문장, 예: '나트륨 섭취가 많으니 저녁에는 싱겁게 드세요. 채소를 더 추가하면 영양 균형에 도움이 됩니다.')
+
+※ 대체 음식 추천은 하지 마세요. 이미 먹은 음식에 대한 피드백만 주세요.
+※ 친근하고 격려하는 톤으로 답변해 주세요.
+"""
+        else:
+            additional_context = f"""다음 음식에 대한 건강한 조언을 해주세요:
+
+음식명: {food_name}
+칼로리: {calories}kcal
+질량: {mass}g
+등급: {grade}
+
+다음 형식으로 답해주세요:
+1. 간단한 한 줄 코멘트 (예: "돈까스는 지방이 높으니 채소를 함께 드세요!")
+2. 구체적인 조언 (2-3문장)
+
+친근하고 격려하는 톤으로 답해주세요."""
 
         response = requests.post(api_url, json={
             "contents": [
-                {"role": "user", "parts": [{"text": prompt}]}
+                {"role": "user", "parts": [{"text": additional_context}]}
             ]
         }, timeout=30)
         

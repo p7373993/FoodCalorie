@@ -8,13 +8,13 @@ import os
 import sys
 import django
 from datetime import datetime, timedelta, date
-from django.contrib.auth.models import User
-from django.db.models import Sum
 
 # Django 설정
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
+from django.contrib.auth.models import User
+from django.db.models import Sum
 from api_integrated.models import MealLog
 
 def create_test_user():
