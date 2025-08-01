@@ -242,7 +242,11 @@ export default function CalendarPage() {
         const mealTypes = log.meals.map((m) => m.type);
         console.log(`🍽️ ${log.date} 식사 타입들:`, mealTypes);
 
-        map.set(log.date, {
+        // 🔧 날짜 키를 정확히 사용 (시간대 변환 없이)
+        const dateKey = log.date; // 백엔드에서 온 날짜 문자열을 그대로 사용
+        console.log(`🔑 사용할 날짜 키: ${dateKey}`);
+
+        map.set(dateKey, {
           mealTypes: new Set(mealTypes),
           totalCalories: log.meals.reduce(
             (sum, meal) => sum + meal.nutrients.calories,
@@ -251,7 +255,7 @@ export default function CalendarPage() {
           mealCount: log.meals.length,
         });
 
-        console.log(`✅ ${log.date} 맵에 추가됨:`, map.get(log.date));
+        console.log(`✅ ${dateKey} 맵에 추가됨:`, map.get(dateKey));
       }
     });
 
@@ -265,7 +269,8 @@ export default function CalendarPage() {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
 
-    const selectedDateStr = selectedDate.toISOString().split("T")[0];
+    // 🔧 시간대 문제 해결: 로컬 시간 기준으로 날짜 문자열 생성
+    const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const selectedDateLog = calendarData.daily_logs.find(
       (log) => log.date === selectedDateStr
     );
@@ -522,12 +527,23 @@ export default function CalendarPage() {
                     currentDate.getMonth(),
                     day
                   );
-                  const dateKey = date.toISOString().split("T")[0];
+                  // 🔧 시간대 문제 해결: 로컬 시간 기준으로 날짜 문자열 생성
+                  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                   const isToday =
                     new Date().toISOString().split("T")[0] === dateKey;
                   const isSelected = selectedDate &&
                     selectedDate.toISOString().split("T")[0] === dateKey;
                   const logInfo = dailyLogInfo.get(dateKey);
+
+                  // 🔍 8월 1일 디버깅
+                  if (day === 1 && currentDate.getMonth() === 7) { // 8월 (0-based)
+                    console.log(`🔍 8월 1일 디버깅:`);
+                    console.log(`  - day: ${day}`);
+                    console.log(`  - date 객체:`, date);
+                    console.log(`  - dateKey: ${dateKey}`);
+                    console.log(`  - logInfo:`, logInfo);
+                    console.log(`  - dailyLogInfo 전체:`, dailyLogInfo);
+                  }
 
                   return (
                     <div
@@ -620,9 +636,8 @@ export default function CalendarPage() {
                   );
                 }
 
-                const selectedDateKey = selectedDate
-                  .toISOString()
-                  .split("T")[0];
+                // 🔧 시간대 문제 해결: 로컬 시간 기준으로 날짜 문자열 생성
+                const selectedDateKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
                 const selectedLog = daily_logs.find(
                   (log) => log.date === selectedDateKey
                 );
@@ -720,58 +735,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* 주간 분석 섹션 */}
-          {weekly_analysis && (
-            <div className="bg-gray-800 p-6 rounded-2xl">
-              <h2 className="text-xl font-bold mb-4 text-green-400">
-                이번 주 분석
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div className="text-center">
-                  <p className="text-sm text-gray-400">평균 칼로리</p>
-                  <p className="text-2xl font-bold text-blue-400">
-                    {Math.round(weekly_analysis.avg_calories)} kcal
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    달성률: {Math.round(weekly_analysis.calorie_achievement_rate)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-400">평균 단백질</p>
-                  <p className="text-2xl font-bold text-green-400">
-                    {Math.round(weekly_analysis.avg_protein)}g
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    달성률: {Math.round(weekly_analysis.protein_achievement_rate)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-400">평균 탄수화물</p>
-                  <p className="text-2xl font-bold text-yellow-400">
-                    {Math.round(weekly_analysis.avg_carbs)}g
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    달성률: {Math.round(weekly_analysis.carbs_achievement_rate)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-400">평균 지방</p>
-                  <p className="text-2xl font-bold text-red-400">
-                    {Math.round(weekly_analysis.avg_fat)}g
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    달성률: {Math.round(weekly_analysis.fat_achievement_rate)}%
-                  </p>
-                </div>
-              </div>
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <h3 className="text-sm font-bold text-white mb-2">AI 조언</h3>
-                <p className="text-gray-300 text-sm">
-                  {weekly_analysis.ai_advice}
-                </p>
-              </div>
-            </div>
-          )}
+
 
           {/* 배지 섹션 */}
           {badges.length > 0 && (
