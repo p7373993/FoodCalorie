@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import FormattedAiResponse from './FormattedAiResponse';
+import { apiClient } from '@/lib/api';
 
 interface WeeklyReportModalProps {
   isOpen: boolean;
@@ -8,6 +9,8 @@ interface WeeklyReportModalProps {
 
 const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [weeklyReport, setWeeklyReport] = useState<string>('');
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     if (isOpen) {
@@ -20,13 +23,155 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
 
   useEffect(() => {
     if (isOpen) {
-      setIsLoading(true);
-      // 하드코딩된 로딩 시뮬레이션
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 1000);
+      generateWeeklyReport();
     }
   }, [isOpen]);
+
+  const generateWeeklyReport = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      console.log('📊 주간 리포트 생성 시작...');
+
+      // 대시보드 데이터 가져오기
+      const dashboardData = await apiClient.getDashboardData();
+      console.log('📊 대시보드 데이터:', dashboardData);
+
+      // 주간 데이터 준비
+      const weeklyCalories = dashboardData.weekly_calories?.days || [];
+      const recentMeals = dashboardData.recent_meals || [];
+      const weightData = dashboardData.weight_data || {};
+
+      // 주간 통계 계산
+      const validCalories = weeklyCalories
+        .filter((day: any) => day.has_data && day.total_kcal > 0)
+        .map((day: any) => day.total_kcal);
+
+      const avgCalories = validCalories.length > 0
+        ? Math.round(validCalories.reduce((sum: number, cal: number) => sum + cal, 0) / validCalories.length)
+        : 0;
+
+      const maxCalories = validCalories.length > 0 ? Math.max(...validCalories) : 0;
+      const minCalories = validCalories.length > 0 ? Math.min(...validCalories) : 0;
+
+      // 영양소 통계 계산
+      const totalProtein = recentMeals.reduce((sum: number, meal: any) => sum + (meal.protein || 0), 0);
+      const totalCarbs = recentMeals.reduce((sum: number, meal: any) => sum + (meal.carbs || 0), 0);
+      const totalFat = recentMeals.reduce((sum: number, meal: any) => sum + (meal.fat || 0), 0);
+
+      // 등급 분포 계산
+      const gradeCount = recentMeals.reduce((acc: any, meal: any) => {
+        acc[meal.nutriScore] = (acc[meal.nutriScore] || 0) + 1;
+        return acc;
+      }, {});
+
+      const requestData = {
+        type: 'weekly_report',
+        meal_data: {
+          weekly_avg_calories: avgCalories,
+          max_calories: maxCalories,
+          min_calories: minCalories,
+          weekly_meal_count: recentMeals.length,
+          recorded_days: validCalories.length,
+          weight_change: weightData.weight_change || 0,
+          total_protein: totalProtein,
+          total_carbs: totalCarbs,
+          total_fat: totalFat,
+          grade_distribution: gradeCount,
+          daily_breakdown: weeklyCalories.map((day: any) => ({
+            day: day.day,
+            calories: day.total_kcal || 0,
+            has_data: day.has_data,
+            is_today: day.is_today
+          })),
+          recent_meals: recentMeals.slice(0, 10).map((meal: any) => ({
+            food_name: meal.foodName,
+            calories: meal.calories,
+            protein: meal.protein,
+            carbs: meal.carbs,
+            fat: meal.fat,
+            grade: meal.nutriScore,
+            date: meal.date,
+            meal_type: meal.mealType
+          }))
+        }
+      };
+
+      console.log('📊 주간 리포트 요청 데이터:', requestData);
+
+      const response = await fetch('http://localhost:8000/api/ai/coaching/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken() || ''
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestData)
+      });
+
+      const responseText = await response.text();
+      console.log('📊 주간 리포트 응답:', responseText);
+
+      if (responseText.includes('<!DOCTYPE html>') || responseText.includes('<html')) {
+        throw new Error('인증이 필요하거나 서버 오류가 발생했습니다.');
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${responseText}`);
+      }
+
+      const result = JSON.parse(responseText);
+
+      if (result.success && result.coaching) {
+        setWeeklyReport(result.coaching);
+      } else {
+        throw new Error(result.message || '주간 리포트 생성에 실패했습니다.');
+      }
+
+    } catch (error) {
+      console.error('📊 주간 리포트 생성 실패:', error);
+      setError(error instanceof Error ? error.message : '주간 리포트 생성 중 오류가 발생했습니다.');
+
+      // 폴백 리포트 생성
+      setWeeklyReport(generateFallbackReport());
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getCsrfToken = () => {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'csrftoken') {
+        return value;
+      }
+    }
+    return null;
+  };
+
+  const generateFallbackReport = () => {
+    return `# 📊 주간 영양 분석 리포트
+
+## 🎯 이번 주 요약
+이번 주 식사 기록을 분석한 결과를 알려드립니다.
+
+### 📈 주요 지표
+- **기록된 날**: 7일 중 7일 (100%)
+- **평균 칼로리**: 1,620kcal/일
+- **목표 달성률**: 81%
+
+### 💡 AI 조언
+꾸준한 식사 기록 관리를 잘하고 계시네요! 단백질 섭취를 조금 더 늘리시면 더욱 균형잡힌 식단이 될 것 같습니다.
+
+### 🎯 다음 주 목표
+- 단백질 섭취량 증가
+- 균형잡힌 영양소 비율 유지
+- 꾸준한 식사 기록 지속
+
+*AI 분석 서비스에 일시적인 문제가 있어 기본 리포트를 표시합니다.*`;
+  };
 
   if (!isOpen) return null;
 
@@ -45,65 +190,34 @@ const WeeklyReportModal: React.FC<WeeklyReportModalProps> = ({ isOpen, onClose }
 
         <div className="p-6 overflow-y-auto max-h-[70vh]">
           {isLoading ? (
-            <div className="flex justify-center items-center h-48">
-              <span className="spinner"></span>
+            <div className="flex flex-col justify-center items-center h-48 space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400"></div>
+              <div className="text-center">
+                <p className="text-white font-medium">AI가 주간 식사 기록을 분석하고 있습니다...</p>
+                <p className="text-gray-400 text-sm mt-2">일주일치 데이터를 종합 분석 중</p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="text-center text-red-400 p-8">
+              <div className="text-4xl mb-4">⚠️</div>
+              <p className="font-medium mb-2">주간 리포트 생성 실패</p>
+              <p className="text-sm text-gray-400">{error}</p>
+              <button
+                onClick={generateWeeklyReport}
+                className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : weeklyReport ? (
+            <div className="text-left text-white">
+              <FormattedAiResponse text={weeklyReport} />
             </div>
           ) : (
-            <div className="text-left text-white space-y-4">
-              <h3 className="text-lg font-bold text-green-400 mb-4">📊 이번 주 영양 분석 리포트</h3>
-
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-blue-400 mb-2">🎯 주간 목표 달성도</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>칼로리 목표:</span>
-                    <span className="text-green-400">1,620 / 2,000 kcal (81%)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>단백질 목표:</span>
-                    <span className="text-yellow-400">81 / 120g (68%)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>탄수화물 목표:</span>
-                    <span className="text-blue-400">243 / 250g (97%)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>지방 목표:</span>
-                    <span className="text-red-400">36 / 65g (55%)</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-green-400 mb-2">📈 주간 트렌드</h4>
-                <ul className="text-sm space-y-1">
-                  <li>• 평균 일일 칼로리: 1,620kcal (목표 대비 81%)</li>
-                  <li>• 가장 높은 칼로리: 1,900kcal (7월 28일)</li>
-                  <li>• 가장 낮은 칼로리: 1,100kcal (7월 31일)</li>
-                  <li>• 식사 기록 일수: 7일 중 7일 (100%)</li>
-                </ul>
-              </div>
-
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-yellow-400 mb-2">💡 AI 조언</h4>
-                <div className="text-sm space-y-2">
-                  <p>🎉 <strong>잘하고 있어요!</strong> 이번 주 식사 기록을 꾸준히 하셨네요.</p>
-                  <p>📊 <strong>칼로리:</strong> 목표 대비 81%로 양호하지만, 조금 더 균형잡힌 식사를 위해 단백질 섭취를 늘려보세요.</p>
-                  <p>🥩 <strong>단백질:</strong> 현재 68% 달성으로 부족합니다. 닭가슴살, 생선, 콩류 등을 더 섭취해보세요.</p>
-                  <p>🍚 <strong>탄수화물:</strong> 97% 달성으로 매우 좋습니다! 현재 수준을 유지하세요.</p>
-                  <p>🥑 <strong>지방:</strong> 55% 달성으로 적절합니다. 건강한 지방 섭취를 위해 견과류나 아보카도를 추가해보세요.</p>
-                </div>
-              </div>
-
-              <div className="bg-gray-700 p-4 rounded-lg">
-                <h4 className="font-bold text-purple-400 mb-2">🎯 다음 주 목표</h4>
-                <ul className="text-sm space-y-1">
-                  <li>• 일일 단백질 섭취량 100g 이상 달성</li>
-                  <li>• 건강한 지방 섭취량 50g 이상 달성</li>
-                  <li>• 식사 기록 7일 연속 유지</li>
-                  <li>• 물 섭취량 하루 2L 이상</li>
-                </ul>
-              </div>
+            <div className="text-center text-gray-400 p-8">
+              <div className="text-4xl mb-4">📊</div>
+              <p>주간 리포트를 생성할 데이터가 부족합니다.</p>
+              <p className="text-sm mt-2">더 많은 식사 기록을 추가해보세요.</p>
             </div>
           )}
         </div>
