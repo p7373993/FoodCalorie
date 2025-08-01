@@ -68,21 +68,18 @@ class TestChallengeAPIView(APIView):
             challenge = Challenge.objects.get(id=challenge_id, is_active=True)
             nutrition_data = get_mock_nutrition_data(calories, target_date)
             
-            # 테스트용 사용자 생성 또는 가져오기
-            from django.contrib.auth.models import User
-            test_user, created = User.objects.get_or_create(
-                username='testuser',
-                defaults={
-                    'email': 'testuser@example.com',
-                    'first_name': 'Test',
-                    'last_name': 'User'
-                }
-            )
+            # 인증된 사용자만 챌린지 참여 가능
+            if not request.user.is_authenticated:
+                return Response({
+                    'success': False,
+                    'error': 'AUTHENTICATION_REQUIRED',
+                    'message': '로그인이 필요합니다.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
             
             # 참가자 생성 또는 가져오기
             participant, created = ChallengeParticipant.objects.get_or_create(
                 challenge=challenge,
-                user=test_user,
+                user=request.user,
                 defaults={'status': 'survived'}
             )
             
@@ -201,21 +198,18 @@ class TestChallengeProgressAPIView(APIView):
         try:
             challenge = Challenge.objects.get(id=challenge_id)
             
-            # 테스트용 사용자
-            from django.contrib.auth.models import User
-            test_user, created = User.objects.get_or_create(
-                username='testuser',
-                defaults={
-                    'email': 'testuser@example.com',
-                    'first_name': 'Test',
-                    'last_name': 'User'
-                }
-            )
+            # 인증된 사용자만 진행 상황 조회 가능
+            if not request.user.is_authenticated:
+                return Response({
+                    'success': False,
+                    'error': 'AUTHENTICATION_REQUIRED',
+                    'message': '로그인이 필요합니다.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
             
             # 참가자 정보
             participant, created = ChallengeParticipant.objects.get_or_create(
                 challenge=challenge,
-                user=test_user,
+                user=request.user,
                 defaults={'status': 'active'}
             )
             
@@ -295,16 +289,13 @@ class TestChallengeJoinAPIView(APIView):
         try:
             challenge = Challenge.objects.get(id=challenge_id, is_active=True)
             
-            # 테스트용 사용자 생성 또는 가져오기
-            from django.contrib.auth.models import User
-            test_user, created = User.objects.get_or_create(
-                username='testuser',
-                defaults={
-                    'email': 'testuser@example.com',
-                    'first_name': 'Test',
-                    'last_name': 'User'
-                }
-            )
+            # 인증된 사용자만 챌린지 참여 가능
+            if not request.user.is_authenticated:
+                return Response({
+                    'success': False,
+                    'error': 'AUTHENTICATION_REQUIRED',
+                    'message': '로그인이 필요합니다.'
+                }, status=status.HTTP_401_UNAUTHORIZED)
             
             if action == 'join':
                 # 챌린지 시작 여부 확인 (시작 후에는 참여 불가)
