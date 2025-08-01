@@ -43,3 +43,20 @@ class AICoachTip(models.Model):
 
     def __str__(self):
         return self.message[:50]
+
+
+class WeightRecord(models.Model):
+    """체중 기록 모델"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='weight_records')
+    weight = models.FloatField(help_text="체중 (kg)")
+    date = models.DateField(help_text="기록 날짜")
+    time = models.TimeField(auto_now_add=True, help_text="기록 시간")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-date', '-time']
+        unique_together = ['user', 'date']  # 하루에 하나의 체중 기록만 허용
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.date}: {self.weight}kg"

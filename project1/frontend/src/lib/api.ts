@@ -56,54 +56,27 @@ class ApiClient {
 
   // CSRF 토큰 가져오기
   private async getCSRFToken(): Promise<string> {
-    // 캐시된 토큰이 있으면 사용
     if (this.csrfToken) {
       return this.csrfToken;
     }
 
     try {
-      console.log('🔐 CSRF 토큰 요청 중...');
       const response = await fetch(`${this.baseURL}/api/auth/csrf-token/`, {
         method: 'GET',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       if (!response.ok) {
-        console.error(`CSRF 토큰 요청 실패: ${response.status}`);
         throw new Error(`Failed to get CSRF token: ${response.status}`);
       }
 
       const data = await response.json();
       this.csrfToken = data.csrf_token || '';
-      console.log('✅ CSRF 토큰 획득 성공:', this.csrfToken ? '토큰 있음' : '토큰 없음');
-      return this.csrfToken || '';
+      return this.csrfToken;
     } catch (error) {
-      console.error('❌ CSRF 토큰 획득 실패:', error);
-      // CSRF 토큰 획득 실패 시 쿠키에서 직접 읽기 시도
-      const cookieToken = this.getCSRFTokenFromCookie();
-      if (cookieToken) {
-        console.log('🍪 쿠키에서 CSRF 토큰 사용');
-        this.csrfToken = cookieToken;
-        return cookieToken;
-      }
+      console.error('Error getting CSRF token:', error);
       throw error;
     }
-  }
-
-  // 쿠키에서 CSRF 토큰 직접 읽기
-  private getCSRFTokenFromCookie(): string | null {
-    if (typeof document === 'undefined') return null;
-    
-    const name = 'csrftoken';
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) {
-      return parts.pop()?.split(';').shift() || null;
-    }
-    return null;
   }
 
   // CSRF 토큰 초기화 (로그아웃 시 사용)
@@ -114,11 +87,11 @@ class ApiClient {
   // 인증 관련 API
   async login(email: string, password: string): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request<ApiResponse<any>>('/api/auth/login/', {
+      const response = await this.request('/api/auth/login/', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      return response as ApiResponse<any>;
+      return response;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -127,23 +100,11 @@ class ApiClient {
 
   async logout(): Promise<ApiResponse<any>> {
     try {
-      // 로그아웃은 CSRF 토큰 없이 직접 요청
-      const url = `${this.baseURL}/api/auth/logout/`;
-      const response = await fetch(url, {
+      const response = await this.request('/api/auth/logout/', {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
-
-      if (!response.ok) {
-        throw new Error(`Logout failed: ${response.status}`);
-      }
-
-      const data = await response.json() as ApiResponse<any>;
       this.clearCSRFToken(); // 로그아웃 후 CSRF 토큰 초기화
-      return data as ApiResponse<any>;
+      return response;
     } catch (error) {
       console.error('Logout error:', error);
       this.clearCSRFToken(); // 오류가 발생해도 CSRF 토큰 초기화
@@ -158,11 +119,11 @@ class ApiClient {
     password_confirm: string;
   }): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request<ApiResponse<any>>('/api/auth/register/', {
+      const response = await this.request('/api/auth/register/', {
         method: 'POST',
         body: JSON.stringify(userData),
       });
-      return response as ApiResponse<any>;
+      return response;
     } catch (error) {
       console.error('Register error:', error);
       throw error;
@@ -171,12 +132,12 @@ class ApiClient {
 
   async checkAuthStatus(): Promise<ApiResponse<any>> {
     try {
-      const response = await this.request<any>('/api/auth/profile/');
+      const response = await this.request('/api/auth/profile/');
       return {
         success: true,
         data: response,
         message: 'Authentication status retrieved successfully'
-      } as ApiResponse<any>;
+      };
     } catch (error) {
       console.error('Auth status check error:', error);
       return {
@@ -221,25 +182,18 @@ class ApiClient {
     // POST, PUT, DELETE 요청에 CSRF 토큰 추가
     if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method?.toUpperCase() || 'GET')) {
       try {
-        console.log(`🔐 ${options.method} 요청에 CSRF 토큰 추가 중...`);
         const csrfToken = await this.getCSRFToken();
         config.headers = {
           ...config.headers,
           'X-CSRFToken': csrfToken,
         };
-        console.log(`✅ CSRF 토큰 헤더 추가 완료: ${csrfToken ? '토큰 있음' : '토큰 없음'}`);
       } catch (error) {
-        console.error('❌ CSRF 토큰 획득 실패:', error);
+        console.error('Failed to get CSRF token for request:', error);
         // CSRF 토큰을 가져올 수 없어도 요청을 계속 진행
       }
     }
 
-    console.log(`🌐 API 요청: ${options.method || 'GET'} ${url}`);
-    console.log('📋 요청 헤더:', config.headers);
-    
     const response = await fetch(url, config);
-    
-    console.log(`📡 응답 상태: ${response.status} ${response.statusText}`);
 
     // 401 또는 403 응답 시 CSRF 토큰 초기화
     if (response.status === 401 || response.status === 403) {
@@ -391,6 +345,11 @@ class ApiClient {
     });
   }
 
+  // 대시보드 관련 API
+  async getDashboardData() {
+    return this.request('/api/dashboard/data/');
+  }
+
   // 게임화 관련 API (임시 비활성화 - 404 에러 방지)
   async getGamificationProfile() {
     // 임시로 빈 데이터 반환
@@ -434,19 +393,8 @@ class ApiClient {
   // 챌린지 방 관리
   async getChallengeRooms(): Promise<PaginatedResponse<ChallengeRoom>> {
     try {
-      // 챌린지 방 목록은 인증 없이 접근
-      const url = `${this.baseURL}/api/challenges/rooms/`;
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return response.json();
+      const response = await this.request('/api/challenges/rooms/');
+      return response;
     } catch (error) {
       console.error('Error fetching challenge rooms:', error);
       throw error;
@@ -455,19 +403,8 @@ class ApiClient {
 
   async getChallengeRoom(roomId: number): Promise<ChallengeRoom> {
     try {
-      // 챌린지 방 상세 정보도 인증 없이 접근
-      const url = `${this.baseURL}/api/challenges/rooms/${roomId}/`;
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return response.json();
+      const response = await this.request(`/api/challenges/rooms/${roomId}/`);
+      return response;
     } catch (error) {
       console.error('Error fetching challenge room:', error);
       throw error;
@@ -477,36 +414,13 @@ class ApiClient {
   // 챌린지 참여 관리
   async joinChallengeRoom(joinData: ChallengeJoinRequest): Promise<ApiResponse<UserChallenge>> {
     try {
-      // 챌린지 참여도 인증 없이 접근 (테스트용)
-      const url = `${this.baseURL}/api/challenges/join/`;
-      
-      // 디버깅을 위한 로그
-      console.log('Joining challenge with data:', joinData);
-      console.log('Request URL:', url);
-      
-      const response = await fetch(url, {
+      const response = await this.request('/api/challenges/join/', {
         method: 'POST',
-        credentials: 'include',  // 세션 쿠키 포함
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(joinData),
       });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('Success response:', data);
       return {
         success: true,
-        data: data,
+        data: response,
         message: '챌린지 참여가 완료되었습니다.'
       };
     } catch (error) {
@@ -524,32 +438,25 @@ class ApiClient {
     total_active_count: number;
   }>> {
     try {
-      // 내 챌린지 정보 조회 (세션 기반 인증)
-      const url = `${this.baseURL}/api/challenges/my/`;
-      const response = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',  // 세션 쿠키 포함
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await this.request('/api/challenges/my/');
+      // 백엔드 응답 구조에 맞게 데이터 추출
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          message: response.message
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || '내 챌린지를 불러올 수 없습니다.'
+        };
       }
-      
-      return response.json();
     } catch (error) {
-      console.error('Error fetching my challenges:', error);
-      // 오류 발생 시 빈 데이터 반환
+      console.error('My challenges API error:', error);
       return {
-        success: true,
-        data: {
-          active_challenges: [],
-          has_active_challenge: false,
-          total_active_count: 0
-        },
-        message: '챌린지 정보를 불러올 수 없습니다.'
+        success: false,
+        error: error instanceof Error ? error.message : '내 챌린지 조회 중 오류가 발생했습니다.'
       };
     }
   }
@@ -573,11 +480,20 @@ class ApiClient {
           reason: reason || '사용자 요청'
         }),
       });
-      return {
-        success: true,
-        data: response,
-        message: '챌린지를 포기했습니다.'
-      };
+      
+      // 백엔드 응답 구조에 맞게 처리
+      if (response.success) {
+        return {
+          success: true,
+          data: response.data,
+          message: response.message || '챌린지를 포기했습니다.'
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || '챌린지 포기에 실패했습니다.'
+        };
+      }
     } catch (error) {
       console.error('Error leaving challenge:', error);
       return {
@@ -619,40 +535,26 @@ class ApiClient {
     total_participants: number;
   }>> {
     try {
-      console.log(`Fetching leaderboard for room ${roomId} with limit ${limit}`);
-      const url = `/api/challenges/leaderboard/${roomId}/?limit=${limit}`;
-      console.log(`Request URL: ${this.baseURL}${url}`);
-      
-      const response = await this.request<ApiResponse<{
-        room_id: number;
-        room_name: string;
-        leaderboard: LeaderboardEntry[];
-        my_rank: number | null;
-        total_participants: number;
-      }>>(url);
-      console.log('Leaderboard response:', response);
-      
-      // 백엔드 응답이 이미 올바른 구조를 가지고 있으므로 그대로 반환
-      return response as ApiResponse<{
-        room_id: number;
-        room_name: string;
-        leaderboard: LeaderboardEntry[];
-        my_rank: number | null;
-        total_participants: number;
-      }>;
+      const response = await this.request(`/api/challenges/leaderboard/${roomId}/?limit=${limit}`);
+      // 백엔드 응답 구조에 맞게 데이터 추출
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          message: response.message
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || '리더보드를 불러올 수 없습니다.'
+        };
+      }
     } catch (error) {
-      console.error('Error in getLeaderboard:', error);
-      // 오류 발생 시 ApiResponse 형태로 반환
+      console.error('Leaderboard API error:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : '리더보드를 불러오는 중 오류가 발생했습니다.'
-      } as ApiResponse<{
-        room_id: number;
-        room_name: string;
-        leaderboard: LeaderboardEntry[];
-        my_rank: number | null;
-        total_participants: number;
-      }>;
+        error: error instanceof Error ? error.message : '리더보드 조회 중 오류가 발생했습니다.'
+      };
     }
   }
 
@@ -707,8 +609,12 @@ class ApiClient {
   }
 
   // 캘린더 관련 API
-  async getCalendarData() {
-    return this.request('/api/calendar/data/');
+  async getCalendarData(year?: number, month?: number) {
+    let url = '/api/calendar/data/';
+    if (year && month) {
+      url += `?year=${year}&month=${month}`;
+    }
+    return this.request(url);
   }
 
   async updateCalendarProfile(profileData: {

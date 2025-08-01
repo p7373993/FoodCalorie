@@ -30,7 +30,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
   useEffect(() => {
     loadLeaderboard();
-    
+
     if (autoRefresh) {
       const interval = setInterval(() => {
         refreshLeaderboard();
@@ -42,40 +42,66 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
 
   const loadLeaderboard = async () => {
     try {
-      console.log(`Loading leaderboard for room ${roomId}`);
       setLoading(true);
       setError(null);
 
       const response = await apiClient.getLeaderboard(roomId);
-      console.log('Leaderboard API response:', response);
-      
-      // 응답 구조 확인 및 처리
-      if (response && response.data && response.data.leaderboard) {
-        // 백엔드 API 응답 구조에 맞게 처리
-        const leaderboardData = response.data.leaderboard || [];
-        console.log('Raw leaderboard data:', leaderboardData);
-        
-        // 프론트엔드에서 필요한 필드명으로 매핑
-        const mappedData = leaderboardData.map((entry: any) => ({
-          ...entry,
-          current_streak: entry.current_streak,
-          total_success: entry.total_success_days,
-          start_date: entry.challenge_start_date,
-          is_me: currentUserId ? entry.user_id === currentUserId : false
-        }));
 
-        console.log('Mapped leaderboard data:', mappedData);
-        setLeaderboard(mappedData);
-        setMyRank(response.data.my_rank || null);
-        setTotalParticipants(response.data.total_participants || 0);
-        setTotalPages(Math.ceil(mappedData.length / itemsPerPage));
-        console.log('Leaderboard state updated successfully');
-      } else if (response && response.success === false) {
-        console.error('API response not successful:', response);
-        setError(response.message || '리더보드를 불러올 수 없습니다.');
+      if (response.success && response.data) {
+        // 백엔드 응답 구조에 맞게 처리
+        const leaderboardData = response.data.leaderboard || [];
+
+        if (Array.isArray(leaderboardData)) {
+          // 리더보드 데이터 처리
+          const rankedData = leaderboardData.map((entry, index) => ({
+            ...entry,
+            rank: entry.rank || (index + 1),
+            is_me: currentUserId ? entry.user_id === currentUserId : false
+          }));
+
+          setLeaderboard(rankedData);
+          setTotalParticipants(response.data.total_participants || rankedData.length);
+          setTotalPages(Math.ceil(rankedData.length / itemsPerPage));
+
+          // 내 순위 설정
+          setMyRank(response.data.my_rank || null);
+        } else if (Array.isArray(response.data)) {
+          // 배열 형태의 응답 처리 (레거시)
+          const sortedData = response.data.sort((a, b) => {
+            // 6.1: 연속 성공 일수 기준 내림차순
+            if (a.current_streak !== b.current_streak) {
+              return b.current_streak - a.current_streak;
+            }
+            // 6.2: 총 성공 횟수 기준 내림차순
+            if (a.total_success !== b.total_success) {
+              return b.total_success - a.total_success;
+            }
+            // 6.3: 시작 날짜 기준 오름차순
+            return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+          });
+
+          // 순위 부여
+          const rankedData = sortedData.map((entry, index) => ({
+            ...entry,
+            rank: index + 1,
+            is_me: currentUserId ? entry.user_id === currentUserId : false
+          }));
+
+          setLeaderboard(rankedData);
+          setTotalParticipants(rankedData.length);
+          setTotalPages(Math.ceil(rankedData.length / itemsPerPage));
+
+          // 내 순위 찾기
+          const myEntry = rankedData.find(entry => entry.is_me);
+          setMyRank(myEntry?.rank || null);
+        } else {
+          // 객체 형태의 응답 처리 (페이지네이션 포함)
+          setLeaderboard(response.data.leaderboard || []);
+          setMyRank(response.data.my_rank || null);
+          setTotalParticipants(response.data.total_participants || 0);
+        }
       } else {
-        console.error('Unexpected response structure:', response);
-        setError('리더보드 데이터 형식이 올바르지 않습니다.');
+        setError(response.message || '리더보드를 불러올 수 없습니다.');
       }
     } catch (err) {
       console.error('Error loading leaderboard:', err);
@@ -170,14 +196,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
             실시간 순위 • 총 {totalParticipants}명 참여
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           {/* 실시간 업데이트 상태 */}
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-yellow-400 animate-pulse' : 'bg-[var(--point-green)]'}`}></div>
             {refreshing ? '업데이트 중...' : '실시간 연결'}
           </div>
-          
+
           <button
             onClick={refreshLeaderboard}
             className="bg-gray-700 text-white p-2 rounded-lg hover:bg-gray-600 transition-colors"
@@ -221,7 +247,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         <div className="p-6 border-b border-gray-600">
           <h3 className="text-xl font-bold text-white">순위표</h3>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-800/50">
@@ -245,13 +271,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                 currentPageData.map((entry) => {
                   const badge = getRankBadge(entry.rank);
                   const isMe = entry.is_me;
-                  
+
                   return (
                     <tr
                       key={entry.user_id}
-                      className={`hover:bg-gray-700/30 transition-colors ${
-                        isMe ? 'bg-[var(--point-green)]/10 border-l-4 border-[var(--point-green)]' : ''
-                      }`}
+                      className={`hover:bg-gray-700/30 transition-colors ${isMe ? 'bg-[var(--point-green)]/10 border-l-4 border-[var(--point-green)]' : ''
+                        }`}
                     >
                       {/* 순위 */}
                       <td className="px-6 py-4">
@@ -267,7 +292,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                           )}
                         </div>
                       </td>
-                      
+
                       {/* 사용자 */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -286,7 +311,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                           </div>
                         </div>
                       </td>
-                      
+
                       {/* 연속 성공 */}
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -296,14 +321,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                           </span>
                         </div>
                       </td>
-                      
+
                       {/* 총 성공 */}
                       <td className="px-6 py-4 text-center">
                         <span className="text-lg font-bold text-[var(--point-green)]">
                           {entry.total_success}일
                         </span>
                       </td>
-                      
+
                       {/* 참여 기간 */}
                       <td className="px-6 py-4 text-center">
                         <span className="text-sm text-gray-300">
@@ -312,20 +337,19 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                           )}일째
                         </span>
                       </td>
-                      
+
                       {/* 상태 */}
                       <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          entry.current_streak >= 7
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${entry.current_streak >= 7
                             ? 'bg-[var(--point-green)]/20 text-[var(--point-green)]'
                             : entry.current_streak >= 3
-                            ? 'bg-yellow-500/20 text-yellow-400'
-                            : entry.current_streak >= 1
-                            ? 'bg-blue-500/20 text-blue-400'
-                            : 'bg-gray-600/20 text-gray-400'
-                        }`}>
-                          {entry.current_streak >= 7 ? '🔥 연승' : 
-                           entry.current_streak >= 1 ? '💪 활발' : '😴 휴식'}
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : entry.current_streak >= 1
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-gray-600/20 text-gray-400'
+                          }`}>
+                          {entry.current_streak >= 7 ? '🔥 연승' :
+                            entry.current_streak >= 1 ? '💪 활발' : '😴 휴식'}
                         </span>
                       </td>
                     </tr>
@@ -343,7 +367,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
               <div className="text-sm text-gray-400">
                 {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalParticipants)} / {totalParticipants}명
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
@@ -352,7 +376,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                 >
                   이전
                 </button>
-                
+
                 {/* 페이지 번호들 */}
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
@@ -366,23 +390,22 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
                     } else {
                       pageNum = currentPage - 2 + i;
                     }
-                    
+
                     return (
                       <button
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
-                        className={`px-3 py-1 rounded transition-colors ${
-                          pageNum === currentPage
+                        className={`px-3 py-1 rounded transition-colors ${pageNum === currentPage
                             ? 'bg-[var(--point-green)] text-black font-bold'
                             : 'bg-gray-700 text-white hover:bg-gray-600'
-                        }`}
+                          }`}
                       >
                         {pageNum}
                       </button>
                     );
                   })}
                 </div>
-                
+
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}

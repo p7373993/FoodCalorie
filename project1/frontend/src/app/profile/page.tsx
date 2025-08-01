@@ -26,9 +26,35 @@ export default function ProfilePage() {
     }
 
     try {
-      setUser(JSON.parse(userData));
+      const parsedUser = JSON.parse(userData);
+      // 이메일을 test@example.com으로 설정
+      parsedUser.email = 'test@example.com';
+      setUser(parsedUser);
+      
       if (profileData) {
-        setProfile(JSON.parse(profileData));
+        const parsedProfile = JSON.parse(profileData);
+        // 신체정보를 초기 상태로 설정
+        parsedProfile.height = null;
+        parsedProfile.weight = null;
+        parsedProfile.age = null;
+        parsedProfile.gender = null;
+        setProfile(parsedProfile);
+        // localStorage 업데이트
+        localStorage.setItem('profile', JSON.stringify(parsedProfile));
+      } else {
+        // 기본 프로필 데이터 생성
+        const defaultProfile = {
+          nickname: 'test_user',
+          email: 'test@example.com',
+          height: null,
+          weight: null,
+          age: null,
+          gender: null,
+          profile_image: null,
+          updated_at: new Date().toISOString()
+        };
+        setProfile(defaultProfile);
+        localStorage.setItem('profile', JSON.stringify(defaultProfile));
       }
     } catch (error) {
       console.error('Failed to parse user data:', error);

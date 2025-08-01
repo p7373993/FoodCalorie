@@ -180,31 +180,96 @@ function ResultPageContent() {
     setAiCoaching('');
 
     try {
-      const response = await fetch('/api/ai/coaching/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'detailed_meal_analysis',
-          meal_data: {
-            food_name: analysisResult?.food_name || '분석된 음식',
-            calories: analysisResult?.total_calories || 0,
-            protein: analysisResult?.total_protein || 0,
-            carbs: analysisResult?.total_carbs || 0,
-            fat: analysisResult?.total_fat || 0,
-            mass: analysisResult?.total_mass || 0,
-            grade: analysisResult?.overall_grade || 'B',
-            confidence: analysisResult?.confidence_score || 0.5,
-            food_details: analysisResult?.food_details || [],
-            needs_manual_input: analysisResult?.needs_manual_input || false
+      console.log('AI 코칭 요청 시작...');
+
+      // 인증 확인 제거 - 직접 API 호출로 확인
+
+      // CSRF 토큰 가져오기
+      const getCsrfToken = () => {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+          const [name, value] = cookie.trim().split('=');
+          if (name === 'csrftoken') {
+            return value;
           }
-        })
+        }
+        return null;
+      };
+
+      const csrfToken = getCsrfToken();
+      console.log('CSRF 토큰:', csrfToken);
+
+      const requestData = {
+        type: 'detailed_meal_analysis',
+        meal_data: {
+          food_name: analysisResult?.food_name || '분석된 음식',
+          calories: analysisResult?.total_calories || 0,
+          protein: analysisResult?.total_protein || 0,
+          carbs: analysisResult?.total_carbs || 0,
+          fat: analysisResult?.total_fat || 0,
+          mass: analysisResult?.total_mass || 0,
+          grade: analysisResult?.overall_grade || 'B',
+          confidence: analysisResult?.confidence_score || 0.5,
+          food_details: analysisResult?.food_details || [],
+          needs_manual_input: analysisResult?.needs_manual_input || false
+        }
+      };
+      console.log('요청 데이터:', requestData);
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      // CSRF 토큰이 있으면 헤더에 추가
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
+      const response = await fetch('http://localhost:8000/api/ai/coaching/', {
+        method: 'POST',
+        headers,
+        credentials: 'include', // 세션 쿠키 포함
+        body: JSON.stringify(requestData)
       });
 
-      const result = await response.json();
-      if (result.coaching) {
+      console.log('응답 상태:', response.status);
+      console.log('응답 헤더:', response.headers);
+
+      const responseText = await response.text();
+      console.log('응답 텍스트:', responseText);
+
+      // HTML 응답인지 확인 (로그인 페이지나 404 페이지)
+      if (responseText.includes('<!DOCTYPE html>') || responseText.includes('<html')) {
+        console.error('HTML 응답 받음 - 인증 문제 또는 404');
+        if (response.status === 403 || response.status === 401) {
+          throw new Error('로그인이 필요합니다. 로그인 후 다시 시도해주세요.');
+        } else if (response.status === 404) {
+          throw new Error('API 엔드포인트를 찾을 수 없습니다.');
+        } else {
+          throw new Error('서버에서 예상치 못한 HTML 응답을 받았습니다.');
+        }
+      }
+
+      if (!response.ok) {
+        console.error('API 오류 응답:', responseText);
+        throw new Error(`HTTP ${response.status}: ${responseText}`);
+      }
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError);
+        console.error('응답 내용:', responseText);
+        throw new Error('서버에서 올바르지 않은 JSON 응답을 받았습니다.');
+      }
+      console.log('API 응답 결과:', result);
+
+      if (result.success && result.coaching) {
         setAiCoaching(result.coaching);
       } else {
-        setAiCoaching("AI 코칭을 받는데 실패했습니다. 잠시 후 다시 시도해주세요.");
+        console.error('API 응답에서 코칭 데이터 없음:', result);
+        setAiCoaching(result.message || "AI 코칭을 받는데 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
     } catch (error) {
       console.error("AI Coaching Error:", error);
@@ -347,8 +412,8 @@ function ResultPageContent() {
                     </span>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${analysisResult?.overall_grade === 'A' ? 'bg-green-500' :
-                      analysisResult?.overall_grade === 'B' ? 'bg-yellow-500' :
-                        analysisResult?.overall_grade === 'C' ? 'bg-orange-500' : 'bg-red-500'
+                    analysisResult?.overall_grade === 'B' ? 'bg-yellow-500' :
+                      analysisResult?.overall_grade === 'C' ? 'bg-orange-500' : 'bg-red-500'
                     }`}>
                     등급 {analysisResult?.overall_grade || 'B'}
                   </span>
@@ -377,8 +442,8 @@ function ResultPageContent() {
                       key={meal.key}
                       onClick={() => setSelectedMealType(meal.key as any)}
                       className={`p-4 rounded-xl border-2 transition-all duration-200 ${selectedMealType === meal.key
-                          ? 'border-[var(--point-green)] bg-[var(--point-green)]/10 text-[var(--point-green)]'
-                          : 'border-gray-600 bg-gray-800/30 text-gray-300 hover:border-gray-500 hover:bg-gray-800/50'
+                        ? 'border-[var(--point-green)] bg-[var(--point-green)]/10 text-[var(--point-green)]'
+                        : 'border-gray-600 bg-gray-800/30 text-gray-300 hover:border-gray-500 hover:bg-gray-800/50'
                         }`}
                     >
                       <div className="text-2xl mb-2">{meal.icon}</div>
@@ -520,10 +585,10 @@ function ResultPageContent() {
                             </span>
                           ) : (
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${food.grade === 'A' ? 'bg-green-500' :
-                                food.grade === 'B' ? 'bg-yellow-500' :
-                                  food.grade === 'C' ? 'bg-orange-500' :
-                                    food.grade === 'D' ? 'bg-red-500' :
-                                      food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
+                              food.grade === 'B' ? 'bg-yellow-500' :
+                                food.grade === 'C' ? 'bg-orange-500' :
+                                  food.grade === 'D' ? 'bg-red-500' :
+                                    food.grade === 'E' ? 'bg-red-700' : 'bg-gray-500'
                               }`}>
                               {food.grade === 'UNKNOWN' ? '미확인' : food.grade}
                             </span>
