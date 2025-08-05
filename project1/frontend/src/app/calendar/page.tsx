@@ -189,6 +189,29 @@ export default function CalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [showGoalModal, setShowGoalModal] = useState(false);
 
+  // 식사 기록 삭제 함수
+  const handleDeleteMeal = async (mealId: number, foodName: string) => {
+    if (!confirm(`"${foodName}" 식사 기록을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      console.log('🗑️ 식사 기록 삭제 시작:', mealId);
+      
+      await apiClient.deleteMeal(mealId);
+      
+      console.log('✅ 식사 기록 삭제 성공');
+      alert('식사 기록이 삭제되었습니다.');
+
+      // 캘린더 데이터 새로고침
+      await loadCalendarData();
+
+    } catch (error) {
+      console.error('❌ 식사 기록 삭제 실패:', error);
+      alert('식사 기록 삭제에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
   // 모든 계산된 값들을 useMemo로 처리
   const daysInMonth = useMemo(
     () =>
@@ -529,10 +552,17 @@ export default function CalendarPage() {
                   );
                   // 🔧 시간대 문제 해결: 로컬 시간 기준으로 날짜 문자열 생성
                   const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                  const isToday =
-                    new Date().toISOString().split("T")[0] === dateKey;
-                  const isSelected = selectedDate &&
-                    selectedDate.toISOString().split("T")[0] === dateKey;
+                  
+                  // 🔧 시간대 문제 해결: 로컬 시간 기준으로 비교
+                  const today = new Date();
+                  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  const isToday = todayKey === dateKey;
+                  
+                  // 🔧 선택된 날짜도 로컬 시간 기준으로 비교
+                  const selectedDateKey = selectedDate ? 
+                    `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` : 
+                    null;
+                  const isSelected = selectedDateKey === dateKey;
                   const logInfo = dailyLogInfo.get(dateKey);
 
                   // 🔍 8월 1일 디버깅
@@ -725,6 +755,19 @@ export default function CalendarPage() {
                             <div className="mt-1 text-xs text-gray-400 italic">
                               💬 {meal.ai_comment}
                             </div>
+                          </div>
+                          
+                          {/* 삭제 버튼 */}
+                          <div className="flex items-center justify-center p-2">
+                            <button
+                              onClick={() => handleDeleteMeal(meal.id, meal.foodName)}
+                              className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                              title="식사 기록 삭제"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       ))}

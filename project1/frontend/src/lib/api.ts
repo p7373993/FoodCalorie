@@ -325,6 +325,11 @@ class ApiClient {
     });
   }
 
+  // 별칭 함수 (호환성을 위해)
+  async deleteMealLog(mealId: number) {
+    return this.deleteMeal(mealId);
+  }
+
   async getMeal(mealId: number) {
     return this.request(`/api/logs/${mealId}/`);
   }

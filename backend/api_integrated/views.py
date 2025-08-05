@@ -128,6 +128,26 @@ class MealLogViewSet(viewsets.ModelViewSet):
             print(f"시리얼라이저 에러: {serializer.errors if hasattr(serializer, 'errors') else 'N/A'}")
             raise
 
+    def perform_destroy(self, instance):
+        """MealLog 삭제 시 로그 출력 및 권한 확인"""
+        print(f"=== MealLog 삭제 시도 ===")
+        print(f"요청 사용자: {self.request.user}")
+        print(f"삭제할 MealLog: {instance.id} - {instance.foodName}")
+        print(f"MealLog 소유자: {instance.user}")
+        
+        # 소유자 확인
+        if instance.user != self.request.user:
+            print(f"❌ 권한 없음: {self.request.user}가 {instance.user}의 기록을 삭제하려 함")
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("자신의 식사 기록만 삭제할 수 있습니다.")
+        
+        try:
+            super().perform_destroy(instance)
+            print(f"✅ MealLog 삭제 성공: {instance.id}")
+        except Exception as e:
+            print(f"❌ MealLog 삭제 실패: {e}")
+            raise
+
 class AICoachTipViewSet(viewsets.ModelViewSet):
     queryset = AICoachTip.objects.all()
     serializer_class = AICoachTipSerializer
