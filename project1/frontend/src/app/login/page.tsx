@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { KakaoLoginButton } from '@/components/auth/KakaoLoginButton';
 import { LoginForm } from '@/components/auth/LoginForm';
@@ -8,8 +8,7 @@ import { HelperLinks } from '@/components/auth/HelperLinks';
 import AuthLoadingScreen from '@/components/ui/AuthLoadingScreen';
 import { useRequireGuest } from '@/hooks/useAuthGuard';
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginContent() {
   const searchParams = useSearchParams();
   const { canRender, isLoading } = useRequireGuest('/upload');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
@@ -74,5 +73,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<AuthLoadingScreen message="로그인 페이지를 불러오고 있습니다..." />}>
+      <LoginContent />
+    </Suspense>
   );
 }

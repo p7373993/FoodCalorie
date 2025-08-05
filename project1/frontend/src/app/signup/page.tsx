@@ -66,7 +66,6 @@ export default function SignUpPage() {
       });
 
       if (response.ok) {
-        const result = await response.json();
         // 회원가입 성공 시 로그인 페이지로 이동
         router.push('/login?registered=true');
       } else {
@@ -89,7 +88,7 @@ export default function SignUpPage() {
           setError(errorData.message || '회원가입에 실패했습니다.');
         }
       }
-    } catch (error) {
+    } catch {
       setError('네트워크 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);

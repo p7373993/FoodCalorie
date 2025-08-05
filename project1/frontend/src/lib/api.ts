@@ -85,9 +85,9 @@ class ApiClient {
   }
 
   // 인증 관련 API
-  async login(email: string, password: string): Promise<ApiResponse<any>> {
+  async login(email: string, password: string): Promise<ApiResponse<AuthResponse>> {
     try {
-      const response = await this.request('/api/auth/login/', {
+      const response = await this.request<ApiResponse<AuthResponse>>('/api/auth/login/', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
@@ -98,9 +98,9 @@ class ApiClient {
     }
   }
 
-  async logout(): Promise<ApiResponse<any>> {
+  async logout(): Promise<ApiResponse<{ message: string }>> {
     try {
-      const response = await this.request('/api/auth/logout/', {
+      const response = await this.request<ApiResponse<{ message: string }>>('/api/auth/logout/', {
         method: 'POST',
       });
       this.clearCSRFToken(); // 로그아웃 후 CSRF 토큰 초기화
@@ -117,9 +117,9 @@ class ApiClient {
     email: string;
     password: string;
     password_confirm: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<AuthResponse>> {
     try {
-      const response = await this.request('/api/auth/register/', {
+      const response = await this.request<ApiResponse<AuthResponse>>('/api/auth/register/', {
         method: 'POST',
         body: JSON.stringify(userData),
       });
@@ -130,9 +130,9 @@ class ApiClient {
     }
   }
 
-  async checkAuthStatus(): Promise<ApiResponse<any>> {
+  async checkAuthStatus(): Promise<ApiResponse<AuthResponse>> {
     try {
-      const response = await this.request('/api/auth/profile/');
+      const response = await this.request<AuthResponse>('/api/auth/profile/');
       return {
         success: true,
         data: response,
@@ -148,9 +148,9 @@ class ApiClient {
     }
   }
 
-  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<any>> {
+  async changePassword(currentPassword: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      const response = await this.request('/api/auth/change-password/', {
+      const response = await this.request<ApiResponse<{ message: string }>>('/api/auth/change-password/', {
         method: 'POST',
         body: JSON.stringify({
           current_password: currentPassword,
@@ -438,7 +438,11 @@ class ApiClient {
     total_active_count: number;
   }>> {
     try {
-      const response = await this.request('/api/challenges/my/');
+      const response = await this.request<ApiResponse<{
+        active_challenges: UserChallenge[];
+        has_active_challenge: boolean;
+        total_active_count: number;
+      }>>('/api/challenges/my/');
       // 백엔드 응답 구조에 맞게 데이터 추출
       if (response.success && response.data) {
         return {
@@ -471,9 +475,9 @@ class ApiClient {
     });
   }
 
-  async leaveChallenge(challengeId: number, reason?: string): Promise<ApiResponse<any>> {
+  async leaveChallenge(challengeId: number, reason?: string): Promise<ApiResponse<{ message: string }>> {
     try {
-      const response = await this.request('/api/challenges/leave/', {
+      const response = await this.request<ApiResponse<{ message: string }>>('/api/challenges/leave/', {
         method: 'POST',
         body: JSON.stringify({
           challenge_id: challengeId,
@@ -535,7 +539,13 @@ class ApiClient {
     total_participants: number;
   }>> {
     try {
-      const response = await this.request(`/api/challenges/leaderboard/${roomId}/?limit=${limit}`);
+      const response = await this.request<ApiResponse<{
+        room_id: number;
+        room_name: string;
+        leaderboard: LeaderboardEntry[];
+        my_rank: number | null;
+        total_participants: number;
+      }>>(`/api/challenges/leaderboard/${roomId}/?limit=${limit}`);
       // 백엔드 응답 구조에 맞게 데이터 추출
       if (response.success && response.data) {
         return {

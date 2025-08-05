@@ -33,7 +33,7 @@ export type GamificationData = {
 export type ActionType = 'record_meal' | 'record_weight' | 'create_challenge' | 'join_challenge';
 
 // API Response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -41,7 +41,7 @@ export interface ApiResponse<T = any> {
 }
 
 // Django REST Framework 페이지네이션 응답
-export interface PaginatedResponse<T = any> {
+export interface PaginatedResponse<T = unknown> {
   count: number;
   next: string | null;
   previous: string | null;

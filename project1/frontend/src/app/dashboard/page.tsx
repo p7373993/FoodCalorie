@@ -31,24 +31,52 @@ interface MealEntry {
   time: string;
 }
 
+interface DashboardData {
+  weekly_calories: {
+    days: Array<{
+      day: string;
+      date: string;
+      total_kcal: number | null;
+      kcal: number | null;
+      is_today: boolean;
+      has_data: boolean;
+      meal_count: number;
+    }>;
+  };
+  weight_data: {
+    weekly_weights: Array<{
+      day: string;
+      date: string;
+      weight: number | null;
+      has_record: boolean;
+      has_approximate: boolean;
+      is_today: boolean;
+      record_date: string | null;
+    }>;
+    latest_weight: number | null;
+    weight_change: number | null;
+    weight_trend: string;
+  };
+  recent_meals: MealEntry[];
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { canRender, isLoading } = useRequireAuth();
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
+  const [, setWeightHistory] = useState<WeightEntry[]>([]);
 
   const [recentMeals, setRecentMeals] = useState<MealEntry[]>([]);
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [weeklyCalories, setWeeklyCalories] = useState<any[]>([]);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [weeklyCalories, setWeeklyCalories] = useState<DashboardData['weekly_calories']['days']>([]);
   const [loading, setLoading] = useState(true);
 
-  // 인증 확인 중이면 로딩 화면 표시
-  if (isLoading || !canRender) {
-    return <AuthLoadingScreen message="대시보드를 불러오고 있습니다..." />;
-  }
-
   useEffect(() => {
+    // 인증 확인 중이면 데이터 로드하지 않음
+    if (isLoading || !canRender) {
+      return;
+    }
     // 실제 대시보드 데이터 로드
     const loadDashboardData = async () => {
       try {
@@ -58,7 +86,7 @@ export default function DashboardPage() {
         // 대시보드 데이터 가져오기
         const dashboardResponse = await apiClient.getDashboardData();
         console.log('📊 대시보드 데이터:', dashboardResponse);
-        setDashboardData(dashboardResponse);
+        setDashboardData(dashboardResponse as DashboardData);
 
         // 주간 칼로리 데이터 설정
         if (dashboardResponse.weekly_calories && dashboardResponse.weekly_calories.days) {
@@ -76,7 +104,11 @@ export default function DashboardPage() {
         const weightResponse = await apiClient.getWeightEntries();
         console.log('⚖️ 체중 데이터:', weightResponse);
         if (weightResponse.success && weightResponse.records) {
-          const formattedWeights = weightResponse.records.map((record: any) => ({
+          const formattedWeights = weightResponse.records.map((record: { 
+            id: number; 
+            weight: number; 
+            created_at: string; 
+          }) => ({
             id: record.id.toString(),
             weight: record.weight,
             timestamp: {
@@ -87,8 +119,6 @@ export default function DashboardPage() {
           setWeightHistory(formattedWeights);
         }
 
-
-
       } catch (error) {
         console.error('❌ 대시보드 데이터 로드 실패:', error);
       } finally {
@@ -97,7 +127,12 @@ export default function DashboardPage() {
     };
 
     loadDashboardData();
-  }, []);
+  }, [isLoading, canRender]);
+
+  // 인증 확인 중이면 로딩 화면 표시
+  if (isLoading || !canRender) {
+    return <AuthLoadingScreen message="대시보드를 불러오고 있습니다..." />;
+  }
 
   const handleSaveWeight = async (weight: string) => {
     if (!weight) return;
@@ -342,8 +377,8 @@ export default function DashboardPage() {
                       <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-gray-500 w-24">
                         {(() => {
                           const recordedWeights = dashboardData?.weight_data?.weekly_weights
-                            ?.filter((d: any) => d.has_record && d.weight)
-                            ?.map((d: any) => d.weight) || [];
+                            ?.filter((d) => d.has_record && d.weight)
+                            ?.map((d) => d.weight) || [];
 
                           if (recordedWeights.length === 0) return null;
 
@@ -393,7 +428,7 @@ export default function DashboardPage() {
                               const range = maxWeight - minWeight;
 
                               return dashboardData?.weight_data?.weekly_weights
-                                ?.map((day: any, index: number) => {
+                                ?.map((day, index: number) => {
                                   if (!day.has_record && !day.has_approximate || !day.weight) return null;
 
                                   const x = (index / 6) * 83.33 + 8.33; // 7일을 83.33%로, 8.33% 여백
@@ -416,12 +451,12 @@ export default function DashboardPage() {
                           </defs>
 
                           {/* 데이터 포인트 */}
-                          {dashboardData?.weight_data?.weekly_weights?.map((day: any, index: number) => {
+                          {dashboardData?.weight_data?.weekly_weights?.map((day, index: number) => {
                             if (!day.has_record && !day.has_approximate || !day.weight) return null;
 
                             const recordedWeights = dashboardData?.weight_data?.weekly_weights
-                              ?.filter((d: any) => d.has_record && d.weight)
-                              ?.map((d: any) => d.weight) || [];
+                              ?.filter((d) => d.has_record && d.weight)
+                              ?.map((d) => d.weight) || [];
 
                             if (recordedWeights.length === 0) return null;
 
@@ -450,7 +485,7 @@ export default function DashboardPage() {
 
                         {/* X축 라벨 */}
                         <div className="flex justify-between mt-6 space-x-1">
-                          {dashboardData?.weight_data?.weekly_weights?.map((day: any, index: number) => (
+                          {dashboardData?.weight_data?.weekly_weights?.map((day, index: number) => (
                             <div key={index} className="text-center flex-1 min-w-0">
                               <div className={`text-xs font-medium ${day.is_today ? 'text-yellow-400' : 'text-gray-300'}`}>
                                 {day.day}
