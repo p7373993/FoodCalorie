@@ -145,6 +145,52 @@ export default function DashboardPage() {
     router.push('/calendar');
   };
 
+  const handleDeleteMeal = async (mealId: number, foodName: string) => {
+    if (!confirm(`"${foodName}" 식사 기록을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      console.log('🗑️ 식사 기록 삭제 시작:', mealId);
+      
+      const response = await apiClient.deleteMeal(mealId);
+      
+      console.log('✅ 식사 기록 삭제 성공:', response);
+      
+      // 성공 메시지 표시
+      const successMessage = `"${foodName}" 식사 기록이 삭제되었습니다.`;
+      alert(successMessage);
+
+      // 대시보드 데이터 새로고침
+      const dashboardResponse = await apiClient.getDashboardData();
+      setDashboardData(dashboardResponse as DashboardData);
+
+      if (dashboardResponse.recent_meals) {
+        setRecentMeals(dashboardResponse.recent_meals);
+      }
+
+      if (dashboardResponse.weekly_calories && dashboardResponse.weekly_calories.days) {
+        setWeeklyCalories(dashboardResponse.weekly_calories.days);
+      }
+
+    } catch (error) {
+      console.error('❌ 식사 기록 삭제 실패:', error);
+      
+      // 에러 타입에 따른 메시지 처리
+      let errorMessage = '식사 기록 삭제에 실패했습니다.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('권한')) {
+          errorMessage = '자신의 식사 기록만 삭제할 수 있습니다.';
+        } else if (error.message.includes('404')) {
+          errorMessage = '삭제하려는 식사 기록을 찾을 수 없습니다.';
+        }
+      }
+      
+      alert(errorMessage + ' 다시 시도해주세요.');
+    }
+  };
+
   // 실제 데이터 또는 기본값 사용
   const weeklyData = weeklyCalories.length > 0 ? weeklyCalories : [];
 
@@ -561,6 +607,19 @@ export default function DashboardPage() {
                         <p className="text-red-400 font-medium">{meal.fat}g</p>
                         <p className="text-xs text-gray-500">지방</p>
                       </div>
+                    </div>
+
+                    {/* 삭제 버튼 */}
+                    <div className="flex-shrink-0">
+                      <button
+                        onClick={() => handleDeleteMeal(meal.id, meal.foodName)}
+                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="식사 기록 삭제"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
