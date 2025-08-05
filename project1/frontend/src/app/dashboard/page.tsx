@@ -398,8 +398,8 @@ export default function DashboardPage() {
         */}
 
           {/* 주간 칼로리 섭취량 */}
-          <div className="w-full bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-4 sm:p-6 lg:p-8">
-            <div className="flex items-center justify-between mb-6">
+          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-white mb-1">주간 칼로리 섭취량</h2>
                 <p className="text-gray-400 text-sm">Recharts로 구현한 깔끔한 칼로리 섭취 그래프</p>
@@ -416,7 +416,7 @@ export default function DashboardPage() {
               <div className="space-y-6">
                 {/* 요약 통계 */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-gray-800/50 rounded-2xl p-4 text-center">
+                  <div className="bg-gray-800/30 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-green-400">
                       {Math.round(
                         chartCalorieData
@@ -427,13 +427,13 @@ export default function DashboardPage() {
                     </div>
                     <div className="text-xs text-gray-400 mt-1">평균</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-2xl p-4 text-center">
+                  <div className="bg-gray-800/30 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-blue-400">
                       {Math.max(...chartCalorieData.filter(d => d['섭취 칼로리'] !== null).map(d => d['섭취 칼로리'] || 0))}kcal
                     </div>
                     <div className="text-xs text-gray-400 mt-1">최고</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-2xl p-4 text-center">
+                  <div className="bg-gray-800/30 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-orange-400">
                       {Math.min(...chartCalorieData.filter(d => d['섭취 칼로리'] !== null).map(d => d['섭취 칼로리'] || 0))}kcal
                     </div>
@@ -442,7 +442,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Recharts 그래프 */}
-                <div className="bg-gray-900/30 rounded-2xl p-6">
+                <div className="bg-gray-800/30 rounded-lg p-6">
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart
@@ -525,7 +525,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-gray-900/30 rounded-2xl p-12 text-center">
+              <div className="bg-gray-800/30 rounded-lg p-12 text-center">
                 <div className="text-6xl mb-4">📊</div>
                 <h3 className="text-xl font-bold text-white mb-2">칼로리 데이터를 불러오는 중...</h3>
                 <p className="text-gray-400">식사 기록을 추가하면 그래프가 표시됩니다</p>
@@ -534,8 +534,8 @@ export default function DashboardPage() {
           </div>
 
           {/* 주간 체중 변화 */}
-          <div className="w-full bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-4 sm:p-6 lg:p-8">
-            <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-white mb-1">주간 체중 변화</h2>
                 <p className="text-gray-400 text-sm">Recharts로 구현한 깔끔한 체중 변화 그래프</p>
@@ -543,12 +543,12 @@ export default function DashboardPage() {
               <div className="flex items-center space-x-4">
                 {dashboardData?.weight_data?.latest_weight && (
                   <div className="flex items-center space-x-3 text-sm">
-                    <div className="text-center bg-gray-800/50 rounded-2xl p-3">
+                    <div className="text-center bg-gray-800/30 rounded-lg p-3">
                       <div className="text-gray-300 text-xs">최근 체중</div>
                       <div className="font-bold text-blue-400 text-lg">{dashboardData?.weight_data?.latest_weight}kg</div>
                     </div>
                     {dashboardData?.weight_data?.weight_change !== null && (
-                      <div className="text-center bg-gray-800/50 rounded-2xl p-3">
+                      <div className="text-center bg-gray-800/30 rounded-lg p-3">
                         <div className="text-gray-300 text-xs">변화량</div>
                         <div className={`font-bold text-lg ${dashboardData?.weight_data?.weight_change > 0 ? 'text-red-400' :
                           dashboardData?.weight_data?.weight_change < 0 ? 'text-green-400' : 'text-gray-400'
@@ -563,7 +563,7 @@ export default function DashboardPage() {
                 )}
                 <button
                   onClick={() => setIsWeightModalOpen(true)}
-                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-2xl transition-all duration-300 hover:scale-105 shadow-lg shadow-green-500/25"
+                  className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
                 >
                   기록하기
                 </button>
@@ -573,7 +573,7 @@ export default function DashboardPage() {
             {dashboardData?.weight_data ? (
               <div className="space-y-6">
                 {chartWeightData.some(d => d['체중(kg)'] !== null) ? (
-                  <div className="bg-gray-900/30 rounded-2xl p-6">
+                  <div className="bg-gray-800/30 rounded-lg p-6">
                     <div className="h-80 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
@@ -657,13 +657,13 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   /* 체중 기록이 전혀 없는 경우 */
-                  <div className="bg-gray-900/30 rounded-2xl p-12 text-center">
+                  <div className="bg-gray-800/30 rounded-lg p-12 text-center">
                     <div className="text-6xl mb-4">⚖️</div>
                     <h3 className="text-xl font-bold text-white mb-2">체중 기록이 없습니다</h3>
                     <p className="text-gray-400 mb-6">기록하기 버튼을 눌러 체중을 기록해보세요!</p>
                     <button
                       onClick={() => setIsWeightModalOpen(true)}
-                      className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-2xl transition-all duration-300 hover:scale-105 shadow-lg shadow-green-500/25"
+                      className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
                     >
                       첫 체중 기록하기
                     </button>
@@ -671,7 +671,7 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              <div className="bg-gray-900/30 rounded-2xl p-12 text-center">
+              <div className="bg-gray-800/30 rounded-lg p-12 text-center">
                 <div className="text-6xl mb-4">⚖️</div>
                 <h3 className="text-xl font-bold text-white mb-2">체중 데이터를 불러오는 중...</h3>
                 <p className="text-gray-400">잠시만 기다려주세요</p>
