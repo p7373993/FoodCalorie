@@ -2,6 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Area,
+} from 'recharts';
 import WeightRecordModal from '@/components/ui/WeightRecordModal';
 import WeeklyReportModal from '@/components/ui/WeeklyReportModal';
 import UserInfo from '@/components/auth/UserInfo';
@@ -152,18 +162,18 @@ export default function DashboardPage() {
 
     try {
       console.log('🗑️ 식사 기록 삭제 시작:', mealId);
-      
+
       const response = await apiClient.deleteMeal(mealId);
-      
+
       console.log('✅ 식사 기록 삭제 성공:', response);
-      
+
       // 성공 메시지 표시
       const successMessage = `"${foodName}" 식사 기록이 삭제되었습니다.`;
       alert(successMessage);
 
       // 대시보드 데이터 새로고침
       const dashboardResponse = await apiClient.getDashboardData();
-      setDashboardData(dashboardResponse as DashboardData);
+      setDashboardData(dashboardResponse);
 
       if (dashboardResponse.recent_meals) {
         setRecentMeals(dashboardResponse.recent_meals);
@@ -175,10 +185,10 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error('❌ 식사 기록 삭제 실패:', error);
-      
+
       // 에러 타입에 따른 메시지 처리
       let errorMessage = '식사 기록 삭제에 실패했습니다.';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('권한')) {
           errorMessage = '자신의 식사 기록만 삭제할 수 있습니다.';
@@ -186,28 +196,72 @@ export default function DashboardPage() {
           errorMessage = '삭제하려는 식사 기록을 찾을 수 없습니다.';
         }
       }
-      
+
       alert(errorMessage + ' 다시 시도해주세요.');
     }
   };
 
-  // 실제 데이터 또는 기본값 사용
+  // Recharts를 위한 데이터 가공
   const weeklyData = weeklyCalories.length > 0 ? weeklyCalories : [];
+  const chartCalorieData = weeklyData.map((data: any) => ({
+    name: data.day,
+    '섭취 칼로리': data.has_data ? (data.total_kcal || data.kcal || 0) : null,
+    isToday: data.is_today,
+  }));
 
-  // 최대값 계산 (실제 데이터가 있는 값들만 고려)
-  const validCalories = weeklyData
-    .map(d => d.total_kcal || d.kcal || 0)
-    .filter(cal => cal > 0); // 0보다 큰 값만 고려
+  const chartWeightData = dashboardData?.weight_data?.weekly_weights?.map((day: any) => ({
+    name: day.day,
+    '체중(kg)': day.has_record ? day.weight : null,
+    isToday: day.is_today,
+  })) || [];
 
-  // 실제 최대값을 기준으로 하되, 최소 2000kcal 보장
-  const actualMax = validCalories.length > 0 ? Math.max(...validCalories) : 0;
-  const maxKcal = Math.max(2000, actualMax);
+  const recordedWeights = chartWeightData
+    .map(d => d['체중(kg)'])
+    .filter(w => w !== null) as number[];
 
-  // 디버깅용 로그
-  console.log('📊 주간 데이터:', weeklyData);
-  console.log('📊 유효한 칼로리:', validCalories);
-  console.log('📊 실제 최대값:', actualMax);
-  console.log('📊 사용할 최대값:', maxKcal);
+  const weightDomain = recordedWeights.length > 0
+    ? [Math.floor(Math.min(...recordedWeights) - 1), Math.ceil(Math.max(...recordedWeights) + 1)]
+    : ['auto', 'auto'];
+
+  // 커스텀 툴팁 컴포넌트들
+  const CustomCalorieTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      if (data.value === null) return null;
+
+      return (
+        <div className="p-3 bg-gray-800/95 backdrop-blur-sm flex flex-col gap-1 rounded-xl border border-gray-700 shadow-xl">
+          <p className="text-base font-bold text-white">{label}</p>
+          <p style={{ color: data.color }} className="text-sm font-medium">
+            섭취 칼로리: {data.value}kcal
+          </p>
+          <p className="text-xs text-gray-400">
+            목표 대비 {Math.round((data.value / 2000) * 100)}%
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomWeightTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      if (data.value === null) return null;
+
+      return (
+        <div className="p-3 bg-gray-800/95 backdrop-blur-sm flex flex-col gap-1 rounded-xl border border-gray-700 shadow-xl">
+          <p className="text-base font-bold text-white">{label}</p>
+          <p style={{ color: data.color }} className="text-sm font-medium">
+            체중: {data.value}kg
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+
 
   return (
     <>
@@ -231,135 +285,144 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white mb-1">주간 칼로리 섭취량</h2>
-                <p className="text-gray-400 text-sm">이번 주 식사 기록을 한눈에 확인하세요</p>
+                <p className="text-gray-400 text-sm">Recharts로 구현한 깔끔한 칼로리 섭취 그래프</p>
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-green-400">
-                  {weeklyData.filter(d => d.has_data).length}
+                  {chartCalorieData.filter(d => d['섭취 칼로리'] !== null).length}
                 </div>
                 <div className="text-xs text-gray-500">기록된 날</div>
               </div>
             </div>
 
-            {weeklyData.length > 0 ? (
-              <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+            {chartCalorieData.some(d => d['섭취 칼로리'] !== null) ? (
+              <div className="space-y-6">
                 {/* 요약 통계 */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-                  <div className="bg-gray-800/50 rounded-2xl p-3 sm:p-4 text-center">
-                    <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-400">
-                      {Math.round(validCalories.reduce((sum, cal) => sum + cal, 0) / validCalories.length)}kcal
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-gray-800/50 rounded-2xl p-4 text-center">
+                    <div className="text-2xl font-bold text-green-400">
+                      {Math.round(
+                        chartCalorieData
+                          .filter(d => d['섭취 칼로리'] !== null)
+                          .reduce((sum, d) => sum + (d['섭취 칼로리'] || 0), 0) /
+                        chartCalorieData.filter(d => d['섭취 칼로리'] !== null).length
+                      )}kcal
                     </div>
                     <div className="text-xs text-gray-400 mt-1">평균</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-2xl p-3 sm:p-4 text-center">
-                    <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-400">
-                      {Math.max(...validCalories)}kcal
+                  <div className="bg-gray-800/50 rounded-2xl p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-400">
+                      {Math.max(...chartCalorieData.filter(d => d['섭취 칼로리'] !== null).map(d => d['섭취 칼로리'] || 0))}kcal
                     </div>
                     <div className="text-xs text-gray-400 mt-1">최고</div>
                   </div>
-                  <div className="bg-gray-800/50 rounded-2xl p-3 sm:p-4 text-center">
-                    <div className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-400">
-                      {Math.min(...validCalories)}kcal
+                  <div className="bg-gray-800/50 rounded-2xl p-4 text-center">
+                    <div className="text-2xl font-bold text-orange-400">
+                      {Math.min(...chartCalorieData.filter(d => d['섭취 칼로리'] !== null).map(d => d['섭취 칼로리'] || 0))}kcal
                     </div>
                     <div className="text-xs text-gray-400 mt-1">최저</div>
                   </div>
                 </div>
 
-                {/* 막대그래프 */}
-                <div className="h-32 sm:h-48 lg:h-64">
-                  <div className="flex justify-between items-end h-full space-x-3 pb-12">
-                    {weeklyData.map((data, index) => {
-                      const calories = data.total_kcal || data.kcal || 0;
-
-                      // 디버깅용 로그
-                      console.log(`📊 ${data.day}: ${calories}kcal, has_data: ${data.has_data}, maxKcal: ${maxKcal}`);
-
-                      // 반응형 픽셀 기반 높이 계산 (라벨 공간 고려)
-                      let barHeightPx = 8; // 최소 높이
-                      if (data.has_data && calories > 0) {
-                        const percentage = (calories / maxKcal) * 100;
-                        // 화면 크기에 따른 높이 조정 (라벨 공간 48px 제외)
-                        const containerHeight = window.innerWidth < 640 ? 80 : window.innerWidth < 1024 ? 144 : 208; // h-32-48, h-48-48, h-64-48
-                        barHeightPx = Math.max(8, (percentage / 100) * containerHeight);
-                        console.log(`📊 ${data.day} 막대 높이: ${barHeightPx}px (${percentage.toFixed(1)}%)`);
-                      }
-
-                      return (
-                        <div key={index} className="flex-1 flex flex-col items-center justify-end group relative">
-                          {/* 막대 */}
-                          <div
-                            className={`w-full rounded-t-lg transition-all duration-700 cursor-pointer relative overflow-hidden ${data.has_data
-                              ? (data.is_today
-                                ? 'bg-gradient-to-t from-yellow-500 to-yellow-400 shadow-lg shadow-yellow-500/25'
-                                : 'bg-gradient-to-t from-green-500 to-green-400 shadow-lg shadow-green-500/25')
-                              : 'bg-gray-700/30'
-                              }`}
-                            style={{
-                              height: `${barHeightPx}px`
-                            }}
-                          >
-                            {/* 호버 효과 */}
-                            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-
-                            {/* 툴팁 */}
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 bg-gray-900/95 backdrop-blur-sm text-white text-sm rounded-xl p-3 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20 whitespace-nowrap pointer-events-none border border-gray-700/50">
-                              <div className="text-center">
-                                <div className="font-bold text-lg mb-1">{data.day}</div>
-                                <div className="text-2xl font-bold text-green-400 mb-1">
-                                  {data.has_data ? `${calories}kcal` : '기록 없음'}
-                                </div>
-                                {data.has_data && (
-                                  <div className="text-xs text-gray-400">
-                                    목표 대비 {Math.round((calories / 2000) * 100)}%
-                                  </div>
-                                )}
-                              </div>
-                              {/* 화살표 */}
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900/95"></div>
-                            </div>
-                          </div>
-
-                          {/* 요일 라벨 */}
-                          <div className="mt-3 text-center absolute bottom-0">
-                            <div className={`text-sm font-semibold ${data.is_today ? 'text-yellow-400' : 'text-white'}`}>
-                              {data.day}
-                            </div>
-                            <div className={`text-xs mt-1 font-medium ${data.has_data ? 'text-white' : 'text-gray-500'}`}>
-                              {data.has_data ? `${calories}kcal` : '기록 없음'}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                {/* Recharts 그래프 */}
+                <div className="bg-gray-900/30 rounded-2xl p-6">
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={chartCalorieData}
+                        margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+                      >
+                        <defs>
+                          <linearGradient id="colorCalorie" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0.1} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          vertical={false}
+                          stroke="rgba(255, 255, 255, 0.1)"
+                        />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fill: '#9CA3AF', fontSize: 12 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fill: '#9CA3AF', fontSize: 12 }}
+                          axisLine={false}
+                          tickLine={false}
+                          unit="kcal"
+                        />
+                        <Tooltip
+                          content={<CustomCalorieTooltip />}
+                          cursor={{
+                            stroke: 'rgba(34, 197, 94, 0.5)',
+                            strokeWidth: 2,
+                            strokeDasharray: '5 5'
+                          }}
+                        />
+                        <Legend
+                          wrapperStyle={{
+                            color: '#9CA3AF',
+                            paddingTop: '20px',
+                            fontSize: '14px'
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="섭취 칼로리"
+                          stroke="#22c55e"
+                          fill="url(#colorCalorie)"
+                          strokeWidth={3}
+                          dot={{
+                            fill: '#22c55e',
+                            strokeWidth: 3,
+                            stroke: '#ffffff',
+                            r: 6
+                          }}
+                          activeDot={{
+                            r: 8,
+                            fill: '#22c55e',
+                            stroke: '#ffffff',
+                            strokeWidth: 3,
+                            style: { filter: 'drop-shadow(0 0 6px rgba(34, 197, 94, 0.6))' }
+                          }}
+                          connectNulls={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">📊</div>
-                  <p className="text-lg font-medium mb-2">주간 칼로리 데이터를 불러오는 중...</p>
-                  <p className="text-sm">식사 기록을 추가하면 그래프가 표시됩니다.</p>
-                </div>
+              <div className="bg-gray-900/30 rounded-2xl p-12 text-center">
+                <div className="text-6xl mb-4">📊</div>
+                <h3 className="text-xl font-bold text-white mb-2">칼로리 데이터를 불러오는 중...</h3>
+                <p className="text-gray-400">식사 기록을 추가하면 그래프가 표시됩니다</p>
               </div>
             )}
           </div>
 
           {/* 주간 체중 변화 */}
-          <div className="w-full bg-[var(--card-bg)] backdrop-blur-sm border border-[var(--border-color)] rounded-2xl p-6 min-h-[420px]">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-left">주간 체중 변화</h2>
+          <div className="w-full bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-4 sm:p-6 lg:p-8">
+            <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-1">주간 체중 변화</h2>
+                <p className="text-gray-400 text-sm">Recharts로 구현한 깔끔한 체중 변화 그래프</p>
+              </div>
               <div className="flex items-center space-x-4">
                 {dashboardData?.weight_data?.latest_weight && (
                   <div className="flex items-center space-x-3 text-sm">
-                    <div className="text-center">
-                      <div className="text-gray-300">최근 체중</div>
-                      <div className="font-bold text-blue-400">{dashboardData?.weight_data?.latest_weight}kg</div>
+                    <div className="text-center bg-gray-800/50 rounded-2xl p-3">
+                      <div className="text-gray-300 text-xs">최근 체중</div>
+                      <div className="font-bold text-blue-400 text-lg">{dashboardData?.weight_data?.latest_weight}kg</div>
                     </div>
                     {dashboardData?.weight_data?.weight_change !== null && (
-                      <div className="text-center">
-                        <div className="text-gray-300">변화량</div>
-                        <div className={`font-bold ${dashboardData?.weight_data?.weight_change > 0 ? 'text-red-400' :
+                      <div className="text-center bg-gray-800/50 rounded-2xl p-3">
+                        <div className="text-gray-300 text-xs">변화량</div>
+                        <div className={`font-bold text-lg ${dashboardData?.weight_data?.weight_change > 0 ? 'text-red-400' :
                           dashboardData?.weight_data?.weight_change < 0 ? 'text-green-400' : 'text-gray-400'
                           }`}>
                           {dashboardData?.weight_data?.weight_change > 0 ? '+' : ''}{dashboardData?.weight_data?.weight_change}kg
@@ -372,166 +435,107 @@ export default function DashboardPage() {
                 )}
                 <button
                   onClick={() => setIsWeightModalOpen(true)}
-                  className="bg-[var(--point-green)] text-black font-bold py-2 px-4 rounded-lg transition-transform hover:scale-105"
+                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-2xl transition-all duration-300 hover:scale-105 shadow-lg shadow-green-500/25"
                 >
                   기록하기
                 </button>
               </div>
             </div>
+
             {dashboardData?.weight_data ? (
-              <div className="space-y-4">
-                {/* 체중 선그래프 */}
-                <div className="h-64 relative">
-                  {dashboardData?.weight_data?.weekly_weights?.some((day: any) => day.has_record) ? (
-                    <div className="relative h-full">
-                      {/* Y축 눈금 */}
-                      <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-gray-500 w-24">
-                        {(() => {
-                          const recordedWeights = dashboardData?.weight_data?.weekly_weights
-                            ?.filter((d: any) => d.has_record && d.weight)
-                            ?.map((d: any) => d.weight) || [];
-
-                          if (recordedWeights.length === 0) return null;
-
-                          const avgWeight = recordedWeights.reduce((sum, w) => sum + w, 0) / recordedWeights.length;
-                          const minWeight = avgWeight - 2; // 평균 -2kg
-                          const maxWeight = avgWeight + 2; // 평균 +2kg
-
-                          return [4, 3, 2, 1, 0].map((i) => {
-                            const weight = minWeight + ((maxWeight - minWeight) / 4) * i;
-                            return (
-                              <div key={i} className="flex items-center">
-                                <span className="text-right pr-2 text-[10px] leading-none">{weight.toFixed(1)}kg</span>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-
-                      {/* 선그래프 영역 */}
-                      <div className="ml-24 h-full pr-4">
-                        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                          {/* 그리드 라인 */}
+              <div className="space-y-6">
+                {chartWeightData.some(d => d['체중(kg)'] !== null) ? (
+                  <div className="bg-gray-900/30 rounded-2xl p-6">
+                    <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={chartWeightData}
+                          margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+                        >
                           <defs>
-                            <pattern id="grid" width="16.67" height="20" patternUnits="userSpaceOnUse">
-                              <path d="M 16.67 0 L 0 0 0 20" fill="none" stroke="rgba(75, 85, 99, 0.2)" strokeWidth="0.5" />
-                            </pattern>
-                          </defs>
-                          <rect width="100" height="100" fill="url(#grid)" />
-
-                          {/* 선그래프 */}
-                          <polyline
-                            fill="none"
-                            stroke="url(#weightGradient)"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points={(() => {
-                              const recordedWeights = dashboardData?.weight_data?.weekly_weights
-                                ?.filter((d: any) => d.has_record && d.weight)
-                                ?.map((d: any) => d.weight) || [];
-
-                              if (recordedWeights.length === 0) return "";
-
-                              const avgWeight = recordedWeights.reduce((sum, w) => sum + w, 0) / recordedWeights.length;
-                              const minWeight = avgWeight - 2; // 평균 -2kg
-                              const maxWeight = avgWeight + 2; // 평균 +2kg
-                              const range = maxWeight - minWeight;
-
-                              return dashboardData?.weight_data?.weekly_weights
-                                ?.map((day: any, index: number) => {
-                                  if (!day.has_record && !day.has_approximate || !day.weight) return null;
-
-                                  const x = (index / 6) * 83.33 + 8.33; // 7일을 83.33%로, 8.33% 여백
-                                  const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 80 : 50; // 80% 높이 사용
-
-                                  return `${x},${y}`;
-                                })
-                                .filter(Boolean)
-                                .join(" ");
-                            })()}
-                          />
-
-                          {/* 그라데이션 정의 */}
-                          <defs>
-                            <linearGradient id="weightGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                              <stop offset="0%" stopColor="#3B82F6" />
-                              <stop offset="50%" stopColor="#10B981" />
-                              <stop offset="100%" stopColor="#F59E0B" />
+                            <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
                             </linearGradient>
                           </defs>
-
-                          {/* 데이터 포인트 */}
-                          {dashboardData?.weight_data?.weekly_weights?.map((day: any, index: number) => {
-                            if (!day.has_record && !day.has_approximate || !day.weight) return null;
-
-                            const recordedWeights = dashboardData?.weight_data?.weekly_weights
-                              ?.filter((d: any) => d.has_record && d.weight)
-                              ?.map((d: any) => d.weight) || [];
-
-                            if (recordedWeights.length === 0) return null;
-
-                            const avgWeight = recordedWeights.reduce((sum, w) => sum + w, 0) / recordedWeights.length;
-                            const minWeight = avgWeight - 2; // 평균 -2kg
-                            const maxWeight = avgWeight + 2; // 평균 +2kg
-                            const range = maxWeight - minWeight;
-
-                            const x = (index / 6) * 83.33 + 8.33;
-                            const y = range > 0 ? 100 - ((day.weight - minWeight) / range) * 80 : 50; // 80% 높이 사용
-
-                            return (
-                              <circle
-                                key={index}
-                                cx={x}
-                                cy={y}
-                                r="4"
-                                fill={day.is_today ? "#F59E0B" : "#3B82F6"}
-                                stroke="white"
-                                strokeWidth="2"
-                                className="cursor-pointer hover:r-5 transition-all duration-200"
-                              />
-                            );
-                          })}
-                        </svg>
-
-                        {/* X축 라벨 */}
-                        <div className="flex justify-between mt-6 space-x-1">
-                          {dashboardData?.weight_data?.weekly_weights?.map((day: any, index: number) => (
-                            <div key={index} className="text-center flex-1 min-w-0">
-                              <div className={`text-xs font-medium ${day.is_today ? 'text-yellow-400' : 'text-gray-300'}`}>
-                                {day.day}
-                              </div>
-                              {(day.has_record || day.has_approximate) && day.weight && (
-                                <div className="text-xs text-gray-400 mt-2 truncate">
-                                  {day.weight}kg
-                                  {day.has_approximate && <span className="text-gray-500">*</span>}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                            stroke="rgba(255, 255, 255, 0.1)"
+                          />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: '#9CA3AF', fontSize: 12 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            domain={weightDomain}
+                            tick={{ fill: '#9CA3AF', fontSize: 12 }}
+                            axisLine={false}
+                            tickLine={false}
+                            unit="kg"
+                          />
+                          <Tooltip
+                            content={<CustomWeightTooltip />}
+                            cursor={{
+                              stroke: 'rgba(59, 130, 246, 0.5)',
+                              strokeWidth: 2,
+                              strokeDasharray: '5 5'
+                            }}
+                          />
+                          <Legend
+                            wrapperStyle={{
+                              color: '#9CA3AF',
+                              paddingTop: '20px',
+                              fontSize: '14px'
+                            }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="체중(kg)"
+                            stroke="#3b82f6"
+                            fill="url(#colorWeight)"
+                            strokeWidth={3}
+                            dot={{
+                              fill: '#3b82f6',
+                              strokeWidth: 3,
+                              stroke: '#ffffff',
+                              r: 6
+                            }}
+                            activeDot={{
+                              r: 8,
+                              fill: '#3b82f6',
+                              stroke: '#ffffff',
+                              strokeWidth: 3,
+                              style: { filter: 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.6))' }
+                            }}
+                            connectNulls={false}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
-                  ) : (
-                    /* 체중 기록이 전혀 없는 경우 */
-                    <div className="h-full flex items-center justify-center text-gray-400">
-                      <div className="text-center">
-                        <div className="text-4xl mb-2">⚖️</div>
-                        <p>체중 기록이 없습니다.</p>
-                        <p className="text-sm">기록하기 버튼을 눌러 체중을 기록해보세요!</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-
+                  </div>
+                ) : (
+                  /* 체중 기록이 전혀 없는 경우 */
+                  <div className="bg-gray-900/30 rounded-2xl p-12 text-center">
+                    <div className="text-6xl mb-4">⚖️</div>
+                    <h3 className="text-xl font-bold text-white mb-2">체중 기록이 없습니다</h3>
+                    <p className="text-gray-400 mb-6">기록하기 버튼을 눌러 체중을 기록해보세요!</p>
+                    <button
+                      onClick={() => setIsWeightModalOpen(true)}
+                      className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-2xl transition-all duration-300 hover:scale-105 shadow-lg shadow-green-500/25"
+                    >
+                      첫 체중 기록하기
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">⚖️</div>
-                  <p>체중 데이터를 불러오는 중...</p>
-                </div>
+              <div className="bg-gray-900/30 rounded-2xl p-12 text-center">
+                <div className="text-6xl mb-4">⚖️</div>
+                <h3 className="text-xl font-bold text-white mb-2">체중 데이터를 불러오는 중...</h3>
+                <p className="text-gray-400">잠시만 기다려주세요</p>
               </div>
             )}
           </div>
