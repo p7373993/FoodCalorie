@@ -201,19 +201,68 @@ export default function DashboardPage() {
     }
   };
 
+  // 선형 보간 함수 (빈 데이터를 자연스럽게 연결)
+  const interpolateData = (data: any[], valueKey: string) => {
+    const result = [...data];
+
+    for (let i = 0; i < result.length; i++) {
+      if (result[i][valueKey] === null) {
+        // 앞뒤 유효한 데이터 찾기
+        let prevIndex = -1;
+        let nextIndex = -1;
+
+        // 이전 유효 데이터 찾기
+        for (let j = i - 1; j >= 0; j--) {
+          if (result[j][valueKey] !== null) {
+            prevIndex = j;
+            break;
+          }
+        }
+
+        // 다음 유효 데이터 찾기
+        for (let j = i + 1; j < result.length; j++) {
+          if (result[j][valueKey] !== null) {
+            nextIndex = j;
+            break;
+          }
+        }
+
+        // 선형 보간 계산
+        if (prevIndex !== -1 && nextIndex !== -1) {
+          const prevValue = result[prevIndex][valueKey];
+          const nextValue = result[nextIndex][valueKey];
+          const ratio = (i - prevIndex) / (nextIndex - prevIndex);
+          const interpolatedValue = prevValue + (nextValue - prevValue) * ratio;
+
+          result[i] = {
+            ...result[i],
+            [valueKey]: Math.round(interpolatedValue * 10) / 10, // 소수점 1자리로 반올림
+            isInterpolated: true // 보간된 데이터임을 표시
+          };
+        }
+      }
+    }
+
+    return result;
+  };
+
   // Recharts를 위한 데이터 가공
   const weeklyData = weeklyCalories.length > 0 ? weeklyCalories : [];
-  const chartCalorieData = weeklyData.map((data: any) => ({
+  const rawCalorieData = weeklyData.map((data: any) => ({
     name: data.day,
     '섭취 칼로리': data.has_data ? (data.total_kcal || data.kcal || 0) : null,
     isToday: data.is_today,
   }));
 
-  const chartWeightData = dashboardData?.weight_data?.weekly_weights?.map((day: any) => ({
+  const rawWeightData = dashboardData?.weight_data?.weekly_weights?.map((day: any) => ({
     name: day.day,
     '체중(kg)': day.has_record ? day.weight : null,
     isToday: day.is_today,
   })) || [];
+
+  // 보간된 데이터 생성
+  const chartCalorieData = interpolateData(rawCalorieData, '섭취 칼로리');
+  const chartWeightData = interpolateData(rawWeightData, '체중(kg)');
 
   const recordedWeights = chartWeightData
     .map(d => d['체중(kg)'])
@@ -223,21 +272,81 @@ export default function DashboardPage() {
     ? [Math.floor(Math.min(...recordedWeights) - 1), Math.ceil(Math.max(...recordedWeights) + 1)]
     : ['auto', 'auto'];
 
+  // 커스텀 도트 컴포넌트 (실제 데이터와 보간 데이터 구분)
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload) return null;
+
+    const isInterpolated = payload.isInterpolated;
+    const isToday = payload.isToday;
+
+    if (isInterpolated) {
+      // 보간된 데이터는 작은 점선 원으로 표시
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={3}
+          fill="none"
+          stroke="#9CA3AF"
+          strokeWidth={2}
+          strokeDasharray="2,2"
+          opacity={0.7}
+        />
+      );
+    } else if (isToday) {
+      // 오늘 데이터는 노란색으로 강조
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={6}
+          fill="#F59E0B"
+          stroke="#ffffff"
+          strokeWidth={3}
+          style={{ filter: 'drop-shadow(0 0 6px rgba(245, 158, 11, 0.6))' }}
+        />
+      );
+    } else {
+      // 일반 실제 데이터
+      return (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={5}
+          fill={props.fill}
+          stroke="#ffffff"
+          strokeWidth={2}
+        />
+      );
+    }
+  };
+
   // 커스텀 툴팁 컴포넌트들
   const CustomCalorieTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0];
       if (data.value === null) return null;
 
+      const isInterpolated = data.payload?.isInterpolated;
+
       return (
         <div className="p-3 bg-gray-800/95 backdrop-blur-sm flex flex-col gap-1 rounded-xl border border-gray-700 shadow-xl">
           <p className="text-base font-bold text-white">{label}</p>
           <p style={{ color: data.color }} className="text-sm font-medium">
             섭취 칼로리: {data.value}kcal
+            {isInterpolated && <span className="text-xs text-gray-400 ml-1">(추정)</span>}
           </p>
-          <p className="text-xs text-gray-400">
-            목표 대비 {Math.round((data.value / 2000) * 100)}%
-          </p>
+          {!isInterpolated && (
+            <p className="text-xs text-gray-400">
+              목표 대비 {Math.round((data.value / 2000) * 100)}%
+            </p>
+          )}
+          {isInterpolated && (
+            <p className="text-xs text-gray-500">
+              앞뒤 데이터를 기반으로 추정된 값입니다
+            </p>
+          )}
         </div>
       );
     }
@@ -249,12 +358,20 @@ export default function DashboardPage() {
       const data = payload[0];
       if (data.value === null) return null;
 
+      const isInterpolated = data.payload?.isInterpolated;
+
       return (
         <div className="p-3 bg-gray-800/95 backdrop-blur-sm flex flex-col gap-1 rounded-xl border border-gray-700 shadow-xl">
           <p className="text-base font-bold text-white">{label}</p>
           <p style={{ color: data.color }} className="text-sm font-medium">
             체중: {data.value}kg
+            {isInterpolated && <span className="text-xs text-gray-400 ml-1">(추정)</span>}
           </p>
+          {isInterpolated && (
+            <p className="text-xs text-gray-500">
+              앞뒤 데이터를 기반으로 추정된 값입니다
+            </p>
+          )}
         </div>
       );
     }
@@ -376,12 +493,7 @@ export default function DashboardPage() {
                           stroke="#22c55e"
                           fill="url(#colorCalorie)"
                           strokeWidth={3}
-                          dot={{
-                            fill: '#22c55e',
-                            strokeWidth: 3,
-                            stroke: '#ffffff',
-                            r: 6
-                          }}
+                          dot={<CustomDot fill="#22c55e" />}
                           activeDot={{
                             r: 8,
                             fill: '#22c55e',
@@ -389,10 +501,26 @@ export default function DashboardPage() {
                             strokeWidth: 3,
                             style: { filter: 'drop-shadow(0 0 6px rgba(34, 197, 94, 0.6))' }
                           }}
-                          connectNulls={false}
+                          connectNulls={true}
                         />
                       </AreaChart>
                     </ResponsiveContainer>
+                  </div>
+
+                  {/* 범례 */}
+                  <div className="flex justify-center items-center space-x-6 mt-4 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded-full bg-green-500 border-2 border-white"></div>
+                      <span className="text-gray-300">실제 기록</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-dashed bg-transparent"></div>
+                      <span className="text-gray-400">추정값</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded-full bg-yellow-500 border-2 border-white shadow-lg"></div>
+                      <span className="text-yellow-400">오늘</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -497,12 +625,7 @@ export default function DashboardPage() {
                             stroke="#3b82f6"
                             fill="url(#colorWeight)"
                             strokeWidth={3}
-                            dot={{
-                              fill: '#3b82f6',
-                              strokeWidth: 3,
-                              stroke: '#ffffff',
-                              r: 6
-                            }}
+                            dot={<CustomDot fill="#3b82f6" />}
                             activeDot={{
                               r: 8,
                               fill: '#3b82f6',
@@ -510,10 +633,26 @@ export default function DashboardPage() {
                               strokeWidth: 3,
                               style: { filter: 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.6))' }
                             }}
-                            connectNulls={false}
+                            connectNulls={true}
                           />
                         </AreaChart>
                       </ResponsiveContainer>
+                    </div>
+
+                    {/* 범례 */}
+                    <div className="flex justify-center items-center space-x-6 mt-4 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white"></div>
+                        <span className="text-gray-300">실제 기록</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-dashed bg-transparent"></div>
+                        <span className="text-gray-400">추정값</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded-full bg-yellow-500 border-2 border-white shadow-lg"></div>
+                        <span className="text-yellow-400">오늘</span>
+                      </div>
                     </div>
                   </div>
                 ) : (
