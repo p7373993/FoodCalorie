@@ -206,14 +206,14 @@ export default function DashboardPage() {
     const result = [...data];
 
     for (let i = 0; i < result.length; i++) {
-      if (result[i][valueKey] === null) {
+      if (result[i][valueKey] === null || result[i][valueKey] === undefined) {
         // 앞뒤 유효한 데이터 찾기
         let prevIndex = -1;
         let nextIndex = -1;
 
         // 이전 유효 데이터 찾기
         for (let j = i - 1; j >= 0; j--) {
-          if (result[j][valueKey] !== null) {
+          if (result[j][valueKey] !== null && result[j][valueKey] !== undefined) {
             prevIndex = j;
             break;
           }
@@ -221,7 +221,7 @@ export default function DashboardPage() {
 
         // 다음 유효 데이터 찾기
         for (let j = i + 1; j < result.length; j++) {
-          if (result[j][valueKey] !== null) {
+          if (result[j][valueKey] !== null && result[j][valueKey] !== undefined) {
             nextIndex = j;
             break;
           }
@@ -250,13 +250,13 @@ export default function DashboardPage() {
   const weeklyData = weeklyCalories.length > 0 ? weeklyCalories : [];
   const rawCalorieData = weeklyData.map((data: any) => ({
     name: data.day,
-    '섭취 칼로리': data.has_data ? (data.total_kcal || data.kcal || 0) : null,
+    '섭취 칼로리': data.has_data && (data.total_kcal || data.kcal) ? (data.total_kcal || data.kcal) : undefined,
     isToday: data.is_today,
   }));
 
   const rawWeightData = dashboardData?.weight_data?.weekly_weights?.map((day: any) => ({
     name: day.day,
-    '체중(kg)': day.has_record ? day.weight : null,
+    '체중(kg)': day.has_record && day.weight ? day.weight : undefined,
     isToday: day.is_today,
   })) || [];
 

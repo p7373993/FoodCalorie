@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.contrib.auth.models import User
 from django.db.models import Sum, Avg
 from datetime import datetime, timedelta, date
+from django.utils import timezone
 from collections import defaultdict
 
 from .models import MealLog, WeightRecord
@@ -28,7 +29,7 @@ def get_dashboard_data(request):
             print(f"🔧 대시보드: user가 null인 MealLog {null_user_meals.count()}개를 {user.username}에게 할당")
             null_user_meals.update(user=user)
         
-        today = date.today()
+        today = timezone.now().date()
         
         # 주간 칼로리 데이터 계산 (최근 7일)
         week_start = today - timedelta(days=6)  # 오늘 포함 7일
@@ -203,7 +204,7 @@ def weight_records(request):
     elif request.method == 'POST':
         # 체중 기록 저장
         weight = request.data.get('weight')
-        record_date = request.data.get('date', date.today().strftime('%Y-%m-%d'))
+        record_date = request.data.get('date', timezone.now().date().strftime('%Y-%m-%d'))
         
         if not weight:
             return Response({'error': 'Weight is required'}, status=status.HTTP_400_BAD_REQUEST)

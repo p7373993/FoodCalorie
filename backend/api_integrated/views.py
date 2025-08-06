@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny # IsAuthenticat
 from .models import MealLog, AICoachTip # Only import models that still exist in api.models
 from .serializers import MealLogSerializer, AICoachTipSerializer, UserSerializer # Only import serializers that still exist
 from datetime import datetime, timedelta
+from django.utils import timezone
 from django.db.models import Q, Avg, Sum # Avg, Sum 임포트
 from django.contrib.auth.models import User
 from calendar import monthrange
@@ -468,8 +469,9 @@ class AnalyzeImageView(APIView):
 class MonthlyLogView(APIView):
     permission_classes = [IsAuthenticated] # 권한 추가
     def get(self, request, *args, **kwargs):
-        year = int(request.query_params.get('year', datetime.now().year))
-        month = int(request.query_params.get('month', datetime.now().month))
+        now = timezone.now()
+        year = int(request.query_params.get('year', now.year))
+        month = int(request.query_params.get('month', now.month))
 
         # Only fetch logs for the current user
         meal_logs = MealLog.objects.filter(
@@ -508,7 +510,7 @@ class MonthlyLogView(APIView):
 class DailyReportView(APIView):
     permission_classes = [IsAuthenticated] # 권한 추가
     def get(self, request, *args, **kwargs):
-        date_str = request.query_params.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_str = request.query_params.get('date', timezone.now().strftime('%Y-%m-%d'))
         try:
             report_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
@@ -628,7 +630,7 @@ class UserStatisticsView(APIView):
 
     def get(self, request, *args, **kwargs):
         user = request.user
-        today = datetime.now().date()
+        today = timezone.now().date()
         week_ago = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
 
@@ -708,7 +710,7 @@ def ai_coaching_view(request):
         print(f"AI 코칭 요청: type={coaching_type}, user={request.user}")
         
         # 사용자의 최근 식단 데이터 수집
-        today = datetime.now().date()
+        today = timezone.now().date()
         week_ago = today - timedelta(days=7)
         
         # 오늘의 식단 데이터
@@ -937,7 +939,7 @@ def generate_insights(weekly_meals, weight_change, user):
         # 식단 패턴 분석
         meal_pattern = []
         days = ['월', '화', '수', '목', '금', '토', '일']
-        week_ago = datetime.now().date() - timedelta(days=7)
+        week_ago = timezone.now().date() - timedelta(days=7)
         
         for i in range(7):
             day_date = week_ago + timedelta(days=i)
