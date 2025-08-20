@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -92,7 +93,7 @@ class UserChallenge(models.Model):
     
     class Meta:
         db_table = 'user_challenge'
-        # unique_together 제약 조건 제거 - 사용자가 같은 방에 여러 번 참여할 수 있도록 허용
+        unique_together = ('user', 'room', 'status')
         indexes = [
             models.Index(fields=['user', 'status']),
             models.Index(fields=['room', 'status']),
@@ -101,6 +102,10 @@ class UserChallenge(models.Model):
             models.Index(fields=['status', 'remaining_duration_days']),
         ]
     
+    def clean(self):
+        if self.status == 'active' and UserChallenge.objects.filter(user=self.user, room=self.room, status='active').exists():
+            raise ValidationError('이미 해당 챌린지에 참여하고 있습니다.')
+
     def __str__(self):
         return f"{self.user.username} - {self.room.name} ({self.status})"
     

@@ -29,11 +29,17 @@ class ChallengeRoomViewSet(viewsets.ReadOnlyModelViewSet):
 
 class JoinChallengeView(APIView):
     """챌린지 참여 API"""
-    permission_classes = []  # 임시로 인증 없이 테스트
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
         serializer = UserChallengeCreateSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
+            if 'error' in serializer.errors and serializer.errors['error'][0] == 'ALREADY_IN_CHALLENGE':
+                return Response({
+                    'success': False,
+                    'error': 'ALREADY_IN_CHALLENGE',
+                    'message': serializer.errors['message'][0]
+                }, status=status.HTTP_400_BAD_REQUEST)
             return Response({
                 'success': False,
                 'error': 'VALIDATION_ERROR',
@@ -42,55 +48,16 @@ class JoinChallengeView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            with transaction.atomic():
-                # 챌린지 방은 시리얼라이저에서 이미 검증됨
-                room = serializer.validated_data['room']
-                
-                # 인증된 사용자만 챌린지 참여 가능
-                if not request.user.is_authenticated:
-                    return Response({
-                        'success': False,
-                        'error': 'AUTHENTICATION_REQUIRED',
-                        'message': '로그인이 필요합니다.'
-                    }, status=status.HTTP_401_UNAUTHORIZED)
-                
-                user = request.user
-                
-                # 중복 참여 방지: 활성 챌린지가 있는지 확인 (모든 방)
-                existing_active_challenge = UserChallenge.objects.filter(
-                    user=user,
-                    status='active'
-                ).first()
-                
-                if existing_active_challenge:
-                    return Response({
-                        'success': False,
-                        'error': 'ALREADY_IN_CHALLENGE',
-                        'message': f'이미 "{existing_active_challenge.room.name}" 챌린지에 참여 중입니다. 하나의 챌린지만 참여할 수 있습니다.',
-                        'details': {
-                            'current_room': existing_active_challenge.room.name,
-                            'current_room_id': existing_active_challenge.room.id,
-                            'joined_at': existing_active_challenge.challenge_start_date,
-                            'remaining_days': existing_active_challenge.remaining_duration_days
-                        }
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                # 새 챌린지 참여 생성 (시리얼라이저 사용)
-                validated_data = serializer.validated_data.copy()
-                validated_data['user'] = user
-                validated_data['status'] = 'active'
-                user_challenge = serializer.save(user=user, status='active')
-                
-                logger.info(f"User {user.id} joined challenge room {room.name}")
-                
-                # 응답 데이터
-                response_data = UserChallengeSerializer(user_challenge).data
-                
-                return Response({
-                    'success': True,
-                    'message': '챌린지 참여가 완료되었습니다.',
-                    'data': response_data
-                }, status=status.HTTP_201_CREATED)
+            user_challenge = serializer.save()
+            logger.info(f"User {request.user.id} joined challenge room {user_challenge.room.name}")
+            
+            response_data = UserChallengeSerializer(user_challenge).data
+            
+            return Response({
+                'success': True,
+                'message': '챌린지 참여가 완료되었습니다.',
+                'data': response_data
+            }, status=status.HTTP_201_CREATED)
                 
         except Exception as e:
             logger.error(f"Error joining challenge: {str(e)}")
@@ -243,7 +210,7 @@ class LeaveChallengeView(APIView):
             )
             
             # 챌린지 포기 처리
-            user_challenge.status = 'inactive'
+            user_challenge.status = 'quit'
             user_challenge.save()
             
             return Response({
@@ -294,7 +261,7 @@ class RequestCheatDayView(APIView):
                     'error': 'INVALID_DATE_FORMAT',
                     'message': '날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식을 사용하세요.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
+
             # 챌린지 조회
             if challenge_id:
                 user_challenge = get_object_or_404(
@@ -316,6 +283,21 @@ class RequestCheatDayView(APIView):
                         'error': 'NO_ACTIVE_CHALLENGE',
                         'message': '참여 중인 활성 챌린지가 없습니다.'
                     }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 날짜 유효성 검증
+            if target_date > timezone.now().date():
+                return Response({
+                    'success': False,
+                    'error': 'FUTURE_DATE_NOT_ALLOWED',
+                    'message': '미래 날짜에 치팅을 요청할 수 없습니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not (user_challenge.challenge_start_date <= target_date <= user_challenge.challenge_end_date):
+                return Response({
+                    'success': False,
+                    'error': 'DATE_OUT_OF_RANGE',
+                    'message': '요청한 날짜가 챌린지 기간에 포함되지 않습니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
             
             # 치팅 요청 처리
             cheat_service = CheatDayService()

@@ -55,11 +55,12 @@ class UserChallengeCreateSerializer(serializers.ModelSerializer):
     room_id = serializers.IntegerField(write_only=True)
     min_daily_meals = serializers.IntegerField(default=2)
     challenge_cutoff_time = serializers.TimeField(default='23:00')
-    
+    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
     class Meta:
         model = UserChallenge
         fields = [
-            'room_id', 'user_height', 'user_weight', 'user_target_weight',
+            'room_id', 'user', 'user_height', 'user_weight', 'user_target_weight',
             'user_challenge_duration_days', 'user_weekly_cheat_limit',
             'min_daily_meals', 'challenge_cutoff_time'
         ]
@@ -87,13 +88,18 @@ class UserChallengeCreateSerializer(serializers.ModelSerializer):
         if data['user_challenge_duration_days'] < 7 or data['user_challenge_duration_days'] > 365:
             raise serializers.ValidationError("챌린지 기간은 7일~365일 사이여야 합니다.")
         
+        # 중복 참여 방지
+        user = self.context['request'].user
+        if UserChallenge.objects.filter(user=user, status='active').exists():
+            raise serializers.ValidationError({'error': 'ALREADY_IN_CHALLENGE', 'message': '이미 진행 중인 챌린지가 있습니다.'})
+
         return data
     
     def create(self, validated_data):
         """챌린지 참여 생성"""
-        # room_id 제거 (이미 room으로 변환됨)
         validated_data.pop('room_id', None)
         validated_data['remaining_duration_days'] = validated_data['user_challenge_duration_days']
+        validated_data['status'] = 'active'
         return super().create(validated_data)
 
 

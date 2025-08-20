@@ -166,13 +166,14 @@ class ChallengeJudgmentService:
             return True  # 치팅 데이는 무조건 성공 처리
         
         # 1. 챌린지 타입별 칼로리 성공 조건
-        if target_calories <= 2000:
-            # 다이어트/유지 챌린지: 목표 칼로리 이하로 먹어야 성공
-            calorie_success = total_calories <= (target_calories + tolerance)
-        else:
-            # 벌크업 챌린지: 목표 칼로리 이상으로 먹어야 성공
-            calorie_success = total_calories >= (target_calories - tolerance)
-        
+        calorie_success = False
+        if user_challenge.room.target_calorie <= 2000: # 다이어트/유지
+            if total_calories <= user_challenge.room.target_calorie + user_challenge.room.tolerance:
+                calorie_success = True
+        else: # 벌크업
+            if total_calories >= user_challenge.room.target_calorie - user_challenge.room.tolerance:
+                calorie_success = True
+
         # 2. 유효한 식사 횟수 체크
         valid_meal_count = self._count_valid_meals(user_challenge, target_date)
         meal_count_success = valid_meal_count >= user_challenge.min_daily_meals

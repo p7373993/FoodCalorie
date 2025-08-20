@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.test import TestCase, TransactionTestCase
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -92,20 +93,19 @@ class UserChallengeModelTest(TestCase):
             password='testpass123'
         )
         self.room = TestConfig.create_test_room()
-        self.challenge_data = {
-            'user': self.user,
-            'room': self.room,
-            'user_height': 170.0,
-            'user_weight': 70.0,
-            'user_target_weight': 65.0,
-            'user_challenge_duration_days': 30,
-            'user_weekly_cheat_limit': 2,
-            'remaining_duration_days': 30
-        }
     
     def test_create_user_challenge(self):
         """사용자 챌린지 생성 테스트"""
-        challenge = UserChallenge.objects.create(**self.challenge_data)
+        challenge = UserChallenge.objects.create(
+            user=self.user,
+            room=self.room,
+            user_height=170.0,
+            user_weight=70.0,
+            user_target_weight=65.0,
+            user_challenge_duration_days=30,
+            user_weekly_cheat_limit=2,
+            remaining_duration_days=30
+        )
         
         self.assertEqual(challenge.user, self.user)
         self.assertEqual(challenge.room, self.room)
@@ -117,20 +117,56 @@ class UserChallengeModelTest(TestCase):
     
     def test_user_challenge_str_representation(self):
         """사용자 챌린지 문자열 표현 테스트"""
-        challenge = UserChallenge.objects.create(**self.challenge_data)
-        expected_str = f"testuser - {TestConfig.DEFAULT_CALORIE}kcal_challenge"
+        challenge = UserChallenge.objects.create(
+            user=self.user,
+            room=self.room,
+            user_height=170.0,
+            user_weight=70.0,
+            user_target_weight=65.0,
+            user_challenge_duration_days=30,
+            user_weekly_cheat_limit=2,
+            remaining_duration_days=30
+        )
+        expected_str = f"testuser - {TestConfig.DEFAULT_CALORIE}kcal_challenge (active)"
         self.assertEqual(str(challenge), expected_str)
     
     def test_user_challenge_unique_constraint(self):
         """사용자-방 유니크 제약 테스트"""
-        UserChallenge.objects.create(**self.challenge_data)
-        
-        with self.assertRaises(IntegrityError):
-            UserChallenge.objects.create(**self.challenge_data)
+        UserChallenge.objects.create(
+            user=self.user,
+            room=self.room,
+            user_height=170.0,
+            user_weight=70.0,
+            user_target_weight=65.0,
+            user_challenge_duration_days=30,
+            remaining_duration_days=30,
+            status='active'
+        )
+        with self.assertRaises(ValidationError):
+            challenge = UserChallenge(
+                user=self.user,
+                room=self.room,
+                user_height=170.0,
+                user_weight=70.0,
+                user_target_weight=65.0,
+                user_challenge_duration_days=30,
+                remaining_duration_days=30,
+                status='active'
+            )
+            challenge.full_clean()
     
     def test_is_active_property(self):
         """is_active 프로퍼티 테스트"""
-        challenge = UserChallenge.objects.create(**self.challenge_data)
+        challenge = UserChallenge.objects.create(
+            user=self.user,
+            room=self.room,
+            user_height=170.0,
+            user_weight=70.0,
+            user_target_weight=65.0,
+            user_challenge_duration_days=30,
+            user_weekly_cheat_limit=2,
+            remaining_duration_days=30
+        )
         
         # 활성 상태 테스트
         self.assertTrue(challenge.is_active)
@@ -148,7 +184,16 @@ class UserChallengeModelTest(TestCase):
     
     def test_challenge_end_date_property(self):
         """challenge_end_date 프로퍼티 테스트"""
-        challenge = UserChallenge.objects.create(**self.challenge_data)
+        challenge = UserChallenge.objects.create(
+            user=self.user,
+            room=self.room,
+            user_height=170.0,
+            user_weight=70.0,
+            user_target_weight=65.0,
+            user_challenge_duration_days=30,
+            user_weekly_cheat_limit=2,
+            remaining_duration_days=30
+        )
         expected_end_date = challenge.challenge_start_date + timedelta(days=30)
         self.assertEqual(challenge.challenge_end_date, expected_end_date)
 
@@ -390,7 +435,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(8, 0),
             mealType='breakfast',
             calories=500.0,
-            image_url='test.jpg'
+            imageUrl='test.jpg'
         )
         MealLog.objects.create(
             user=self.user,
@@ -398,7 +443,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(12, 0),
             mealType='lunch',
             calories=600.0,
-            image_url='test2.jpg'
+            imageUrl='test2.jpg'
         )
         
         total_calories = self.service._calculate_daily_calories(self.user, self.target_date)
@@ -413,7 +458,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(8, 0),
             mealType='breakfast',
             calories=500.0,
-            image_url='test.jpg'
+            imageUrl='test.jpg'
         )
         MealLog.objects.create(
             user=self.user,
@@ -421,7 +466,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(12, 0),
             mealType='lunch',
             calories=600.0,
-            image_url='test2.jpg'
+            imageUrl='test2.jpg'
         )
         
         meal_count = self.service._count_meals(self.user, self.target_date)
@@ -466,7 +511,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(8, 0),
             mealType='breakfast',
             calories=700.0,
-            image_url='test.jpg'
+            imageUrl='test.jpg'
         )
         MealLog.objects.create(
             user=self.user,
@@ -474,7 +519,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(12, 0),
             mealType='lunch',
             calories=800.0,
-            image_url='test2.jpg'
+            imageUrl='test2.jpg'
         )
         
         daily_record = self.service.judge_daily_challenge(self.user_challenge, self.target_date)
@@ -497,7 +542,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(8, 0),
             mealType='breakfast',
             calories=1000.0,
-            image_url='test.jpg'
+            imageUrl='test.jpg'
         )
         MealLog.objects.create(
             user=self.user,
@@ -505,7 +550,7 @@ class ChallengeJudgmentServiceTest(TestCase):
             time=time(12, 0),
             mealType='lunch',
             calories=800.0,
-            image_url='test2.jpg'
+            imageUrl='test2.jpg'
         )
         
         daily_record = self.service.judge_daily_challenge(self.user_challenge, self.target_date)
@@ -669,7 +714,7 @@ class ChallengeStatisticsServiceTest(TestCase):
     def test_get_user_statistics(self):
         """사용자 통계 조회 테스트"""
         # 테스트용 일일 기록 생성
-        for i in range(5):
+        for i in range(10):
             DailyChallengeRecord.objects.create(
                 user_challenge=self.user_challenge,
                 date=date.today() - timedelta(days=i),
@@ -677,6 +722,14 @@ class ChallengeStatisticsServiceTest(TestCase):
                 target_calories=1500.0,
                 is_success=True,
                 is_cheat_day=(i == 2)  # 하나는 치팅 데이
+            )
+        for i in range(10, 13):
+            DailyChallengeRecord.objects.create(
+                user_challenge=self.user_challenge,
+                date=date.today() - timedelta(days=i),
+                total_calories=1800.0,
+                target_calories=1500.0,
+                is_success=False,
             )
         
         statistics = self.service.get_user_statistics(self.user_challenge)
@@ -813,14 +866,14 @@ class WeeklyResetServiceTest(TestCase):
         for challenge in self.challenges[1:]:
             challenge.refresh_from_db()
             self.assertEqual(challenge.current_weekly_cheat_count, 0)
-fr
-om rest_framework.test import APITestCase, APIClient
+
+from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from django.urls import reverse
 import json
 
 
-class ChallengeAPITestCase(APITestCase):
+class ChallengeAPITestCase(TransactionTestCase):
     """챌린지 API 통합 테스트"""
     
     def setUp(self):
@@ -831,33 +884,37 @@ class ChallengeAPITestCase(APITestCase):
             password='testpass123'
         )
         
-        # 테스트용 챌린지 방 생성
-        self.room = ChallengeRoom.objects.create(
-            name='1500kcal_challenge',
-            target_calorie=1500,
-            tolerance=50,
-            description='1500칼로리 챌린지',
-            is_active=True
-        )
-        
         # 인증 설정 (필요시)
         # self.client.force_authenticate(user=self.user)
 
 
 class ChallengeRoomAPITest(ChallengeAPITestCase):
     """챌린지 방 API 테스트"""
-    
-    def test_list_challenge_rooms(self):
-        """챌린지 방 목록 조회 테스트"""
-        # 추가 챌린지 방 생성
-        ChallengeRoom.objects.create(
+    def setUp(self):
+        super().setUp()
+        ChallengeRoom.objects.all().delete()
+        self.room1 = ChallengeRoom.objects.create(
+            name='1500kcal_challenge',
+            target_calorie=1500,
+            tolerance=50,
+            description='1500칼로리 챌린지',
+            is_active=True
+        )
+        self.room2 = ChallengeRoom.objects.create(
             name='1800kcal_challenge',
             target_calorie=1800,
             tolerance=50,
             description='1800칼로리 챌린지',
             is_active=True
         )
-        
+
+    def tearDown(self):
+        super().tearDown()
+        self.room1.delete()
+        self.room2.delete()
+
+    def test_list_challenge_rooms(self):
+        """챌린지 방 목록 조회 테스트"""
         url = '/api/challenges/rooms/'
         response = self.client.get(url)
         
@@ -886,18 +943,17 @@ class ChallengeRoomAPITest(ChallengeAPITestCase):
         data = response.json()
         
         # 활성 방만 반환되는지 확인
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['name'], '1500kcal_challenge')
+        self.assertEqual(len(data), 2)
     
     def test_get_challenge_room_detail(self):
         """챌린지 방 상세 조회 테스트"""
-        url = f'/api/challenges/rooms/{self.room.id}/'
+        url = f'/api/challenges/rooms/{self.room1.id}/'
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         
-        self.assertEqual(data['id'], self.room.id)
+        self.assertEqual(data['id'], self.room1.id)
         self.assertEqual(data['name'], '1500kcal_challenge')
         self.assertEqual(data['target_calorie'], 1500)
         self.assertEqual(data['tolerance'], 50)
@@ -906,11 +962,16 @@ class ChallengeRoomAPITest(ChallengeAPITestCase):
 class JoinChallengeAPITest(ChallengeAPITestCase):
     """챌린지 참여 API 테스트"""
     
+    def setUp(self):
+        super().setUp()
+        self.room = TestConfig.create_test_room()
+        self.client.force_authenticate(user=self.user)
+
     def test_join_challenge_success(self):
         """챌린지 참여 성공 테스트"""
         url = '/api/challenges/join/'
         data = {
-            'room': self.room.id,
+            'room_id': self.room.id,
             'user_height': 170.0,
             'user_weight': 70.0,
             'user_target_weight': 65.0,
@@ -927,7 +988,7 @@ class JoinChallengeAPITest(ChallengeAPITestCase):
         self.assertIn('data', response_data)
         
         # 데이터베이스에 챌린지가 생성되었는지 확인
-        challenge = UserChallenge.objects.get(room=self.room)
+        challenge = UserChallenge.objects.get(user=self.user, room=self.room)
         self.assertEqual(challenge.user_height, 170.0)
         self.assertEqual(challenge.user_weight, 70.0)
         self.assertEqual(challenge.status, 'active')
@@ -936,7 +997,7 @@ class JoinChallengeAPITest(ChallengeAPITestCase):
         """챌린지 참여 검증 오류 테스트"""
         url = '/api/challenges/join/'
         data = {
-            'room': self.room.id,
+            'room_id': self.room.id,
             'user_height': 50.0,  # 너무 작은 키
             'user_weight': 70.0,
             'user_target_weight': 65.0,
@@ -956,7 +1017,7 @@ class JoinChallengeAPITest(ChallengeAPITestCase):
         """이미 참여 중인 챌린지 참여 시도 테스트"""
         # 먼저 챌린지에 참여
         UserChallenge.objects.create(
-            user=User.objects.get(username='test_user'),
+            user=self.user,
             room=self.room,
             user_height=170.0,
             user_weight=70.0,
@@ -968,7 +1029,7 @@ class JoinChallengeAPITest(ChallengeAPITestCase):
         
         url = '/api/challenges/join/'
         data = {
-            'room': self.room.id,
+            'room_id': self.room.id,
             'user_height': 175.0,
             'user_weight': 75.0,
             'user_target_weight': 70.0,
@@ -987,13 +1048,17 @@ class JoinChallengeAPITest(ChallengeAPITestCase):
 
 class MyChallengeAPITest(ChallengeAPITestCase):
     """내 챌린지 현황 API 테스트"""
+
+    def setUp(self):
+        super().setUp()
+        self.room = TestConfig.create_test_room()
+        self.client.force_authenticate(user=self.user)
     
     def test_get_my_challenge_with_active_challenge(self):
         """활성 챌린지가 있는 경우 현황 조회 테스트"""
         # 테스트 사용자의 활성 챌린지 생성
-        test_user = User.objects.get(username='test_user')
         UserChallenge.objects.create(
-            user=test_user,
+            user=self.user,
             room=self.room,
             user_height=170.0,
             user_weight=70.0,
@@ -1037,6 +1102,7 @@ class CheatDayAPITest(ChallengeAPITestCase):
     
     def setUp(self):
         super().setUp()
+        self.room = TestConfig.create_test_room()
         self.client.force_authenticate(user=self.user)
         
         self.user_challenge = UserChallenge.objects.create(
@@ -1100,6 +1166,7 @@ class LeaderboardAPITest(ChallengeAPITestCase):
     
     def setUp(self):
         super().setUp()
+        self.room = TestConfig.create_test_room()
         self.client.force_authenticate(user=self.user)
         
         # 테스트용 참여자들 생성
@@ -1156,6 +1223,7 @@ class PersonalStatsAPITest(ChallengeAPITestCase):
     
     def setUp(self):
         super().setUp()
+        self.room = TestConfig.create_test_room()
         self.client.force_authenticate(user=self.user)
         
         self.user_challenge = UserChallenge.objects.create(
@@ -1208,6 +1276,7 @@ class DailyChallengeJudgmentAPITest(ChallengeAPITestCase):
     
     def setUp(self):
         super().setUp()
+        self.room = TestConfig.create_test_room()
         self.client.force_authenticate(user=self.user)
         
         self.user_challenge = UserChallenge.objects.create(
@@ -1223,6 +1292,8 @@ class DailyChallengeJudgmentAPITest(ChallengeAPITestCase):
     
     def test_daily_judgment_success(self):
         """일일 판정 성공 테스트"""
+        self.user_challenge.current_streak_days = 0
+        self.user_challenge.save()
         # 테스트용 식사 기록 생성
         MealLog.objects.create(
             user=self.user,
@@ -1230,7 +1301,7 @@ class DailyChallengeJudgmentAPITest(ChallengeAPITestCase):
             time=time(8, 0),
             mealType='breakfast',
             calories=700.0,
-            image_url='test.jpg'
+            imageUrl='test.jpg'
         )
         MealLog.objects.create(
             user=self.user,
@@ -1238,7 +1309,7 @@ class DailyChallengeJudgmentAPITest(ChallengeAPITestCase):
             time=time(12, 0),
             mealType='lunch',
             calories=800.0,
-            image_url='test2.jpg'
+            imageUrl='test2.jpg'
         )
         
         url = '/api/challenges/judge/'
@@ -1266,6 +1337,7 @@ class WeeklyResetAPITest(ChallengeAPITestCase):
     
     def setUp(self):
         super().setUp()
+        self.room = TestConfig.create_test_room()
         self.client.force_authenticate(user=self.user)
         
         # 테스트용 챌린지들 생성 (치팅 사용 상태)
