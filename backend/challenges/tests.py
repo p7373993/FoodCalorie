@@ -13,6 +13,31 @@ from .services import (
     ChallengeJudgmentService, CheatDayService, 
     ChallengeStatisticsService, WeeklyResetService
 )
+
+
+# 테스트용 공통 설정
+class TestConfig:
+    """테스트용 공통 설정 클래스"""
+    DEFAULT_CALORIE = 1500
+    DEFAULT_TOLERANCE = 50
+    
+    @classmethod
+    def get_room_data(cls, calorie=None):
+        """테스트용 챌린지 방 데이터 생성"""
+        calorie = calorie or cls.DEFAULT_CALORIE
+        return {
+            'name': f'{calorie}kcal_challenge',
+            'target_calorie': calorie,
+            'tolerance': int(calorie * 0.033),  # 약 3.3% 허용 오차
+            'description': f'{calorie}칼로리 챌린지',
+            'is_active': True,
+            'dummy_users_count': 10
+        }
+    
+    @classmethod
+    def create_test_room(cls, calorie=None):
+        """테스트용 챌린지 방 생성"""
+        return ChallengeRoom.objects.create(**cls.get_room_data(calorie))
 from api_integrated.models import MealLog
 
 
@@ -20,29 +45,23 @@ class ChallengeRoomModelTest(TestCase):
     """챌린지 방 모델 테스트"""
     
     def setUp(self):
-        self.room_data = {
-            'name': '1500kcal_challenge',
-            'target_calorie': 1500,
-            'tolerance': 50,
-            'description': '1500칼로리 챌린지',
-            'is_active': True,
-            'dummy_users_count': 10
-        }
+        self.test_calorie = TestConfig.DEFAULT_CALORIE
+        self.room_data = TestConfig.get_room_data()
     
     def test_create_challenge_room(self):
         """챌린지 방 생성 테스트"""
         room = ChallengeRoom.objects.create(**self.room_data)
         
-        self.assertEqual(room.name, '1500kcal_challenge')
-        self.assertEqual(room.target_calorie, 1500)
-        self.assertEqual(room.tolerance, 50)
+        self.assertEqual(room.name, f'{self.test_calorie}kcal_challenge')
+        self.assertEqual(room.target_calorie, self.test_calorie)
+        self.assertEqual(room.tolerance, int(self.test_calorie * 0.033))
         self.assertTrue(room.is_active)
         self.assertEqual(room.dummy_users_count, 10)
     
     def test_challenge_room_str_representation(self):
         """챌린지 방 문자열 표현 테스트"""
         room = ChallengeRoom.objects.create(**self.room_data)
-        expected_str = "1500kcal_challenge (1500kcal)"
+        expected_str = f"{self.test_calorie}kcal_challenge ({self.test_calorie}kcal)"
         self.assertEqual(str(room), expected_str)
     
     def test_challenge_room_unique_name(self):
@@ -72,12 +91,7 @@ class UserChallengeModelTest(TestCase):
             email='test@example.com',
             password='testpass123'
         )
-        self.room = ChallengeRoom.objects.create(
-            name='1500kcal_challenge',
-            target_calorie=1500,
-            tolerance=50,
-            description='테스트 챌린지'
-        )
+        self.room = TestConfig.create_test_room()
         self.challenge_data = {
             'user': self.user,
             'room': self.room,
@@ -104,7 +118,7 @@ class UserChallengeModelTest(TestCase):
     def test_user_challenge_str_representation(self):
         """사용자 챌린지 문자열 표현 테스트"""
         challenge = UserChallenge.objects.create(**self.challenge_data)
-        expected_str = "testuser - 1500kcal_challenge"
+        expected_str = f"testuser - {TestConfig.DEFAULT_CALORIE}kcal_challenge"
         self.assertEqual(str(challenge), expected_str)
     
     def test_user_challenge_unique_constraint(self):

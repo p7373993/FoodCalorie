@@ -161,14 +161,19 @@ class ChallengeJudgmentService:
         return start_hour <= meal_hour < end_hour
     
     def _judge_success(self, user_challenge: UserChallenge, target_date: date, total_calories: float, target_calories: float, tolerance: int, is_cheat_day: bool) -> bool:
-        """새로운 식사 규칙이 적용된 성공/실패 판정"""
+        """챌린지 타입별 성공/실패 판정"""
         if is_cheat_day:
             return True  # 치팅 데이는 무조건 성공 처리
         
-        # 1. 목표 칼로리 ±tolerance 범위 내인지 확인
-        calorie_success = abs(total_calories - target_calories) <= tolerance
+        # 1. 챌린지 타입별 칼로리 성공 조건
+        if target_calories <= 2000:
+            # 다이어트/유지 챌린지: 목표 칼로리 이하로 먹어야 성공
+            calorie_success = total_calories <= (target_calories + tolerance)
+        else:
+            # 벌크업 챌린지: 목표 칼로리 이상으로 먹어야 성공
+            calorie_success = total_calories >= (target_calories - tolerance)
         
-        # 2. 유효한 식사 횟수 체크 (새로운 규칙)
+        # 2. 유효한 식사 횟수 체크
         valid_meal_count = self._count_valid_meals(user_challenge, target_date)
         meal_count_success = valid_meal_count >= user_challenge.min_daily_meals
         
@@ -332,9 +337,6 @@ class ChallengeStatisticsService:
         # 참여 일수 계산
         days_since_start = (timezone.now().date() - user_challenge.challenge_start_date).days
         
-        # 주간 데이터 생성 (최근 4주)
-        weekly_data = self._get_weekly_data(user_challenge)
-        
         # 일일 칼로리 데이터 (최근 7일)
         daily_calories = self._get_daily_calories_data(user_challenge)
         
@@ -350,70 +352,149 @@ class ChallengeStatisticsService:
             'challenge_progress': round((total_days / user_challenge.user_challenge_duration_days * 100), 1),
             'average_calories': round(avg_calories, 0),
             'days_since_start': days_since_start,
-            'weekly_data': weekly_data,
             'daily_calories': daily_calories
         }
     
     def _get_weekly_data(self, user_challenge):
-        """주간 성과 데이터 생성"""
+        """주간 성과 데이터 생성 (최근 4주)"""
         weekly_data = []
         today = timezone.now().date()
+        challenge_start = user_challenge.challenge_start_date
         
-        for week in range(4):  # 최근 4주
-            week_start = today - timedelta(days=(week + 1) * 7)
-            week_end = week_start + timedelta(days=6)
+        # 디버깅: 전체 기록 확인
+        all_records = DailyChallengeRecord.objects.filter(user_challenge=user_challenge)
+        print(f"DEBUG: {user_challenge.user.username}의 전체 기록: {all_records.count()}개")
+        
+        # 어제까지의 데이터로 주간 계산 (오늘은 아직 완료되지 않았으므로)
+        yesterday = today - timedelta(days=1)
+        
+        # 최근 4주 계산 (어제부터 역순으로)
+        for week in range(4):
+            # 각 주는 7일씩, 겹치지 않게 계산
+            week_end = yesterday - timedelta(days=week * 7)
+            week_start = week_end - timedelta(days=6)
             
-            week_records = DailyChallengeRecord.objects.filter(
-                user_challenge=user_challenge,
-                date__range=[week_start, week_end]
-            )
+            # 챌린지 시작일 이전은 제외
+            actual_week_start = max(week_start, challenge_start)
+            actual_week_end = week_end  # week_end 그대로 사용
             
-            success_count = week_records.filter(is_success=True).count()
-            failure_count = week_records.filter(is_success=False).count()
+            # 유효한 기간인지 확인
+            if actual_week_start > actual_week_end:
+                success_count = 0
+                failure_count = 0
+                total_records = 0
+            else:
+                week_records = DailyChallengeRecord.objects.filter(
+                    user_challenge=user_challenge,
+                    date__range=[actual_week_start, actual_week_end]
+                )
+                
+                success_count = week_records.filter(is_success=True).count()
+                failure_count = week_records.filter(is_success=False).count()
+                total_records = week_records.count()
             
-            weekly_data.append({
-                'week': 4 - week,  # 1주차, 2주차, 3주차, 4주차
+            print(f"DEBUG: {4-week}주차 ({actual_week_start} ~ {actual_week_end}): 기록 {total_records}개, 성공 {success_count}개, 실패 {failure_count}개")
+            
+            # 역순으로 추가 (1주차부터 4주차 순서로)
+            weekly_data.insert(0, {
+                'week': 4 - week,  # 4주차, 3주차, 2주차, 1주차
                 'success': success_count,
                 'failure': failure_count,
-                'week_start': week_start.isoformat(),
-                'week_end': week_end.isoformat()
+                'week_start': actual_week_start.isoformat(),
+                'week_end': actual_week_end.isoformat()
             })
         
-        return list(reversed(weekly_data))  # 시간순으로 정렬
+        print(f"DEBUG: 최종 주간 데이터: {weekly_data}")
+        return weekly_data
     
     def _get_daily_calories_data(self, user_challenge):
-        """일일 칼로리 데이터 (최근 7일)"""
+        """일일 칼로리 데이터 (최근 7일) - 실제 식사 기록 기반"""
+        from api_integrated.models import MealLog
+        from django.db.models import Sum
+        
         daily_data = []
         today = timezone.now().date()
         days_korean = ['월', '화', '수', '목', '금', '토', '일']
+        challenge_start = user_challenge.challenge_start_date
+        
+        print(f"DEBUG: 일일 칼로리 데이터 - 챌린지 시작일: {challenge_start}, 오늘: {today}")
+        
+        # 목표 칼로리를 미리 정의
+        target_calorie = user_challenge.room.target_calorie
+        tolerance = user_challenge.room.tolerance
         
         for i in range(7):
             target_date = today - timedelta(days=6-i)
             day_name = days_korean[target_date.weekday()]
             
+            # 실제 식사 기록에서 칼로리 계산
+            meal_calories = MealLog.objects.filter(
+                user=user_challenge.user,
+                date=target_date
+            ).aggregate(total=Sum('calories'))['total'] or 0
+            
+            # 챌린지 기록에서 성공/실패 정보 가져오기
             daily_record = DailyChallengeRecord.objects.filter(
                 user_challenge=user_challenge,
                 date=target_date
             ).first()
             
+            # 챌린지 시작일 이전이면 칼로리 기준으로 판정
+            if target_date < challenge_start:
+                if meal_calories > 0:
+                    if target_calorie <= 2000:
+                        # 다이어트/유지: 목표 이하로 먹어야 성공
+                        is_success = meal_calories <= (target_calorie + tolerance)
+                    else:
+                        # 벌크업: 목표 이상으로 먹어야 성공
+                        is_success = meal_calories >= (target_calorie - tolerance)
+                else:
+                    is_success = False
+                
+                print(f"DEBUG: {target_date} ({day_name}) - 챌린지 시작일 이전, 식사 칼로리: {meal_calories}kcal, 판정: {is_success}")
+                daily_data.append({
+                    'day': day_name,
+                    'date': target_date.isoformat(),
+                    'calories': int(meal_calories),
+                    'target': int(target_calorie),
+                    'has_record': meal_calories > 0,
+                    'is_success': is_success,
+                    'is_cheat_day': False
+                })
+                continue
+            
+            # 챌린지 기간 내 데이터
+            has_record = meal_calories > 0
+            
             if daily_record:
-                calories = daily_record.total_calories
-                target = daily_record.target_calories
+                is_success = daily_record.is_success
+                is_cheat_day = daily_record.is_cheat_day
+                print(f"DEBUG: {target_date} ({day_name}) - 식사 칼로리: {meal_calories}kcal, 성공: {is_success}, 치팅: {is_cheat_day}")
             else:
-                # 기록이 없는 경우 0으로 설정
-                calories = 0
-                target = user_challenge.room.target_calorie
+                # 챌린지 기록이 없으면 챌린지 타입별 성공/실패 판정
+                if meal_calories > 0:
+                    if target_calorie <= 2000:
+                        # 다이어트/유지: 목표 이하로 먹어야 성공
+                        is_success = meal_calories <= (target_calorie + tolerance)
+                    else:
+                        # 벌크업: 목표 이상으로 먹어야 성공
+                        is_success = meal_calories >= (target_calorie - tolerance)
+                else:
+                    is_success = False
+                is_cheat_day = False
+                print(f"DEBUG: {target_date} ({day_name}) - 식사 칼로리: {meal_calories}kcal, 자동 판정: {is_success}")
             
             daily_data.append({
                 'day': day_name,
                 'date': target_date.isoformat(),
-                'calories': int(calories),
-                'target': int(target),
-                'has_record': daily_record is not None,
-                'is_success': daily_record.is_success if daily_record else False,
-                'is_cheat_day': daily_record.is_cheat_day if daily_record else False
+                'calories': int(meal_calories),
+                'target': int(target_calorie),
+                'has_record': has_record,
+                'is_success': is_success,
+                'is_cheat_day': is_cheat_day
             })
         
+        print(f"DEBUG: 최종 일일 데이터: {daily_data}")
         return daily_data
     
     def get_leaderboard(self, room_id: int, limit: int = 50) -> list:
@@ -431,6 +512,11 @@ class ChallengeStatisticsService:
             
             leaderboard = []
             for rank, challenge in enumerate(user_challenges, 1):
+                # 참여기간 계산 (실제 참여한 일수)
+                from datetime import date
+                today = date.today()
+                participation_days = (today - challenge.challenge_start_date).days + 1  # +1은 시작일 포함
+                
                 leaderboard.append({
                     'rank': rank,
                     'user_id': challenge.user.id,
@@ -438,6 +524,8 @@ class ChallengeStatisticsService:
                     'current_streak': challenge.current_streak_days,
                     'total_success': challenge.total_success_days,
                     'start_date': challenge.challenge_start_date.isoformat(),
+                    'participation_days': participation_days,  # 실제 참여한 일수
+                    'remaining_days': challenge.remaining_duration_days,  # 남은 일수
                     'is_me': False  # 프론트엔드에서 설정
                 })
             

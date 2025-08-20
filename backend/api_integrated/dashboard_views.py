@@ -59,6 +59,32 @@ def get_dashboard_data(request):
                 'meal_count': day_meals.count()
             })
         
+        # 챌린지 통계 데이터 추가
+        challenge_stats = {}
+        try:
+            from challenges.models import UserChallenge
+            from challenges.services import ChallengeStatisticsService
+            
+            # 사용자의 활성 챌린지 조회
+            active_challenges = UserChallenge.objects.filter(
+                user=user,
+                status='active'
+            ).select_related('room')
+            
+            if active_challenges.exists():
+                # 첫 번째 활성 챌린지의 통계 조회
+                user_challenge = active_challenges.first()
+                stats_service = ChallengeStatisticsService()
+                challenge_stats = stats_service.get_user_statistics(user_challenge)
+                
+                print(f"🏆 챌린지 통계 로드: {user.username} - {user_challenge.room.name}")
+                print(f"   - 현재 연속: {challenge_stats.get('current_streak', 0)}일")
+                print(f"   - 최고 기록: {challenge_stats.get('max_streak', 0)}일")
+                print(f"   - 성공률: {challenge_stats.get('success_rate', 0)}%")
+        except Exception as e:
+            print(f"⚠️ 챌린지 통계 로드 실패: {str(e)}")
+            challenge_stats = {}
+        
         # 최근 식사 기록 (최근 5개)
         recent_meals = MealLog.objects.filter(user=user).order_by('-date', '-time')[:5]
         
@@ -162,7 +188,8 @@ def get_dashboard_data(request):
             'user_info': {
                 'username': user.username,
                 'total_days': (today - user.date_joined.date()).days if user.date_joined else 0
-            }
+            },
+            'challenge_stats': challenge_stats
         }
         
         print(f"📊 대시보드 데이터 조회 완료: 주간 칼로리 {len(weekly_calories)}일, 최근 식사 {recent_meals.count()}개")
