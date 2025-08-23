@@ -341,6 +341,11 @@ class ChallengeStatisticsService:
         # 일일 칼로리 데이터 (최근 7일)
         daily_calories = self._get_daily_calories_data(user_challenge)
         
+        # LLM 기반 분석 추가
+        from .llm_analysis import ChallengeAnalysisService
+        analysis_service = ChallengeAnalysisService()
+        llm_analysis = analysis_service.analyze_user_challenge(user_challenge)
+        
         return {
             'current_streak': user_challenge.current_streak_days,
             'max_streak': user_challenge.max_streak_days,
@@ -353,7 +358,8 @@ class ChallengeStatisticsService:
             'challenge_progress': round((total_days / user_challenge.user_challenge_duration_days * 100), 1),
             'average_calories': round(avg_calories, 0),
             'days_since_start': days_since_start,
-            'daily_calories': daily_calories
+            'daily_calories': daily_calories,
+            'ai_analysis': llm_analysis  # LLM 분석 결과 추가
         }
     
     def _get_weekly_data(self, user_challenge):
